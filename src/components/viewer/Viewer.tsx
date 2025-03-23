@@ -62,16 +62,18 @@ interface ViewerProps {
 
 export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [fov, setFov] = useState(50);
-  const [floorType, setFloorType] = useState<FloorType>('grid'); // Default to grid
-  const [floorTexture, setFloorTexture] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(5); // Default 5 seconds
-  const [modelHeight, setModelHeight] = useState(0); // Add model height state
-  const cameraRef = useRef<ThreePerspectiveCamera>(null!); // Non-null assertion
-  const controlsRef = useRef<any>(null);
+  const [duration, setDuration] = useState(5);
+  const [modelHeight, setModelHeight] = useState(0);
+  const [floorType, setFloorType] = useState<FloorType>('grid');
+  const [floorTexture, setFloorTexture] = useState<string | undefined>(undefined);
+  
   const modelRef = useRef<Object3D | null>(null);
+  const cameraRef = useRef<ThreePerspectiveCamera>(null!);
+  const controlsRef = useRef<any>(null);
   const startPositionRef = useRef<Vector3 | null>(null);
   const startTargetRef = useRef<Vector3 | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null!);
 
   const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
     if (cameraRef.current && controlsRef.current) {
@@ -128,7 +130,11 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
 
   return (
     <div className={`w-full h-full relative ${className}`}>
-      <Canvas shadows>
+      <Canvas
+        ref={canvasRef}
+        camera={{ position: [5, 5, 5], fov }}
+        className="w-full h-full"
+      >
         <Suspense fallback={null}>
           <PerspectiveCamera
             ref={cameraRef}
@@ -213,6 +219,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           modelRef={modelRef}
           cameraRef={cameraRef}
           controlsRef={controlsRef}
+          canvasRef={canvasRef}
         />
       </div>
 

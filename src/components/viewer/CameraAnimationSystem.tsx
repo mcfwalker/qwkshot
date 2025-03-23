@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Play, Pause, Clock, Wand2, Loader2 } from 'lucide-react';
+import { Play, Pause, Clock, Wand2, Loader2, Video, Square } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Vector3, Object3D, PerspectiveCamera } from 'three';
 import { toast } from 'sonner';
@@ -28,6 +28,7 @@ interface CameraAnimationSystemProps {
   modelRef: React.RefObject<Object3D | null>;
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
+  canvasRef?: React.RefObject<HTMLCanvasElement>;
 }
 
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
@@ -41,13 +42,17 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   modelRef,
   cameraRef,
   controlsRef,
+  canvasRef,
 }) => {
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
   const progressRef = useRef(0);
   const animationFrameRef = useRef<number>();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   // Update the ref whenever progress changes
   useEffect(() => {
@@ -238,6 +243,63 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
+  const startRecording = async () => {
+    if (!canvasRef?.current) {
+      toast.error('Canvas not available for recording');
+      return;
+    }
+
+    try {
+      const stream = canvasRef.current.captureStream(60);
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 5000000 // 5 Mbps
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'camera-path-animation.webm';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setProgress(0);
+      onAnimationStart();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast.error('Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      onAnimationStop();
+    }
+  };
+
+  useEffect(() => {
+    // Stop recording when animation completes
+    if (isRecording && progress >= 100) {
+      stopRecording();
+    }
+  }, [isRecording, progress]);
+
   return (
     <Card className="viewer-card">
       <CardHeader className="pb-3">
@@ -281,9 +343,18 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 size="icon"
                 className="viewer-button"
                 onClick={isPlaying ? onAnimationPause : onAnimationStart}
-                disabled={keyframes.length === 0}
+                disabled={keyframes.length === 0 || isRecording}
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className={`viewer-button ${isRecording ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={keyframes.length === 0 || (!isRecording && isPlaying)}
+              >
+                {isRecording ? <Square className="h-4 w-4" /> : <Video className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -303,7 +374,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
               min={0}
               max={100}
               step={0.1}
-              disabled={keyframes.length === 0}
+              disabled={keyframes.length === 0 || isRecording}
             />
           </div>
         </div>
