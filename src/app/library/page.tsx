@@ -15,51 +15,53 @@ export default function LibraryPage() {
   const router = useRouter()
 
   useEffect(() => {
-    checkSession()
-    loadModels()
-    
-    // Add this handler for route changes
-    const handleRouteChange = () => {
-      console.log('Route changed, refreshing model data')
-      loadModels()
+    let mounted = true
+
+    async function initialize() {
+      try {
+        // Check session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          if (mounted) {
+            toast.error('Please sign in to access the library')
+            router.push('/auth/sign-in')
+          }
+          return
+        }
+
+        if (!session) {
+          if (mounted) {
+            console.log('No session found, redirecting to sign in')
+            router.push('/auth/sign-in')
+          }
+          return
+        }
+
+        // Load models if authenticated
+        if (mounted) {
+          await loadModels()
+        }
+      } catch (error) {
+        console.error('Initialization error:', error)
+        if (mounted) {
+          toast.error('Failed to initialize library')
+          setLoading(false)
+        }
+      }
     }
-    
-    // Listen for changes like when returning from another page
-    window.addEventListener('focus', loadModels)
-    
+
+    initialize()
+
     return () => {
-      window.removeEventListener('focus', loadModels)
+      mounted = false
     }
-  }, [])
-
-  async function checkSession() {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('Session error:', error)
-        toast.error('Authentication error')
-        router.push('/auth/sign-in')
-        return
-      }
-
-      if (!session) {
-        console.log('No session found, redirecting to sign in')
-        router.push('/auth/sign-in')
-        return
-      }
-    } catch (error) {
-      console.error('Session check error:', error)
-      toast.error('Authentication error')
-      router.push('/auth/sign-in')
-    }
-  }
+  }, [router])
 
   async function loadModels() {
     try {
-      console.log('Fetching models directly from Supabase')
-      
-      // Get models directly from Supabase 
+      console.log('Fetching models from Supabase')
       const { data: models, error } = await supabase
         .from('models')
         .select('*')
@@ -67,7 +69,7 @@ export default function LibraryPage() {
       
       if (error) {
         console.error('Supabase error:', error)
-        throw new Error(error.message)
+        throw error
       }
       
       console.log('Models fetched:', models?.length || 0)
@@ -108,7 +110,6 @@ export default function LibraryPage() {
       }
 
       toast.success('Model deleted successfully')
-      // Refresh the list
       await loadModels()
     } catch (error) {
       console.error('Error deleting model:', error)
