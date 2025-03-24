@@ -6,9 +6,15 @@ if (!process.env.OPENAI_API_KEY) {
   throw new Error('Missing OPENAI_API_KEY environment variable');
 }
 
-// Initialize OpenAI client
+// Check if API key is a project-based key (sk-proj-*)
+const isProjectKey = process.env.OPENAI_API_KEY?.startsWith('sk-proj-');
+console.log('Using project-based API key:', isProjectKey);
+
+// Initialize OpenAI client with proper configuration
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  // Add organization ID for project-based keys if available
+  ...(process.env.OPENAI_ORGANIZATION && { organization: process.env.OPENAI_ORGANIZATION })
 });
 
 export async function POST(request: Request) {
@@ -98,7 +104,26 @@ export async function POST(request: Request) {
         status: error.status,
         message: error.message,
         code: error.code,
+        type: error.type
       });
+      
+      // Handle authentication errors specifically
+      if (error.status === 401) {
+        let errorMessage = 'Authentication error with OpenAI API. ';
+        
+        // Additional context for project-based keys
+        if (isProjectKey) {
+          errorMessage += 'You are using a project-based API key (sk-proj-*). Make sure OPENAI_ORGANIZATION is set correctly in your environment variables.';
+        } else {
+          errorMessage += 'Please check your API key is valid and has not expired.';
+        }
+        
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
         { error: `OpenAI API error: ${error.message}` },
         { status: error.status || 500 }
