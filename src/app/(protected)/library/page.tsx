@@ -9,22 +9,42 @@ import Link from 'next/link'
 
 // Separate data fetching logic
 async function getModels() {
-  const supabase = await createServerClient()
-  const { data: models, error } = await supabase
-    .from('models')
-    .select('*')
-    .order('created_at', { ascending: false })
+  try {
+    console.log('Debug: Library - Starting getModels')
+    const supabase = await createServerClient()
+    console.log('Debug: Library - Supabase client created')
 
-  if (error) {
-    console.error('Error fetching models:', error)
+    // First, try to get the session
+    try {
+      console.log('Debug: Library - Checking session')
+      const { data: { session } } = await supabase.auth.getSession()
+      console.log('Debug: Library - Session check complete:', !!session)
+    } catch (sessionError) {
+      console.error('Warning: Session check failed:', sessionError)
+      // Continue anyway - the middleware will handle unauthorized access
+    }
+
+    const { data: models, error } = await supabase
+      .from('models')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching models:', error)
+      throw error
+    }
+
+    console.log('Debug: Library - Models fetched successfully')
+    return models as Model[]
+  } catch (error) {
+    console.error('Error in getModels:', error)
     throw new Error('Failed to fetch models')
   }
-
-  return models as Model[]
 }
 
 // Server Component
 export default async function LibraryPage() {
+  console.log('Debug: Library - Page component rendering')
   return (
     <div className="container py-8">
       <div className="flex justify-between items-center mb-8">
@@ -51,6 +71,8 @@ export default async function LibraryPage() {
 
 // Async component for models content
 async function ModelsContent() {
+  console.log('Debug: Library - ModelsContent starting')
   const models = await getModels()
+  console.log('Debug: Library - ModelsContent received models')
   return <ModelGridClient initialModels={models} />
 } 

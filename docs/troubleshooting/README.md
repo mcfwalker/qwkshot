@@ -12,9 +12,26 @@
 **Cause**: Synchronous cookie access in server components.
 **Impact**: Warning only, functionality still works.
 **Solution**: 
-- This is a known issue documented in [TECHNICAL_DEBT.md](../TECHNICAL_DEBT.md)
-- No immediate action required
-- Will be fixed in future sprint
+- This issue has been fixed in [Status Report M3DV-SR-2025-03-24-1557](../status-reports/M3DV-SR-2025-03-24-1557.md)
+- The fix involved properly awaiting the cookies() function in createServerClient:
+```typescript
+// Create a server component client that uses cookies for auth
+export async function createServerClient() {
+  // Next.js cookies() returns a Promise as of Next.js 14
+  const cookieStore = await cookies()
+  
+  // Create the client using the awaited cookie store
+  return createServerComponentClient<Database>({
+    cookies: () => {
+      // Return properly typed cookie handler
+      return {
+        get: cookieStore.get.bind(cookieStore),
+        getAll: cookieStore.getAll.bind(cookieStore)
+      } as any
+    }
+  })
+}
+```
 
 #### Session Management
 1. **Invalid Session**
