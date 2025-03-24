@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { cookies } from 'next/headers'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Get environment variables without quotes
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/"/g, '') || ''
@@ -18,14 +20,10 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-// Create a direct server-side Supabase client that doesn't use cookies
-export const supabaseServer = createClient<Database>(
-  supabaseUrl,
-  supabaseKey,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-) 
+// Create a server component client that uses cookies for auth
+export async function createServerClient() {
+  const cookieStore = cookies()
+  return createServerComponentClient<Database>({ 
+    cookies: () => cookieStore 
+  })
+} 

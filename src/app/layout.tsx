@@ -16,12 +16,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <ErrorBoundary>
           <Providers>
-            <div className="relative min-h-screen flex flex-col">
-              <Navigation />
-              <main className="flex-1">
-                {children}
-              </main>
-            </div>
+            {children}
           </Providers>
         </ErrorBoundary>
       </body>

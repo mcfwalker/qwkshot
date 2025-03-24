@@ -5,23 +5,23 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const redirectTo = requestUrl.searchParams.get('redirectTo') || '/library'
 
   if (code) {
     const cookieStore = cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     
-    console.log('Auth callback - Processing with code')
-    
     try {
       await supabase.auth.exchangeCodeForSession(code)
-      console.log('Auth callback - Session established')
     } catch (error) {
       console.error('Auth callback error:', error)
+      return NextResponse.redirect(new URL('/auth/sign-in', request.url))
     }
   } else {
-    console.log('Auth callback - No code found')
+    console.error('No code in callback')
+    return NextResponse.redirect(new URL('/auth/sign-in', request.url))
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(new URL('/library', request.url))
+  // Get the intended redirect URL from the query params
+  return NextResponse.redirect(new URL(redirectTo, request.url))
 } 

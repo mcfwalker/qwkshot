@@ -446,6 +446,11 @@ src/
 ├── app/
 │   ├── layout.tsx           // Main app layout with theme provider
 │   ├── page.tsx             // Landing page
+│   ├── auth/                // Authentication routes
+│   │   ├── layout.tsx       // Split-screen auth layout
+│   │   │   └── page.tsx    // Sign-in form and handlers
+│   │   └── callback/       // OAuth callback handling
+│   │       └── route.ts    // Server-side auth callback
 │   ├── viewer/
 │   │   ├── page.tsx         // 3D viewer page
 │   │   └── [...modelId]/    // Specific model viewer
@@ -455,35 +460,180 @@ src/
 │   │   └── path/            // Path generation
 │   └── library/
 │       └── page.tsx         // User model library
-├── components/
-│   ├── ui/                  // shadcn components
-│   ├── viewer/
-│   │   ├── ModelViewer.tsx  // Main 3D viewport
-│   │   ├── CameraControls.tsx
-│   │   ├── ModelControls.tsx
-│   │   └── TerrainControls.tsx
-│   ├── ai/
-│   │   ├── PathGenerator.tsx
-│   │   └── ModelGenerator.tsx
-│   └── shared/
-│       ├── Layout.tsx
-│       ├── LoadingStates.tsx
-│       └── Telemetry.tsx
-├── lib/
-│   ├── three/              // Three.js utilities
-│   ├── ai/                 // AI service wrappers
-│   └── utils/              // Shared utilities
-├── hooks/
-│   ├── useViewerState.ts   // Core viewer state hook
-│   ├── useCameraPath.ts    // Camera path manager
-│   └── useModelGeneration.ts
-└── store/
-    ├── viewerStore.ts      // Main state store
-    ├── modelStore.ts       // Model management
-    └── userStore.ts        // User preferences
 ```
 
-### B. State Management
+### B. Authentication Architecture
+
+#### 1. Authentication Provider
+```typescript
+// Supabase Client Configuration (src/lib/supabase.ts)
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabase'
+
+// Single instance for client components
+export const supabase = createClientComponentClient<Database>()
+
+// For server components/routes (src/lib/supabase-server.ts)
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+
+export const createServerClient = () => {
+  return createServerComponentClient<Database>({ cookies })
+}
+```
+
+#### 2. Authentication Flow Requirements
+
+a. **Environment Variables**
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+```
+
+b. **Protected Routes**
+```typescript
+// src/middleware.ts
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+
+export async function middleware(req) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
+  const session = await supabase.auth.getSession()
+
+  // Protected routes
+  const protectedPaths = ['/viewer', '/library']
+  const isProtectedPath = protectedPaths.some(path => 
+    req.nextUrl.pathname.startsWith(path)
+  )
+
+  if (isProtectedPath && !session) {
+    return NextResponse.redirect(new URL(
+      `/auth/sign-in?redirectTo=${req.nextUrl.pathname}`,
+      req.url
+    ))
+  }
+
+  return res
+}
+
+export const config = {
+  matcher: ['/viewer/:path*', '/library/:path*', '/auth/:path*']
+}
+```
+
+#### 3. Sign-In Page Requirements
+
+a. **Layout Structure**
+```typescript
+// Split screen layout with:
+// - Form section (left/top)
+// - Brand section (right/hidden on mobile)
+// Required classes:
+className="flex min-h-screen"  // Root container
+className="flex flex-1 flex-col justify-center px-4 py-12"  // Form container
+className="mx-auto w-full max-w-sm"  // Form width constraint
+className="relative hidden w-0 flex-1 lg:block"  // Brand section
+```
+
+b. **Authentication Methods**
+- Email/Password authentication
+- Google OAuth provider
+- Proper redirect handling for both methods
+
+c. **State Management**
+```typescript
+// Required states
+const [email, setEmail] = useState('')
+const [password, setPassword] = useState('')
+const [isLoading, setIsLoading] = useState(false)
+
+// Auth state listener
+useEffect(() => {
+  const { subscription } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      router.push(redirectTo)
+    }
+  })
+  return () => subscription.unsubscribe()
+}, [])
+```
+
+#### 4. OAuth Callback Requirements
+
+```typescript
+// src/app/auth/callback/route.ts
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get('code')
+  const redirectTo = requestUrl.searchParams.get('redirectTo') || '/library'
+
+  if (code) {
+    const supabase = createRouteHandlerClient({ cookies })
+    await supabase.auth.exchangeCodeForSession(code)
+  }
+
+  return NextResponse.redirect(`${requestUrl.origin}${redirectTo}`)
+}
+```
+
+#### 5. Error Handling Requirements
+
+a. **Client-Side Errors**
+- Invalid credentials
+- Network issues
+- OAuth provider errors
+- Session expiration
+
+b. **Error Recovery**
+- Clear error messages via toast notifications
+- Automatic retry for network issues
+- Session refresh handling
+- Graceful fallbacks
+
+#### 6. Security Requirements
+
+a. **Session Management**
+- Secure cookie handling
+- CSRF protection
+- XSS prevention
+- Proper session expiration
+
+b. **Environment Security**
+- Environment variable validation
+- Key length verification
+- Proper key scoping
+
+#### 7. Performance Requirements
+
+a. **Loading States**
+- Proper loading indicators
+- Disabled form controls during submission
+- Prevent duplicate submissions
+
+b. **Client-Side Validation**
+- Email format validation
+- Password requirements
+- Required field handling
+
+#### 8. Testing Requirements
+
+a. **Authentication Tests**
+- Sign-in flow testing
+- OAuth flow testing
+- Error handling testing
+- Session management testing
+
+b. **Integration Tests**
+- Protected route testing
+- Redirect handling testing
+- Session persistence testing
+
+### C. State Management
 
 ```typescript
 // Core State Interface (Zustand store)
@@ -529,7 +679,7 @@ const useViewerStore = create<ViewerState>((set, get) => ({
 }));
 ```
 
-### C. API Structure
+### D. API Structure
 
 ```typescript
 // API Routes
