@@ -11,8 +11,19 @@ This directory contains periodic status reports and updates on the project's pro
 ## Structure
 Status reports should be named using the following format:
 ```
-YYYY-MM-DD-status-report.md
+M3DV-SR-YYYY-MM-DD-HHMM.md
 ```
+Where:
+- M3DV: Modern 3D Viewer project abbreviation
+- SR: Status Report
+- YYYY-MM-DD: Date (year-month-day)
+- HHMM: Time in 24-hour format (e.g., 1430 for 2:30 PM)
+
+## Requirements
+1. **Timestamp Accuracy**
+   - MUST query system time using `date "+%Y-%m-%d-%H%M"` before creating a new status report
+   - Use the exact timestamp from the query in the filename
+   - Never assume or manually enter the timestamp
 
 ## Template
 Each status report should include:
@@ -23,12 +34,13 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
-- [2024-03-26] Status Report - Latest project updates
-- [2024-03-24] Status Report - Development progress
-- [2024-03-23] Status Report - Initial implementation
-- [2024-03-22] Camera Issue Investigation
+- M3DV-SR-2025-03-24-0847 - Branch Reorganization and Project Structure Update
+- M3DV-SR-2025-03-24-1430 - Latest project updates
+- M3DV-SR-2025-03-24-0945 - Development progress
+- M3DV-SR-2025-03-23-1620 - Initial implementation
+- M3DV-SR-2025-03-22-1100 - Camera Issue Investigation
 - General Status Report (Template)
 
 ## Issue Reports
 Special reports documenting specific technical investigations or issues:
-- Camera Issue Investigation (March 22, 2024) 
+- M3DV-SR-2025-03-22-1100 - Camera Issue Investigation
