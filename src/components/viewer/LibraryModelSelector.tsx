@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, FolderOpen } from 'lucide-react';
+import { Loader2, FolderOpen, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getModels, loadModel } from '@/lib/library-service';
 import { LoadingSpinner, LoadingButton, ModelLoadingSkeleton } from '@/components/shared/LoadingStates';
+import { createRetryableFunction } from '@/lib/retry-utils';
 import { toast } from 'sonner';
 import { Model } from '@/lib/supabase';
 
@@ -18,23 +19,24 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
   const [loading, setLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryingModelId, setRetryingModelId] = useState<string | null>(null);
+
+  const fetchModelsWithRetry = createRetryableFunction(async () => {
+    setLoading(true);
+    setError(null);
+    const fetchedModels = await getModels();
+    setModels(fetchedModels);
+  }, {
+    maxAttempts: 3,
+    onRetry: (error, attempt) => {
+      toast.error('Failed to load models', {
+        description: `Retrying... (Attempt ${attempt}/3)`,
+      });
+    }
+  });
 
   useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const fetchedModels = await getModels();
-        setModels(fetchedModels);
-      } catch (error) {
-        console.error('Error loading models:', error);
-        setError('Failed to load models');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchModels();
+    fetchModelsWithRetry.execute().finally(() => setLoading(false));
   }, []);
 
   const handleModelSelect = async (model: Model) => {
@@ -46,9 +48,30 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
     } catch (error) {
       console.error('Error loading model:', error);
       setError('Failed to load model');
+      setRetryingModelId(model.id);
     } finally {
       setLoadingModelId(null);
     }
+  };
+
+  const handleRetry = async (model: Model) => {
+    try {
+      setLoadingModelId(model.id);
+      setError(null);
+      setRetryingModelId(null);
+      const modelUrl = await loadModel(model.id);
+      onSelectModel(modelUrl);
+    } catch (error) {
+      console.error('Error loading model:', error);
+      setError('Failed to load model');
+      setRetryingModelId(model.id);
+    } finally {
+      setLoadingModelId(null);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchModelsWithRetry.execute().finally(() => setLoading(false));
   };
 
   if (loading) {
@@ -58,9 +81,19 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
   return (
     <Card className="viewer-card">
       <CardHeader className="pb-3">
-        <CardTitle className="viewer-title">
-          <FolderOpen className="viewer-button-icon" />
-          Model Library
+        <CardTitle className="viewer-title flex justify-between items-center">
+          <div className="flex items-center">
+            <FolderOpen className="viewer-button-icon" />
+            Model Library
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -75,14 +108,26 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
         ) : (
           <div className="space-y-2">
             {models.map((model) => (
-              <LoadingButton
-                key={model.id}
-                onClick={() => handleModelSelect(model)}
-                className="w-full justify-start text-left"
-                loading={loadingModelId === model.id}
-              >
-                {model.name}
-              </LoadingButton>
+              <div key={model.id} className="space-y-2">
+                <LoadingButton
+                  onClick={() => handleModelSelect(model)}
+                  className="w-full justify-start text-left"
+                  loading={loadingModelId === model.id}
+                >
+                  {model.name}
+                </LoadingButton>
+                {retryingModelId === model.id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRetry(model)}
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry Loading
+                  </Button>
+                )}
+              </div>
             ))}
           </div>
         )}

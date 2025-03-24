@@ -2,6 +2,8 @@
 
 import { supabase } from './supabase'
 import { Model, Collection } from './supabase'
+import { withRetry } from './retry-utils'
+import { toast } from 'sonner'
 
 export async function uploadModel(file: File, metadata: Partial<Model>) {
   try {
@@ -66,16 +68,25 @@ export async function uploadModel(file: File, metadata: Partial<Model>) {
 }
 
 export async function getModels(): Promise<Model[]> {
-  const { data, error } = await supabase
-    .from('models')
-    .select('*')
-    .order('created_at', { ascending: false })
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('models')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    throw error
-  }
+    if (error) {
+      throw error;
+    }
 
-  return data || []
+    return data || [];
+  }, {
+    maxAttempts: 3,
+    onRetry: (error, attempt) => {
+      toast.error(`Loading models failed (attempt ${attempt}/3)`, {
+        description: error.message
+      });
+    }
+  });
 }
 
 export async function getModel(id: string) {
@@ -185,26 +196,41 @@ export async function updateCollection(id: string, updates: Partial<Collection>)
 }
 
 export async function loadModel(modelId: string): Promise<string> {
-  // Get the model details first
-  const { data: model, error: modelError } = await supabase
-    .from('models')
-    .select('file_url')
-    .eq('id', modelId)
-    .single();
+  return withRetry(async () => {
+    // Get the model details first
+    const { data: model, error: modelError } = await supabase
+      .from('models')
+      .select('file_url')
+      .eq('id', modelId)
+      .single();
 
-  if (modelError || !model) {
-    throw new Error('Failed to find model');
-  }
+    if (modelError || !model) {
+      throw new Error('Failed to find model');
+    }
 
-  // Get a signed URL for the model file
-  const { data: urlData, error: urlError } = await supabase
-    .storage
-    .from('models')
-    .createSignedUrl(model.file_url, 3600); // 1 hour expiration
+    // Get a signed URL for the model file
+    const { data: urlData, error: urlError } = await supabase
+      .storage
+      .from('models')
+      .createSignedUrl(model.file_url, 3600); // 1 hour expiration
 
-  if (urlError || !urlData?.signedUrl) {
-    throw new Error('Failed to get model URL');
-  }
+    if (urlError || !urlData?.signedUrl) {
+      throw new Error('Failed to get model URL');
+    }
 
-  return urlData.signedUrl;
+    return urlData.signedUrl;
+  }, {
+    maxAttempts: 3,
+    onRetry: (error, attempt) => {
+      toast.error(`Loading model failed (attempt ${attempt}/3)`, {
+        description: error.message
+      });
+    },
+    retryableErrors: [
+      'Failed to find model',
+      'Failed to get model URL',
+      'Network request failed',
+      /5\d\d/
+    ]
+  });
 } 

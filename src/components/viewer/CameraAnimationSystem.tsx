@@ -5,11 +5,12 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Play, Pause, Clock, Wand2, Loader2, Video, Square } from 'lucide-react';
+import { Play, Pause, Clock, Wand2, Loader2, Video, Square, RefreshCcw } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Vector3, Object3D, PerspectiveCamera } from 'three';
 import { toast } from 'sonner';
 import { analyzeScene, SceneGeometry } from '@/lib/scene-analysis';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 interface CameraKeyframe {
   position: Vector3;
@@ -31,7 +32,39 @@ interface CameraAnimationSystemProps {
   canvasRef?: React.RefObject<HTMLCanvasElement>;
 }
 
-export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
+const CameraSystemFallback = () => (
+  <Card>
+    <CardHeader>
+      <CardTitle>Camera System Error</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        The camera animation system encountered an error. Please try reloading the component.
+      </p>
+      <Button 
+        variant="outline" 
+        className="w-full"
+        onClick={() => window.location.reload()}
+      >
+        <RefreshCcw className="mr-2 h-4 w-4" />
+        Reload System
+      </Button>
+    </CardContent>
+  </Card>
+);
+
+export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = (props) => {
+  return (
+    <ErrorBoundary 
+      name="CameraAnimationSystem"
+      fallback={<CameraSystemFallback />}
+    >
+      <CameraAnimationSystemInner {...props} />
+    </ErrorBoundary>
+  );
+};
+
+const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
   onAnimationUpdate,
   onAnimationStop,
   onAnimationStart,
