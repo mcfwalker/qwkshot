@@ -65,19 +65,17 @@ export async function uploadModel(file: File, metadata: Partial<Model>) {
   }
 }
 
-export async function getModels() {
-  try {
-    const { data, error } = await supabase
-      .from('models')
-      .select('*')
-      .order('created_at', { ascending: false })
+export async function getModels(): Promise<Model[]> {
+  const { data, error } = await supabase
+    .from('models')
+    .select('*')
+    .order('created_at', { ascending: false })
 
-    if (error) throw error
-    return data
-  } catch (error) {
-    console.error('Error fetching models:', error)
+  if (error) {
     throw error
   }
+
+  return data || []
 }
 
 export async function getModel(id: string) {
@@ -184,4 +182,29 @@ export async function updateCollection(id: string, updates: Partial<Collection>)
     console.error('Error updating collection:', error)
     throw error
   }
+}
+
+export async function loadModel(modelId: string): Promise<string> {
+  // Get the model details first
+  const { data: model, error: modelError } = await supabase
+    .from('models')
+    .select('file_url')
+    .eq('id', modelId)
+    .single();
+
+  if (modelError || !model) {
+    throw new Error('Failed to find model');
+  }
+
+  // Get a signed URL for the model file
+  const { data: urlData, error: urlError } = await supabase
+    .storage
+    .from('models')
+    .createSignedUrl(model.file_url, 3600); // 1 hour expiration
+
+  if (urlError || !urlData?.signedUrl) {
+    throw new Error('Failed to get model URL');
+  }
+
+  return urlData.signedUrl;
 } 
