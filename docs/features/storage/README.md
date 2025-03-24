@@ -1,5 +1,21 @@
 # Storage Security Configuration
 
+## Overview
+This document outlines the security configuration for Supabase storage buckets in the Modern 3D Viewer application.
+
+## Current Status
+Last Updated: March 23, 2025
+
+### Security Configuration Issues
+- Current configuration allows broader access than appropriate for production
+- Temporary configuration allows unauthenticated users to upload to `floor-textures` bucket
+
+### Required Changes Before Production
+- Implement proper [authentication checks](../auth/README.md)
+- Add user-specific restrictions
+- Implement file type restrictions
+- Consider folder structures for uploads
+
 ## Current Issue
 
 The application currently has security configuration issues with Supabase storage buckets. We've identified that while database Row Level Security (RLS) policies are correctly configured, the storage bucket policies have been temporarily set to allow broader access than would be appropriate for production.
@@ -85,6 +101,11 @@ This issue affects all storage buckets in the application:
 ## Implementation Timeline
 
 Security policy updates should be completed before the application is deployed to production or made available to end-users.
+
+## Related Documentation
+- [Authentication Documentation](../auth/README.md)
+- [Technical Debt](../../TECHNICAL_DEBT.md)
+- [Development Setup](../../DEVELOPMENT_SETUP.md)
 
 ---
 

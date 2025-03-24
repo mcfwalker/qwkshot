@@ -11,6 +11,10 @@ Authentication in Modern 3D Viewer is implemented using Supabase Auth, providing
 - Protected route middleware
 - Authentication layout and pages
 
+### Related Documentation
+- [Storage Security Configuration](../storage/README.md) - Security policies for storage buckets
+- [Technical Debt](../../TECHNICAL_DEBT.md) - Known issues and planned improvements
+
 ### File Structure
 ```
 src/

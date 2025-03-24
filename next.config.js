@@ -12,6 +12,25 @@ const nextConfig = {
   },
   // Support external packages for server components
   serverExternalPackages: ['@supabase/auth-helpers-nextjs'],
+  
+  // Add better development headers
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig 

@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Navigation } from "@/components/layout/Navigation";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { HealthCheck } from "@/components/health-check";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,6 +17,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <ErrorBoundary>
           <Providers>
+            <HealthCheck />
             {children}
           </Providers>
         </ErrorBoundary>
