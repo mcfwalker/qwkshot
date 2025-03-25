@@ -109,4 +109,93 @@ Security policy updates should be completed before the application is deployed t
 
 ---
 
-*Last updated: March 23, 2025* 
+*Last updated: March 23, 2025*
+
+# Storage Management
+
+## Overview
+Modern 3D Viewer uses Supabase Storage for managing 3D model files. This document outlines the best practices and implementation patterns for handling file storage and access.
+
+## URL Handling Best Practices
+
+### Signed URLs
+The recommended approach for accessing stored files is using signed URLs:
+
+```typescript
+// Example of correct URL handling
+const { data: urlData } = await supabase
+  .storage
+  .from('models')
+  .createSignedUrl(filePath, 3600); // 1 hour expiration
+
+const signedUrl = urlData.signedUrl;
+```
+
+#### Benefits
+- Secure, temporary access
+- Automatic URL encoding
+- Built-in authentication
+- Compatible with RLS policies
+- Consistent across storage providers
+
+#### Use Cases
+- Model viewing
+- File downloads
+- Temporary access sharing
+- Authenticated access to private files
+
+### Anti-patterns to Avoid
+```typescript
+// ❌ Don't construct storage URLs manually
+const url = `${SUPABASE_URL}/storage/v1/object/public/${path}`;
+
+// ❌ Don't use direct public URLs without signing
+model.file_url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/...`;
+```
+
+## Implementation Guide
+
+### 1. File Upload
+```typescript
+const { data } = await supabase.storage
+  .from('models')
+  .upload(path, file);
+```
+
+### 2. File Access
+```typescript
+// Get a signed URL for temporary access
+const { data } = await supabase.storage
+  .from('models')
+  .createSignedUrl(path, 3600);
+```
+
+### 3. File Deletion
+```typescript
+const { error } = await supabase.storage
+  .from('models')
+  .remove([path]);
+```
+
+## Current Implementation Status
+
+### Working Examples
+- Library model selector (`src/components/viewer/LibraryModelSelector.tsx`)
+- Model loading service (`src/lib/library-service.ts`)
+
+### Needs Update
+- Direct model viewing (`src/app/(protected)/viewer/[modelId]/page.tsx`)
+- Any direct public URL construction
+
+## Migration Guide
+When updating existing code to use signed URLs:
+1. Replace direct URL construction with `createSignedUrl`
+2. Update components to handle URL expiration
+3. Consider caching strategies for frequently accessed files
+4. Implement error handling for URL generation failures
+
+## Security Considerations
+- Signed URLs expire after their specified duration
+- Each signed URL is unique and cannot be modified
+- Access can be revoked by updating storage bucket policies
+- URLs should not be stored long-term in the database 
