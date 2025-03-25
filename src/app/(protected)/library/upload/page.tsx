@@ -9,16 +9,34 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeft, Upload } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
+import { supabase } from '@/lib/supabase'
 
 export default function UploadPage() {
-  const { user, loading } = useAuth()
   const router = useRouter()
   const [uploading, setUploading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
   const [file, setFile] = useState<File | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [tags, setTags] = useState('')
+
+  useEffect(() => {
+    async function getUser() {
+      try {
+        const { data: { user: currentUser }, error } = await supabase.auth.getUser()
+        if (error) throw error
+        setUser(currentUser)
+      } catch (error) {
+        console.error('Error getting user:', error)
+        router.push('/auth/sign-in')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getUser()
+  }, [router])
 
   useEffect(() => {
     if (!loading && !user) {

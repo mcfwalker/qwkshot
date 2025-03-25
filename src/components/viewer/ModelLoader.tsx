@@ -5,7 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, RefreshCw } from 'lucide-react';
 import { LoadingOverlay, LoadingButton } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
-import { createRetryableFunction } from '@/lib/retry-utils';
+import { withRetry } from '@/lib/retry-utils';
 import { toast } from 'sonner';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
@@ -13,59 +13,52 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
 
-  const processFile = createRetryableFunction(async () => {
-    if (!currentFile) throw new Error('No file selected');
-
+  const processFile = async (file: File) => {
     // Validate file type
-    if (!currentFile.name.toLowerCase().endsWith('.glb') && !currentFile.name.toLowerCase().endsWith('.gltf')) {
+    if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
       throw new Error('Please upload a .glb or .gltf file');
     }
 
     // Create object URL for the file
-    const url = URL.createObjectURL(currentFile);
+    const url = URL.createObjectURL(file);
     onModelLoad(url);
     return url;
-  }, {
-    maxAttempts: 3,
-    onRetry: (error, attempt) => {
-      toast.error('Failed to process model', {
-        description: `Retrying... (Attempt ${attempt}/3)`,
-      });
-    }
-  });
+  };
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-
+  const handleFile = async (file: File) => {
     setCurrentFile(file);
     setLoading(true);
     setError(null);
 
     try {
-      await processFile.execute();
+      await withRetry(
+        () => processFile(file),
+        {
+          maxAttempts: 3,
+          onRetry: (error, attempt) => {
+            toast.error('Failed to process model', {
+              description: `Retrying... (Attempt ${attempt}/3)`,
+            });
+          }
+        }
+      );
     } catch (err) {
       console.error('Model loading error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load model');
     } finally {
       setLoading(false);
     }
-  }, [onModelLoad]);
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+    await handleFile(file);
+  }, []);
 
   const handleRetry = async () => {
     if (!currentFile) return;
-    
-    setLoading(true);
-    setError(null);
-
-    try {
-      await processFile.execute();
-    } catch (err) {
-      console.error('Model loading error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load model');
-    } finally {
-      setLoading(false);
-    }
+    await handleFile(currentFile);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
