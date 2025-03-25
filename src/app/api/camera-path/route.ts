@@ -2,27 +2,59 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { SceneGeometry } from '@/lib/scene-analysis';
 
+// Simple debug logs at the very start
+console.log('DEBUG - API Route Loading');
+console.log('DEBUG - Environment check:');
+console.log('Has OPENAI_API_KEY:', !!process.env.OPENAI_API_KEY);
+console.log('Has OPENAI_ORGANIZATION:', !!process.env.OPENAI_ORGANIZATION);
+
 if (!process.env.OPENAI_API_KEY) {
+  console.log('ERROR: Missing OPENAI_API_KEY');
   throw new Error('Missing OPENAI_API_KEY environment variable');
 }
 
-// Check if API key is a project-based key (sk-proj-*)
-const isProjectKey = process.env.OPENAI_API_KEY?.startsWith('sk-proj-');
-console.log('Using project-based API key:', isProjectKey);
-
-// Initialize OpenAI client with proper configuration
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  // Add organization ID for project-based keys if available
-  ...(process.env.OPENAI_ORGANIZATION && { organization: process.env.OPENAI_ORGANIZATION })
+// Detailed environment diagnostics
+console.log('Environment Variables Check:', {
+  OPENAI_API_KEY_EXISTS: !!process.env.OPENAI_API_KEY,
+  OPENAI_API_KEY_TYPE: typeof process.env.OPENAI_API_KEY,
+  OPENAI_API_KEY_PREFIX: process.env.OPENAI_API_KEY?.substring(0, 8),
+  OPENAI_ORGANIZATION_EXISTS: !!process.env.OPENAI_ORGANIZATION,
+  OPENAI_ORGANIZATION_TYPE: typeof process.env.OPENAI_ORGANIZATION,
+  OPENAI_ORGANIZATION_VALUE: process.env.OPENAI_ORGANIZATION
 });
 
+// Check if API key is a project-based key (sk-proj-*)
+const isProjectKey = process.env.OPENAI_API_KEY?.startsWith('sk-proj-');
+console.log('DEBUG - Is project key:', isProjectKey);
+
+// Create configuration object with trimmed values
+const openaiConfig = {
+  apiKey: process.env.OPENAI_API_KEY?.trim(),
+  organization: process.env.OPENAI_ORGANIZATION?.trim(),
+  defaultHeaders: {
+    'OpenAI-Organization': process.env.OPENAI_ORGANIZATION?.trim()
+  }
+};
+
+console.log('OpenAI Configuration:', {
+  hasApiKey: !!openaiConfig.apiKey,
+  organization: openaiConfig.organization,
+  hasOrgHeader: !!openaiConfig.defaultHeaders['OpenAI-Organization'],
+  configKeys: Object.keys(openaiConfig)
+});
+
+// Initialize OpenAI client with proper configuration
+const openai = new OpenAI(openaiConfig);
+
 export async function POST(request: Request) {
-  console.log('Camera path generation request received');
+  console.log('DEBUG - Received POST request');
   
   try {
     const body = await request.json();
-    console.log('Request body:', JSON.stringify(body, null, 2));
+    console.log('Request received:', {
+      hasInstruction: !!body.instruction,
+      hasSceneGeometry: !!body.sceneGeometry
+    });
 
     const { instruction, sceneGeometry } = body;
 

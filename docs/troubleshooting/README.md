@@ -44,6 +44,32 @@ export async function createServerClient() {
    - Check network tab for failed auth requests
    - Review [Authentication Documentation](../features/auth/README.md)
 
+#### OpenAI API Authentication
+```
+Error: Authentication error with OpenAI API. You are using a project-based API key (sk-proj-*). 
+Make sure OPENAI_ORGANIZATION is set correctly in your environment variables.
+```
+
+**Cause**: Issues with OpenAI API key configuration or format
+**Impact**: Camera path generation and other OpenAI features fail
+**Solutions**: 
+1. Verify API key format:
+   - Check for correct key format (should start with `sk-proj-`)
+   - Ensure no extra spaces or quotes in `.env.local`
+   - Verify key matches exactly with OpenAI dashboard
+
+2. If key verification fails:
+   - Generate new API key at https://platform.openai.com/api-keys
+   - Copy key immediately (it won't be shown again)
+   - Update `.env.local` with new key
+   - Restart development server
+
+3. Diagnostic steps:
+   - Check API key in OpenAI dashboard
+   - Verify organization ID is set correctly
+   - Restart server after any changes
+   - Clear browser cache if needed
+
 ### 2. Development Server Issues
 
 #### Terminal Interruptions

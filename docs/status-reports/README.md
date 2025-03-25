@@ -25,6 +25,11 @@ Where:
    - Use the exact timestamp from the query in the filename
    - Never assume or manually enter the timestamp
 
+2. **README Maintenance**
+   - MUST update this README.md after creating a new status report
+   - Add the new report to the "Current Reports" section
+   - Place newest reports at the top of the list
+
 ## Template
 Each status report should include:
 1. **Summary** - Brief overview of progress
@@ -34,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-03-24-1755 - OpenAI API Authentication Resolution
 - M3DV-SR-2025-03-24-1557 - Cookie Handling Fix
 - M3DV-SR-2025-03-24-0847 - Branch Reorganization and Project Structure Update
 - M3DV-SR-2025-03-24-1430 - Latest project updates
