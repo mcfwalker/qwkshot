@@ -54,7 +54,7 @@ export default async function LibraryPage() {
             Manage and view your 3D models
           </p>
         </div>
-        <Link href="/viewer">
+        <Link href="/library/upload">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
             New Model
