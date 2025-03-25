@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Model } from '@/lib/supabase'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { toast } from 'sonner'
+import { loadModel } from '@/lib/library-service'
 
 interface ModelViewerClientProps {
   model: Model
@@ -17,9 +18,24 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
+  const [signedUrl, setSignedUrl] = useState<string | null>(null)
+
+  // Get signed URL when component mounts
+  useEffect(() => {
+    async function getSignedUrl() {
+      try {
+        const url = await loadModel(model.id)
+        setSignedUrl(url)
+      } catch (error) {
+        console.error('Error getting signed URL:', error)
+        toast.error('Failed to load model URL')
+      }
+    }
+    getSignedUrl()
+  }, [model.id])
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!containerRef.current || !signedUrl) return
 
     // Initialize Three.js scene
     const scene = new THREE.Scene()
@@ -58,7 +74,7 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
     // Load model
     const loader = new GLTFLoader()
     loader.load(
-      model.file_url,
+      signedUrl,
       (gltf: GLTF) => {
         scene.add(gltf.scene)
 
@@ -110,7 +126,18 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
       scene.clear()
       containerRef.current?.removeChild(renderer.domElement)
     }
-  }, [model.file_url])
+  }, [signedUrl]) // Added signedUrl dependency
+
+  if (!signedUrl) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="text-muted-foreground">Loading model...</p>
+        </div>
+      </div>
+    )
+  }
 
   return <div ref={containerRef} className="w-full h-full" />
 } 

@@ -54,12 +54,19 @@ export default async function LibraryPage() {
             Manage and view your 3D models
           </p>
         </div>
-        <Link href="/library/upload">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Model
-          </Button>
-        </Link>
+        <div className="space-x-2">
+          <Link href="/test-viewer/test-123">
+            <Button variant="outline">
+              Test Viewer
+            </Button>
+          </Link>
+          <Link href="/library/upload">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Model
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Suspense fallback={<ModelGridSkeleton />}>

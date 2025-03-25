@@ -6,15 +6,15 @@ import { ViewerSkeleton } from '@/components/viewer/ViewerSkeleton'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
+import { BackToLibrary } from '@/components/viewer/BackToLibrary'
 
 // Enable revalidation every hour
 export const revalidate = 3600
 
 // Metadata for the page
 export async function generateMetadata({ params }: { params: { modelId: string } }) {
-  const modelId = await Promise.resolve(params.modelId)
-  const model = await getModelData(modelId)
+  const resolvedParams = await params
+  const model = await getModelData(resolvedParams.modelId)
   
   return {
     title: model ? `${model.name} - Modern 3D Viewer` : 'Model Not Found',
@@ -29,9 +29,9 @@ async function getModelData(modelId: string) {
   }
 
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     
+    // Get the model details
     const { data: model, error } = await supabase
       .from('models')
       .select('*')
@@ -43,14 +43,10 @@ async function getModelData(modelId: string) {
       return null
     }
 
-    // Ensure the file_url is a full URL if it's a relative path
-    if (model && !model.file_url.startsWith('http')) {
-      // Remove any leading 'models/' from the file_url as it's already part of the bucket path
-      const fileName = model.file_url.replace(/^models\//, '')
-      model.file_url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/models/${fileName}`
+    if (!model) {
+      return null
     }
 
-    console.log('Model data:', { id: model?.id, file_url: model?.file_url })
     return model
   } catch (error) {
     console.error('Error fetching model:', error)
@@ -60,22 +56,31 @@ async function getModelData(modelId: string) {
 
 // Server Component
 export default async function ViewerPage({ params }: { params: { modelId: string } }) {
-  const modelId = await Promise.resolve(params.modelId)
-  const model = await getModelData(modelId)
+  try {
+    const resolvedParams = await params
+    const model = await getModelData(resolvedParams.modelId)
 
-  if (!model) {
-    notFound()
+    if (!model) {
+      notFound()
+    }
+
+    return (
+      <div className="h-[calc(100vh-4rem)] relative">
+        <div className="absolute top-4 left-4 z-10">
+          <BackToLibrary />
+        </div>
+        <ErrorBoundary fallback={<ViewerError modelId={resolvedParams.modelId} />}>
+          <Suspense fallback={<ViewerSkeleton />}>
+            <ModelViewerClient model={model} />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    )
+  } catch (error) {
+    console.error('Error in ViewerPage:', error)
+    const resolvedParams = await params
+    return <ViewerError modelId={resolvedParams.modelId} />
   }
-
-  return (
-    <div className="h-[calc(100vh-4rem)] relative">
-      <ErrorBoundary fallback={<ViewerError modelId={modelId} />}>
-        <Suspense fallback={<ViewerSkeleton />}>
-          <ModelViewerClient model={model} />
-        </Suspense>
-      </ErrorBoundary>
-    </div>
-  )
 }
 
 // Error fallback component
