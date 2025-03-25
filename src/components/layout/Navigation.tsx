@@ -40,7 +40,7 @@ export function Navigation() {
             variant="ghost" 
             size="sm"
             className="font-bold"
-            onClick={() => handleNavigation('/')}
+            onClick={() => handleNavigation('/viewer')}
           >
             <Home className="mr-2 h-4 w-4" />
             3D Viewer

@@ -55,11 +55,6 @@ export default async function LibraryPage() {
           </p>
         </div>
         <div className="space-x-2">
-          <Link href="/test-viewer/test-123">
-            <Button variant="outline">
-              Test Viewer
-            </Button>
-          </Link>
           <Link href="/library/upload">
             <Button>
               <Plus className="mr-2 h-4 w-4" />

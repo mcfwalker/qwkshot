@@ -38,6 +38,7 @@
 2. **AI Assistant Review**
    The AI will:
    - Confirm review of documentation
+   - Perform thorough code review of relevant components
    - Analyze current codebase state
    - Verify environment setup
    - Check health monitoring status

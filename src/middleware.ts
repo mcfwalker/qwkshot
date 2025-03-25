@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Handle protected routes
-    const protectedPaths = ['/viewer', '/library']
+    const protectedPaths = ['/', '/viewer', '/library']
     const isProtectedPath = protectedPaths.some(protectedPath => 
       path.startsWith(protectedPath)
     )
