@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export const LoadingSpinner = ({
   className,
@@ -84,16 +85,18 @@ export const LoadingButton = ({
 
 export const ModelLoadingSkeleton = () => {
   return (
-    <div className="space-y-4 p-4">
-      <LoadingSkeleton className="h-8 w-3/4" />
-      <LoadingSkeleton className="h-32" />
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-8 w-8 rounded-md" />
+      </div>
       <div className="space-y-2">
-        <LoadingSkeleton className="h-4 w-1/2" />
-        <LoadingSkeleton className="h-4 w-3/4" />
-        <LoadingSkeleton className="h-4 w-2/3" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
       </div>
     </div>
-  )
+  );
 }
 
 export const ViewerLoadingSkeleton = () => {

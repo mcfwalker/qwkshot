@@ -2,9 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { ModelLoader } from './ModelLoader';
-import { LibraryModelSelector } from './LibraryModelSelector';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { ModelSelectorTabs } from './ModelSelectorTabs';
 
 // Dynamically import the Viewer component with no SSR
 const Viewer = dynamic(() => import("./Viewer"), { ssr: false });
@@ -19,19 +18,13 @@ export const ViewerContainer = () => {
           <Viewer modelUrl={modelUrl} />
         </div>
         
-        {/* Controls panel positioned on the right side */}
-        <div className="absolute top-4 right-4 w-80 z-10 space-y-4">
-          {/* Upload new model */}
-          <ErrorBoundary name="ModelLoader">
-            <ModelLoader onModelLoad={setModelUrl} />
-          </ErrorBoundary>
-          
-          {/* Library model selector */}
-          <ErrorBoundary name="LibraryModelSelector">
-            <LibraryModelSelector onSelectModel={setModelUrl} />
+        {/* Cast panel positioned on the left side */}
+        <div className="absolute top-4 left-4 w-80 z-10">
+          <ErrorBoundary name="ModelSelectorTabs">
+            <ModelSelectorTabs onModelSelect={setModelUrl} />
           </ErrorBoundary>
         </div>
       </ErrorBoundary>
     </div>
   );
-} 
+}; 

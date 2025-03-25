@@ -34,7 +34,7 @@ export function Navigation() {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
+      <div className="flex h-14 items-center px-4">
         <div className="mr-4 flex">
           <Button 
             variant="ghost" 
@@ -43,38 +43,27 @@ export function Navigation() {
             onClick={() => handleNavigation('/viewer')}
           >
             <Home className="mr-2 h-4 w-4" />
-            3D Viewer
+            MiniMav
           </Button>
         </div>
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="flex items-center">
-            <Button 
-              variant={pathname === '/viewer' ? "default" : "ghost"} 
-              size="sm" 
-              className="mr-2"
-              onClick={() => handleNavigation('/viewer')}
-            >
-              <ViewIcon className="mr-2 h-4 w-4" />
-              Scene
-            </Button>
-            <Button 
-              variant={pathname.startsWith('/library') ? "default" : "ghost"} 
-              size="sm"
-              className="mr-2"
-              onClick={() => handleNavigation('/library')}
-            >
-              <FolderOpen className="mr-2 h-4 w-4" />
-              Library
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={handleSignOut}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </Button>
-          </div>
+        <div className="flex flex-1 items-center justify-end space-x-2">
+          <Button 
+            variant={pathname.startsWith('/library') ? "default" : "ghost"} 
+            size="sm"
+            className="mr-2"
+            onClick={() => handleNavigation('/library')}
+          >
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Library
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={handleSignOut}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </Button>
         </div>
       </div>
     </nav>

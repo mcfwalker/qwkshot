@@ -4,14 +4,13 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback } from 'react';
 import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D } from 'three';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import CameraControls from './CameraControls';
+// Commented out unused imports (keeping for reference)
+// import CameraControls from './CameraControls';
+// import FloorControls from './FloorControls';
 import CameraTelemetry from './CameraTelemetry';
 import { CameraAnimationSystem } from './CameraAnimationSystem';
 import Floor, { FloorType } from './Floor';
-import FloorControls from './FloorControls';
+import { SceneControls } from './SceneControls';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -26,33 +25,6 @@ function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.Ref
   scene.position.y = height;
   
   return <primitive object={scene} />;
-}
-
-// Add ModelControls component
-function ModelControls({ height, onHeightChange }: { height: number; onHeightChange: (height: number) => void }) {
-  return (
-    <Card className="viewer-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="viewer-title">Model Position</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="viewer-label">Height</Label>
-            <span className="text-sm text-muted-foreground">{height.toFixed(2)}</span>
-          </div>
-          <Slider
-            className="viewer-slider"
-            value={[height]}
-            onValueChange={(values: number[]) => onHeightChange(values[0])}
-            min={0}
-            max={5}
-            step={0.1}
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 interface ViewerProps {
@@ -192,22 +164,21 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
         </Suspense>
       </Canvas>
 
-      {/* Controls panel */}
-      <div className="absolute left-4 top-20 w-80 z-10 space-y-4">
-        <CameraControls
-          onUpdateCamera={handleCameraUpdate}
-          onUpdateFov={setFov}
-          currentFov={fov}
-        />
-        <ModelControls
-          height={modelHeight}
-          onHeightChange={setModelHeight}
-        />
-        <FloorControls
+      {/* Scene Controls panel - positioned below Cast container */}
+      <div className="absolute left-4 top-[calc(4rem+24rem)] w-80 z-10">
+        <SceneControls
+          modelHeight={modelHeight}
+          onModelHeightChange={setModelHeight}
+          fov={fov}
+          onFovChange={setFov}
+          floorType={floorType}
           onFloorTypeChange={setFloorType}
           onFloorTextureChange={setFloorTexture}
-          currentFloorType={floorType}
         />
+      </div>
+
+      {/* Camera Animation System - positioned in upper right */}
+      <div className="absolute right-4 top-4 w-80 z-10">
         <CameraAnimationSystem
           onAnimationUpdate={handleAnimationUpdate}
           onAnimationStop={handleAnimationStop}

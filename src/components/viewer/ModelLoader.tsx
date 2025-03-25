@@ -71,13 +71,13 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   });
 
   return (
-    <div className="relative">
+    <div className="relative p-4">
       <div
         {...getRootProps()}
         className={`
-          border-2 border-dashed rounded-lg p-8
+          border-2 border-dashed rounded-lg p-6
           flex flex-col items-center justify-center
-          transition-colors cursor-pointer
+          transition-colors cursor-pointer min-h-[12rem]
           ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
           ${error ? 'border-destructive' : ''}
         `}

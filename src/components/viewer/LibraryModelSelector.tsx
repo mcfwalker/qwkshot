@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, FolderOpen, RefreshCw } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getModels, loadModel } from '@/lib/library-service';
 import { LoadingSpinner, LoadingButton, ModelLoadingSkeleton } from '@/components/shared/LoadingStates';
@@ -79,59 +78,56 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
   }
 
   return (
-    <Card className="viewer-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="viewer-title flex justify-between items-center">
-          <div className="flex items-center">
-            <FolderOpen className="viewer-button-icon" />
-            Model Library
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <p className="text-sm text-destructive mb-4">{error}</p>
-        )}
-        
-        {models.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No models in library
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {models.map((model) => (
-              <div key={model.id} className="space-y-2">
-                <LoadingButton
-                  onClick={() => handleModelSelect(model)}
-                  className="w-full justify-start text-left"
-                  loading={loadingModelId === model.id}
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">Available Models</h3>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleRefresh}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
+      {error && (
+        <p className="text-sm text-destructive mb-4">{error}</p>
+      )}
+      
+      {models.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          No models in library
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {models.map((model) => (
+            <div key={model.id} className="space-y-2">
+              <LoadingButton
+                onClick={() => handleModelSelect(model)}
+                className="w-full justify-start text-left"
+                loading={loadingModelId === model.id}
+              >
+                {model.name}
+              </LoadingButton>
+              {retryingModelId === model.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRetry(model)}
+                  className="w-full"
                 >
-                  {model.name}
-                </LoadingButton>
-                {retryingModelId === model.id && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRetry(model)}
-                    className="w-full"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry Loading
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry Loading
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }; 
