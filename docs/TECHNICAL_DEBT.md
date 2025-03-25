@@ -84,4 +84,21 @@
 - Updated `createServerClient` to properly await cookie access
 - Implemented custom cookie handler for proper async access
 - Full details in [Status Report M3DV-SR-2025-03-24-1557](./status-reports/M3DV-SR-2025-03-24-1557.md)
-**Related Documentation**: [Authentication Documentation](./features/auth/README.md), [Troubleshooting Guide](./troubleshooting/README.md) 
+**Related Documentation**: [Authentication Documentation](./features/auth/README.md), [Troubleshooting Guide](./troubleshooting/README.md)
+
+### Performance Optimization: OrbitControls Event Listeners
+**Status**: Open
+**Priority**: Low
+**Impact**: Performance warning in console, potential scroll responsiveness
+**Description**: Non-passive event listeners on wheel events in OrbitControls
+**Location**: `OrbitControls.js:311`
+**Warning Message**: `Added non-passive event listener to a scroll-blocking 'wheel' event`
+**Fix Required**: Update wheel event listeners to use passive option
+**Reference**: https://www.chromestatus.com/feature/5745543795965952
+**Notes**:
+- Third-party library (Three.js OrbitControls)
+- Consider either:
+  1. Forking and modifying OrbitControls
+  2. Wrapping with custom implementation
+  3. Waiting for upstream fix
+**Priority**: Low - Warning only, functionality not affected 
