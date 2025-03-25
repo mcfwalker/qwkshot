@@ -5,7 +5,7 @@ This directory contains documentation related to the Modern 3D Viewer's user int
 ## Contents
 
 ### Current Documents
-- [UI Revamp 2024](./UI_REVAMP_2024.md) - Comprehensive plan for the 2024 UI restructuring, including tab-based navigation and improved workflow organization
+- [UI Revamp 2025](./UI_REVAMP_2025-03-25-1114.md) - Comprehensive plan for the 2025 UI restructuring, including tab-based navigation and improved workflow organization
 
 ## UI Design Principles
 
