@@ -65,20 +65,21 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="library-grid">
       {models.map((model) => (
-        <Card key={model.id} className="overflow-hidden">
+        <Card key={model.id} className="library-card overflow-hidden">
           <CardContent className="p-0">
-            <div className="aspect-square bg-muted relative">
-              {/* Thumbnail or preview would go here */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-muted-foreground">{model.name}</span>
+            <div className="aspect-square bg-[#1a1a1a] relative rounded-lg">
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                <span className="text-[#666666] text-sm font-mono truncate">
+                  {model.name}
+                </span>
               </div>
             </div>
           </CardContent>
           <CardFooter className="p-4 flex justify-between">
             <Link href={`/viewer/${model.id}`}>
-              <Button variant="secondary" size="sm">
+              <Button className="library-button" variant="secondary" size="sm">
                 View
               </Button>
             </Link>
@@ -86,13 +87,14 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
               <Button
                 variant="ghost"
                 size="sm"
+                className="library-button"
                 onClick={() => handleDelete(model)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="library-button-icon" />
               </Button>
               <Link href={`/library/edit/${model.id}`}>
-                <Button variant="ghost" size="sm">
-                  <Pencil className="h-4 w-4" />
+                <Button variant="ghost" size="sm" className="library-button">
+                  <Pencil className="library-button-icon" />
                 </Button>
               </Link>
             </div>

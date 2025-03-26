@@ -12,21 +12,21 @@ interface ModelGridProps {
 
 export function ModelGrid({ models, onEdit, onDelete }: ModelGridProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="library-grid">
       {models.map((model) => (
-        <Card key={model.id} className="flex flex-col">
+        <Card key={model.id} className="library-card flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span className="truncate">{model.name}</span>
               <div className="flex gap-2">
                 {onEdit && (
-                  <Button variant="ghost" size="icon" onClick={() => onEdit(model)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="library-button" onClick={() => onEdit(model)}>
+                    <Pencil className="library-button-icon" />
                   </Button>
                 )}
                 {onDelete && (
-                  <Button variant="ghost" size="icon" onClick={() => onDelete(model)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="library-button" onClick={() => onDelete(model)}>
+                    <Trash2 className="library-button-icon" />
                   </Button>
                 )}
               </div>
@@ -52,7 +52,7 @@ export function ModelGrid({ models, onEdit, onDelete }: ModelGridProps) {
           </CardContent>
           <CardFooter>
             <Link href={`/viewer/${model.id}`} className="w-full">
-              <Button className="w-full">View Model</Button>
+              <Button className="library-button w-full">View Model</Button>
             </Link>
           </CardFooter>
         </Card>

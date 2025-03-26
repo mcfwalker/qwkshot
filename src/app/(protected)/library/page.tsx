@@ -46,18 +46,18 @@ async function getModels() {
 export default async function LibraryPage() {
   console.log('Debug: Library - Page component rendering')
   return (
-    <div className="container py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="container px-4 py-8">
+      <div className="library-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Your Library</h1>
-          <p className="text-muted-foreground">
+          <h1 className="library-title">Your Library</h1>
+          <p className="library-subtitle">
             Manage and view your 3D models
           </p>
         </div>
         <div className="space-x-2">
           <Link href="/library/upload">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button className="library-button">
+              <Plus className="library-button-icon" />
               New Model
             </Button>
           </Link>

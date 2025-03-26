@@ -251,6 +251,48 @@
   .focus-visible\:ring-ring\/50[data-slot="textarea"] {
     @apply focus-visible:ring-0;
   }
+
+  /* Library specific styles */
+  .library-card {
+    @apply bg-background/95 backdrop-blur-md 
+           !border !border-solid !border-[#444444]
+           rounded shadow-lg 
+           transition-all duration-200
+           hover:shadow-xl
+           hover:bg-background/98
+           p-4;
+  }
+  
+  .library-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
+  }
+  
+  .library-header {
+    @apply flex justify-between items-center mb-8;
+  }
+  
+  .library-title {
+    @apply text-2xl font-bold tracking-tight text-foreground;
+  }
+  
+  .library-subtitle {
+    @apply text-muted-foreground mt-1;
+  }
+  
+  .library-content {
+    @apply space-y-4;
+  }
+  
+  .library-button {
+    @apply bg-secondary/50 hover:bg-secondary/70 text-secondary-foreground 
+           rounded-md px-4 py-2 flex items-center gap-2 transition-colors
+           border border-border/50 hover:border-border
+           focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+  
+  .library-button-icon {
+    @apply w-4 h-4 shrink-0 mr-2;
+  }
 }
 
 @layer base {
