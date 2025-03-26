@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Play, Pause, Clock, Wand2, Loader2, Video, Square, RefreshCcw } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Vector3, Object3D, PerspectiveCamera } from 'three';
 import { toast } from 'sonner';
 import { analyzeScene, SceneGeometry } from '@/lib/scene-analysis';
@@ -82,6 +83,8 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [inputDuration, setInputDuration] = useState(duration.toString());
+  const [isPromptFocused, setIsPromptFocused] = useState(false);
   const progressRef = useRef(0);
   const animationFrameRef = useRef<number>();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -200,7 +203,8 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
         },
         body: JSON.stringify({
           instruction,
-          sceneGeometry
+          sceneGeometry,
+          duration: parseFloat(inputDuration) // Include the user's requested duration
         }),
       });
 
@@ -346,19 +350,72 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
     onAnimationStop();
   };
 
+  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputDuration(value);
+    
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue >= 1 && numValue <= 20) {
+      setDuration(numValue);
+    }
+  };
+
+  const handleDurationBlur = () => {
+    const numValue = parseFloat(inputDuration);
+    if (isNaN(numValue) || numValue < 1) {
+      setInputDuration('1');
+      setDuration(1);
+    } else if (numValue > 20) {
+      setInputDuration('20');
+      setDuration(20);
+    } else {
+      setInputDuration(numValue.toString());
+      setDuration(numValue);
+    }
+  };
+
   return (
     <Card className="viewer-panel">
       <CardHeader className="viewer-panel-header px-2">
         <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
       </CardHeader>
-      <CardContent className="viewer-panel-content">
+      <CardContent className="px-4 pb-6">
         <div className="space-y-4">
           <Textarea
             placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
+            onFocus={() => setIsPromptFocused(true)}
+            onBlur={() => setIsPromptFocused(false)}
             className="min-h-[140px] resize-none"
+            active={isPromptFocused}
           />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
+              <div className="w-20">
+                <Input
+                  id="duration-input"
+                  type="number"
+                  value={inputDuration}
+                  onChange={handleDurationChange}
+                  onBlur={handleDurationBlur}
+                  onFocus={() => setIsPromptFocused(true)}
+                  min={1}
+                  max={20}
+                  step={0.5}
+                  className="text-right"
+                  disabled={isPlaying}
+                  active={isPromptFocused}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
+          </div>
+        </div>
+
+        <div className="mt-8">
           <Button
             onClick={handleGeneratePath}
             disabled={isGenerating || !instruction.trim()}
@@ -378,53 +435,6 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
               </>
             )}
           </Button>
-        </div>
-
-        <div className="space-y-4 mt-6">
-          <div className="flex items-center justify-between">
-            <Label className="viewer-label">Duration</Label>
-            <span className="text-sm text-muted-foreground">{duration}s</span>
-          </div>
-          <Slider
-            value={[duration]}
-            onValueChange={(values) => setDuration(values[0])}
-            min={1}
-            max={10}
-            step={0.5}
-            className="viewer-slider"
-            disabled={isPlaying}
-          />
-          <div className="flex justify-between gap-2">
-            <Button
-              onClick={handlePlayPause}
-              variant="ghost"
-              size="icon"
-              className="flex-1"
-              disabled={keyframes.length === 0}
-            >
-              {isPlaying ? (
-                <Pause className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              onClick={isRecording ? stopRecording : startRecording}
-              variant="ghost"
-              size="icon"
-              disabled={keyframes.length === 0}
-            >
-              <Video className="h-4 w-4" />
-            </Button>
-            <Button
-              onClick={handleReset}
-              variant="ghost"
-              size="icon"
-              disabled={!isPlaying && keyframes.length === 0}
-            >
-              <RefreshCcw className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </CardContent>
     </Card>

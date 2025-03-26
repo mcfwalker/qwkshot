@@ -2,7 +2,11 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+interface TextareaProps extends React.ComponentProps<"textarea"> {
+  active?: boolean;
+}
+
+function Textarea({ className, active, ...props }: TextareaProps) {
   return (
     <textarea
       data-slot="textarea"
@@ -14,6 +18,7 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
         "hover:border-white focus:border-white focus:outline-none focus:ring-0",
         "focus:placeholder:text-transparent",
         "transition-colors",
+        active && "border-white",
         className
       )}
       {...props}

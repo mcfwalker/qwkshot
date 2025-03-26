@@ -11,6 +11,8 @@ import CameraTelemetry from './CameraTelemetry';
 import { CameraAnimationSystem } from './CameraAnimationSystem';
 import Floor, { FloorType } from './Floor';
 import { SceneControls } from './SceneControls';
+import { PlaybackPanel } from './PlaybackPanel';
+import { toast } from 'sonner';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -190,6 +192,18 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           modelRef={modelRef}
           cameraRef={cameraRef}
           controlsRef={controlsRef}
+          canvasRef={canvasRef}
+        />
+      </div>
+
+      {/* Playback panel - positioned below Camera Animation System */}
+      <div className="absolute right-4 top-[calc(4rem+24rem+1rem)] w-80 z-10">
+        <PlaybackPanel
+          isPlaying={isPlaying}
+          duration={duration}
+          onDurationChange={setDuration}
+          onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
+          disabled={!modelRef.current}
           canvasRef={canvasRef}
         />
       </div>

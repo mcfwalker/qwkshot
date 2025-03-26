@@ -53,20 +53,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     console.log('Request received:', {
       hasInstruction: !!body.instruction,
-      hasSceneGeometry: !!body.sceneGeometry
+      hasSceneGeometry: !!body.sceneGeometry,
+      duration: body.duration
     });
 
-    const { instruction, sceneGeometry } = body;
+    const { instruction, sceneGeometry, duration } = body;
 
-    if (!instruction || !sceneGeometry) {
-      console.error('Missing parameters:', { instruction: !!instruction, sceneGeometry: !!sceneGeometry });
+    if (!instruction || !sceneGeometry || !duration) {
+      console.error('Missing parameters:', { 
+        instruction: !!instruction, 
+        sceneGeometry: !!sceneGeometry,
+        duration: !!duration 
+      });
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    const prompt = generatePrompt(instruction, sceneGeometry);
+    const prompt = generatePrompt(instruction, sceneGeometry, duration);
     console.log('Generated prompt:', prompt);
     
     console.log('Calling OpenAI API...');
@@ -75,23 +80,30 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "system",
-          content: `You are a camera path generator for a 3D viewer. Your task is to generate camera keyframes based on natural language instructions. 
-          The scene has the following constraints:
-          - Camera must stay above the floor (y > ${sceneGeometry.floor.height})
-          - Camera must maintain safe distance from model (between ${sceneGeometry.safeDistance.min} and ${sceneGeometry.safeDistance.max} units)
-          - Camera should generally point towards the model's center
-          
-          IMPORTANT: You must respond ONLY with a valid JSON object containing an array of keyframes. No other text or explanation.
-          Example response format:
-          {
-            "keyframes": [
-              {
-                "position": {"x": 5, "y": 2, "z": 3},
-                "target": {"x": 0, "y": 0, "z": 0},
-                "duration": 2
-              }
-            ]
-          }`
+          content: `You are a camera path generator for a 3D viewer. Your task is to generate camera keyframes based on natural language instructions and a specified duration. 
+
+Core constraints:
+1. Duration Constraint:
+   - The total animation duration MUST EXACTLY match the user's requested duration
+   - Break down the total duration into appropriate keyframes for smooth, cinematic movement
+   - You have full control over individual keyframe timing to achieve the best result
+
+2. Spatial Constraints:
+   - Camera must stay above the floor (y > ${sceneGeometry.floor.height})
+   - Camera must maintain safe distance from model (between ${sceneGeometry.safeDistance.min} and ${sceneGeometry.safeDistance.max} units)
+   - Camera should generally point towards the model's center
+
+IMPORTANT: You must respond ONLY with a valid JSON object containing an array of keyframes. No other text or explanation.
+Example response format:
+{
+  "keyframes": [
+    {
+      "position": {"x": 5, "y": 2, "z": 3},
+      "target": {"x": 0, "y": 0, "z": 0},
+      "duration": 2
+    }
+  ]
+}`
         },
         {
           role: "user",
@@ -169,13 +181,15 @@ export async function POST(request: Request) {
   }
 }
 
-function generatePrompt(instruction: string, geometry: SceneGeometry): string {
+function generatePrompt(instruction: string, geometry: SceneGeometry, duration: number): string {
   const currentCamera = geometry.currentCamera;
   const isFrontView = Math.abs(currentCamera?.target.z || 0) < 0.1 && 
                       Math.abs(currentCamera?.position.z || 0) > Math.abs(currentCamera?.position.x || 0);
 
   return `
 Generate camera keyframes for the following instruction: "${instruction}"
+
+Required animation duration: ${duration} seconds
 
 Scene information:
 - Model center: (${geometry.boundingBox.center.x}, ${geometry.boundingBox.center.y}, ${geometry.boundingBox.center.z})
@@ -197,28 +211,5 @@ Generate a sequence of camera keyframes that:
 1. Start from the current camera position
 2. Follow the user's instructions, considering the current view
 3. Maintain safe distances
-4. Create smooth, cinematic movement
-5. Stay above the floor
-6. Keep the model in frame
-
-Response format:
-{
-  "keyframes": [
-    {
-      "position": {"x": number, "y": number, "z": number},
-      "target": {"x": number, "y": number, "z": number},
-      "duration": number
-    }
-  ]
-}
-
-Important:
-- First keyframe should match or smoothly transition from current camera position
-- All positions must be numbers
-- All positions must respect the safe distance range
-- All y-coordinates must be above ${geometry.floor.height}
-- Target points should generally be near the model center
-- Duration should be between 1-5 seconds per keyframe
-- Generate at least 4 keyframes for smooth movement
-- When instructions mention "front", use the established front direction of the model`;
+4. Create smooth, cinematic movement`;
 } 

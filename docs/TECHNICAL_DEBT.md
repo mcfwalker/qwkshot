@@ -1,5 +1,36 @@
 # Technical Debt & Future Improvements
 
+## Camera Path Recording
+
+### MediaRecorder Implementation
+**Status**: Working with Timer-Based Solution
+**Priority**: Low
+**Impact**: Functional but not optimal
+**Description**: Current implementation uses a timer-based approach instead of responding to actual animation state
+**Location**: `src/components/viewer/PlaybackPanel.tsx`
+**Current Implementation**:
+- Uses `setTimeout` based on animation duration to stop recording
+- Adds 100ms buffer to ensure complete capture
+- Works reliably but is not technically elegant
+
+**Future Improvements**:
+1. Investigate better integration with animation progress
+2. Research alternative recording methods:
+   - Frame-by-frame capture
+   - WebRTC-based solutions
+   - Custom MediaRecorder configurations
+3. Add handling for edge cases:
+   - Animation failures
+   - Browser compatibility issues
+   - Network/performance issues
+4. Improve error handling and recovery
+
+**Reference**: See [Status Report M3DV-SR-2025-03-26-1012](./status-reports/M3DV-SR-2025-03-26-1012.md) for full context
+**Notes**:
+- Current solution is functional and reliable
+- Timer-based approach chosen after issues with MediaRecorder API and canvas stream capture
+- Low priority as current implementation meets user needs
+
 ## Authentication & Session Management
 
 ### ~~Cookie Handling in Server Components~~ (RESOLVED)
@@ -92,13 +123,3 @@
 **Impact**: Performance warning in console, potential scroll responsiveness
 **Description**: Non-passive event listeners on wheel events in OrbitControls
 **Location**: `OrbitControls.js:311`
-**Warning Message**: `Added non-passive event listener to a scroll-blocking 'wheel' event`
-**Fix Required**: Update wheel event listeners to use passive option
-**Reference**: https://www.chromestatus.com/feature/5745543795965952
-**Notes**:
-- Third-party library (Three.js OrbitControls)
-- Consider either:
-  1. Forking and modifying OrbitControls
-  2. Wrapping with custom implementation
-  3. Waiting for upstream fix
-**Priority**: Low - Warning only, functionality not affected 

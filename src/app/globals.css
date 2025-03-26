@@ -231,7 +231,7 @@
 
   /* Textarea styles */
   [data-slot="textarea"] {
-    @apply bg-transparent border border-[#444444] rounded-md
+    @apply bg-transparent border-[1.5px] border-[#444444] rounded-md
            text-white placeholder:text-gray-500
            focus-visible:border-white focus-visible:outline-none focus-visible:ring-0
            hover:border-white
@@ -243,13 +243,40 @@
     @apply text-transparent;
   }
 
+  /* Input styles */
+  [data-slot="input"] {
+    @apply bg-transparent border-[1.5px] border-[#444444] rounded-md
+           text-white placeholder:text-gray-500
+           focus-visible:border-white focus-visible:outline-none focus-visible:ring-0
+           hover:border-white
+           transition-colors
+           px-3 py-2;
+  }
+
+  [data-slot="input"]:focus::placeholder {
+    @apply text-transparent;
+  }
+
   /* Override the default focus styles */
-  .focus-visible\:border-ring[data-slot="textarea"] {
+  .focus-visible\:border-ring[data-slot="input"] {
     @apply focus-visible:border-white;
   }
 
-  .focus-visible\:ring-ring\/50[data-slot="textarea"] {
+  .focus-visible\:ring-ring\/50[data-slot="input"] {
     @apply focus-visible:ring-0;
+  }
+
+  /* Dark mode overrides for input */
+  .dark input[data-slot="input"].border-input {
+    @apply border-[#444444] bg-transparent text-white;
+  }
+
+  .dark input[data-slot="input"].border-input:hover {
+    @apply border-white;
+  }
+
+  .dark input[data-slot="input"].border-input:focus-visible {
+    @apply border-white ring-0 outline-none;
   }
 
   /* Library specific styles */
