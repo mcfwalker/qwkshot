@@ -201,6 +201,39 @@ const Navigation = () => {
 - [ ] Library system is functional
 - [ ] Integration with existing viewer works
 
+## Priority 4: Model Thumbnails
+**Timeline: 5-7 days**
+
+### Feature Overview
+Implement automatic thumbnail generation for 3D models in the library view, providing users with visual previews of their models. See detailed documentation in [Model Thumbnails](./features/UI/MODEL_THUMBNAILS.md).
+
+### Implementation Phases
+1. **Core Infrastructure (2-3 days)**
+   - Create thumbnail generation utility using Three.js
+   - Set up Supabase storage for thumbnails
+   - Add database schema updates
+   - Implement error handling
+
+2. **Integration (2 days)**
+   - Add thumbnail generation to upload flow
+   - Update ModelGrid component
+   - Add loading states
+   - Implement error recovery
+
+3. **Optimization (1-2 days)**
+   - Add caching layer
+   - Implement batch processing
+   - Add regeneration capabilities
+   - Performance optimization
+
+### Success Criteria
+- [ ] Automatic thumbnail generation for new uploads
+- [ ] Batch processing for existing models
+- [ ] Clear error handling and recovery
+- [ ] Responsive UI during generation
+- [ ] Proper storage management
+- [ ] Efficient caching implementation
+
 ## Timeline Overview
 ```mermaid
 gantt

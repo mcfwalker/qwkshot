@@ -10,14 +10,14 @@
 - [ ] Understand [Branch Strategy](./BRANCH_STRATEGY.md)
 
 ### 2. Project State Assessment
-- [ ] Verify current branch (use `stable` branch for new features)
+- [ ] Verify current branch 
 - [ ] Review any open pull requests
 - [ ] Check recent commits
 - [ ] Review any pending issues or tasks
 - [ ] Verify environment variables in `.env.local`
 
 ### 3. Development Environment Setup
-- [ ] Start server in background mode: `npm run dev &`
+- [ ] Verify if server has been launched in background mode: `npm run dev &`
 - [ ] Verify health checks at `/api/health`
 - [ ] Monitor server logs for environment validation
 - [ ] Check Supabase connection status
