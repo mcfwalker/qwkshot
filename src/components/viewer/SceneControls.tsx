@@ -69,12 +69,12 @@ export function SceneControls({
 
   return (
     <Card className="viewer-panel">
-      <CardHeader className="viewer-panel-header px-2">
+      <CardHeader className="viewer-panel-header px-2 pb-6 pt-5">
         <CardTitle className="viewer-panel-title">Scene</CardTitle>
       </CardHeader>
-      <CardContent className="viewer-panel-content">
+      <CardContent className="space-y-8 px-4 pb-6">
         {/* Model Height Control */}
-        <div className="space-y-2">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <Label className="viewer-label">Model Height</Label>
             <span className="text-sm text-muted-foreground">{modelHeight.toFixed(2)}</span>
@@ -90,7 +90,7 @@ export function SceneControls({
         </div>
 
         {/* FOV Control */}
-        <div className="space-y-2">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <Label className="viewer-label">Field of View</Label>
             <span className="text-sm text-muted-foreground">{fov}°</span>
@@ -106,35 +106,26 @@ export function SceneControls({
         </div>
 
         {/* Floor Type Control */}
-        <div className="space-y-2">
+        <div className="space-y-6">
           <Label>Floor Type</Label>
           <RadioGroup
             value={floorType}
             onValueChange={(value) => onFloorTypeChange(value as FloorType)}
-            className="space-y-2"
+            className="flex gap-6"
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="grid" id="grid" />
-              <Label htmlFor="grid" className="flex items-center gap-2">
-                <Grid className="h-4 w-4" />
-                Grid
-              </Label>
+              <Label htmlFor="grid">Grid</Label>
             </div>
             
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="none" id="none" />
-              <Label htmlFor="none" className="flex items-center gap-2">
-                <X className="h-4 w-4" />
-                None
-              </Label>
+              <Label htmlFor="none">None</Label>
             </div>
             
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="textured" id="textured" />
-              <Label htmlFor="textured" className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" />
-                Textured
-              </Label>
+              <Label htmlFor="textured">Textured</Label>
             </div>
           </RadioGroup>
 

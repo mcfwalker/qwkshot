@@ -357,7 +357,7 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
             placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            className="min-h-[100px] resize-none"
+            className="min-h-[140px] resize-none"
           />
           <Button
             onClick={handleGeneratePath}

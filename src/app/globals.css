@@ -102,29 +102,19 @@
   
   .viewer-panel {
     @apply bg-background/95 backdrop-blur-md 
-           border border-gray-600
+           border border-[#444444]
            rounded shadow-lg 
            transition-all duration-200
-           hover:border-gray-500
-           hover:shadow-xl
            hover:bg-background/98
            p-4;
   }
   
   .viewer-panel-header {
-    @apply pb-2 transition-colors;
-  }
-  
-  .viewer-panel:hover .viewer-panel-header {
-    /* @apply border-gray-500; */
+    @apply pb-6 pt-4 px-2 transition-colors;
   }
   
   .viewer-panel-title {
-    @apply text-base font-normal text-[#a78bfa] text-left uppercase tracking-wide leading-relaxed transition-colors;
-  }
-  
-  .viewer-panel:hover .viewer-panel-title {
-    @apply text-[#c4b5fd];
+    @apply text-base font-normal text-left uppercase tracking-wide leading-relaxed transition-colors;
   }
   
   .viewer-panel-content {
@@ -144,7 +134,7 @@
     @apply inline-flex items-center justify-center whitespace-nowrap 
            px-3 py-1.5 text-sm font-light transition-colors
            text-gray-400 border-b-2 border-transparent
-           data-[state=active]:text-[#a78bfa] data-[state=active]:border-[#a78bfa];
+           data-[state=active]:text-[#bef264] data-[state=active]:border-[#bef264];
   }
 
   .viewer-tabs [role="tabpanel"] {
@@ -153,26 +143,14 @@
 
   /* Viewer Drop Zone */
   .viewer-drop-zone {
-    @apply rounded-3xl flex flex-col items-center justify-center
-           transition-colors cursor-pointer
+    @apply rounded-lg flex flex-col items-center justify-center
+           cursor-pointer 
+           !border !border-dashed !border-[#444444]
            min-h-[12rem] mb-4;
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 7px,
-      rgb(75 85 99 / 0.3) 7px,
-      rgb(75 85 99 / 0.3) 8px
-    );
   }
-  
-  .viewer-panel:hover .viewer-drop-zone {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 7px,
-      rgb(107 114 128 / 0.3) 7px,
-      rgb(107 114 128 / 0.3) 8px
-    );
+
+  .viewer-drop-zone:hover {
+    @apply !border-[#bef264];
   }
   
   .viewer-button {
@@ -191,22 +169,22 @@
   }
   
   .viewer-slider [role="slider"] {
-    @apply block h-4 w-4 rounded-full border-2 border-primary bg-background 
+    @apply block h-3 w-3 rounded-full border border-primary bg-background 
            transition-colors focus-visible:outline-none focus-visible:ring-2 
            focus-visible:ring-ring focus-visible:ring-offset-2 
            disabled:pointer-events-none disabled:opacity-50;
   }
   
   .viewer-slider [data-orientation="horizontal"] {
-    @apply h-2;
+    @apply h-1;
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-track {
-    @apply relative h-2 w-full grow overflow-hidden rounded-full bg-secondary/50;
+    @apply relative h-1 w-full grow overflow-hidden rounded-full bg-secondary;
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-range {
-    @apply absolute h-full bg-primary/50;
+    @apply absolute h-full bg-primary;
   }
   
   .viewer-label {
@@ -222,19 +200,67 @@
   }
   
   .viewer-radio-item {
-    @apply h-4 w-4 border-2 border-border text-primary 
-           focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+    appearance: none;
+    @apply h-4 w-4 rounded-full border-2 border-border
+           checked:border-[#bef264]
+           focus:outline-none focus:ring-2 focus:ring-[#bef264] focus:ring-offset-2;
+  }
+
+  .viewer-radio-item:checked {
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23bef264' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3.5'/%3e%3c/svg%3e");
+    background-color: transparent;
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  /* Update the radio button base styles */
+  [role="radio"] {
+    @apply border-border text-[#bef264] ring-offset-background;
+  }
+
+  /* Style the inner dot */
+  [role="radio"] [data-state="checked"] .bg-current {
+    @apply bg-[#bef264];
+  }
+
+  /* Style the border when checked */
+  [role="radio"][data-state="checked"] {
+    @apply border-[#bef264];
+  }
+
+  /* Textarea styles */
+  [data-slot="textarea"] {
+    @apply bg-transparent border border-[#444444] rounded-md
+           text-white placeholder:text-gray-500
+           focus-visible:border-white focus-visible:outline-none focus-visible:ring-0
+           hover:border-white
+           transition-colors
+           px-3 py-2;
+  }
+
+  [data-slot="textarea"]:focus::placeholder {
+    @apply text-transparent;
+  }
+
+  /* Override the default focus styles */
+  .focus-visible\:border-ring[data-slot="textarea"] {
+    @apply focus-visible:border-white;
+  }
+
+  .focus-visible\:ring-ring\/50[data-slot="textarea"] {
+    @apply focus-visible:ring-0;
   }
 }
 
 @layer base {
   .dark {
     --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
+    --foreground: 0 0% 90%; /* This is approximately #e5e5e5 */
     --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card-foreground: 0 0% 90%;
     --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover-foreground: 0 0% 90%;
     --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
@@ -248,5 +274,39 @@
     --border: 0 0% 25%;
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
+  }
+
+  /* Override Radix UI radio button colors */
+  .dark [role="radio"] {
+    @apply !border-[#bef264] !text-[#bef264];
+  }
+
+  .dark [role="radio"][data-state="checked"] {
+    @apply !border-[#bef264];
+  }
+
+  .dark [role="radio"] .bg-current {
+    @apply !bg-[#bef264];
+  }
+
+  /* Override textarea styles with higher specificity */
+  .dark textarea[data-slot="textarea"].border-input {
+    @apply border-[#444444] bg-transparent text-white;
+  }
+
+  .dark textarea[data-slot="textarea"].border-input:hover {
+    @apply border-white;
+  }
+
+  .dark textarea[data-slot="textarea"].border-input:focus-visible {
+    @apply border-white ring-0 outline-none;
+  }
+
+  .dark textarea[data-slot="textarea"].placeholder\:text-muted-foreground::placeholder {
+    @apply text-gray-500;
+  }
+
+  .dark textarea[data-slot="textarea"].placeholder\:text-muted-foreground:focus::placeholder {
+    @apply text-transparent;
   }
 }

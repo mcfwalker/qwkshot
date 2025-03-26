@@ -46,7 +46,7 @@ function TabsTrigger({
         "transition-all focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
         "border-b-2 border-transparent",
-        "data-[state=active]:text-[#a78bfa] data-[state=active]:border-[#a78bfa]",
+        "data-[state=active]:text-[#bef264] data-[state=active]:border-[#bef264]",
         className
       )}
       {...props}

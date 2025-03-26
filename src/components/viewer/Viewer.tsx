@@ -165,7 +165,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
       </Canvas>
 
       {/* Scene Controls panel - positioned below Cast container */}
-      <div className="absolute left-4 top-[calc(4rem+24rem)] w-80 z-10">
+      <div className="absolute left-4 top-[calc(4rem+20rem+1rem)] w-80 z-10">
         <SceneControls
           modelHeight={modelHeight}
           onModelHeightChange={setModelHeight}

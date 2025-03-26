@@ -88,7 +88,7 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
           No models in library
         </p>
       ) : (
-        <div className="space-y-[1px] [&>*:not(:last-child)]:border-b [&>*:not(:last-child)]:border-[#a78bfa]/20 overflow-y-auto">
+        <div className="space-y-[1px] [&>*:not(:last-child)]:border-b [&>*:not(:last-child)]:border-[#bef264]/20 overflow-y-auto">
           {models.map((model) => (
             <div key={model.id} className="py-2 first:pt-0 last:pb-0">
               <LoadingButton
