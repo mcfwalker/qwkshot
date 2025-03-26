@@ -68,15 +68,15 @@ export function SceneControls({
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Scene Controls</CardTitle>
+    <Card className="viewer-panel">
+      <CardHeader className="viewer-panel-header px-2">
+        <CardTitle className="viewer-panel-title">Scene</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="viewer-panel-content">
         {/* Model Height Control */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Model Height</Label>
+            <Label className="viewer-label">Model Height</Label>
             <span className="text-sm text-muted-foreground">{modelHeight.toFixed(2)}</span>
           </div>
           <Slider
@@ -85,14 +85,14 @@ export function SceneControls({
             min={0}
             max={5}
             step={0.1}
-            className="w-full"
+            className="viewer-slider"
           />
         </div>
 
         {/* FOV Control */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Field of View</Label>
+            <Label className="viewer-label">Field of View</Label>
             <span className="text-sm text-muted-foreground">{fov}°</span>
           </div>
           <Slider
@@ -101,7 +101,7 @@ export function SceneControls({
             min={20}
             max={120}
             step={1}
-            className="w-full"
+            className="viewer-slider"
           />
         </div>
 

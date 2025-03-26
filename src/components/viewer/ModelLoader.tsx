@@ -71,27 +71,25 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   });
 
   return (
-    <div className="relative p-4">
+    <div className="relative">
       <div
         {...getRootProps()}
         className={`
-          border-2 border-dashed rounded-lg p-6
-          flex flex-col items-center justify-center
-          transition-colors cursor-pointer min-h-[12rem]
+          viewer-drop-zone p-8
           ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
           ${error ? 'border-destructive' : ''}
         `}
       >
         <input {...getInputProps()} />
         
-        <Upload className="h-8 w-8 mb-4 text-muted-foreground" />
+        <Upload className="h-6 w-6 mb-4 text-muted-foreground" />
         
         <div className="text-center space-y-2">
           <p className="text-sm font-medium">
-            {isDragActive ? 'Drop the model here' : 'Drag & drop model here'}
+            {isDragActive ? 'Drop your model here' : 'Drop your model here'}
           </p>
-          <p className="text-xs text-muted-foreground">
-            Supports .glb and .gltf files
+          <p className="text-xs text-muted-foreground italic font-light">
+            Supports .glb and .gltf
           </p>
           {error && (
             <div className="space-y-2">
@@ -115,15 +113,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
             </div>
           )}
         </div>
-
-        <LoadingButton
-          type="button"
-          onClick={e => e.stopPropagation()}
-          className="mt-4"
-          loading={loading}
-        >
-          Select File
-        </LoadingButton>
       </div>
 
       {loading && (

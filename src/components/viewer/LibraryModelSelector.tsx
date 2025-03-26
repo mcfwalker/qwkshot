@@ -78,22 +78,7 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Available Models</h3>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRefresh}
-          disabled={loading}
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-
+    <div className="p-4 min-h-[12rem] flex flex-col">
       {error && (
         <p className="text-sm text-destructive mb-4">{error}</p>
       )}
@@ -103,12 +88,12 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
           No models in library
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-[1px] [&>*:not(:last-child)]:border-b [&>*:not(:last-child)]:border-[#a78bfa]/20 overflow-y-auto">
           {models.map((model) => (
-            <div key={model.id} className="space-y-2">
+            <div key={model.id} className="py-2 first:pt-0 last:pb-0">
               <LoadingButton
                 onClick={() => handleModelSelect(model)}
-                className="w-full justify-start text-left"
+                className="w-full justify-start text-left font-light text-base"
                 loading={loadingModelId === model.id}
               >
                 {model.name}
@@ -118,7 +103,7 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
                   variant="outline"
                   size="sm"
                   onClick={() => handleRetry(model)}
-                  className="w-full"
+                  className="w-full mt-2"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Retry Loading

@@ -22,7 +22,7 @@ interface CameraAnimationSystemProps {
   onAnimationUpdate: (progress: number) => void;
   onAnimationStop: () => void;
   onAnimationStart: () => void;
-  onAnimationPause: () => void;
+  onAnimationPause: (progress: number) => void;
   isPlaying: boolean;
   duration: number;
   setDuration: (duration: number) => void;
@@ -333,82 +333,91 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
     }
   }, [isRecording, progress]);
 
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      onAnimationPause(progress);
+    } else {
+      onAnimationStart();
+    }
+  };
+
+  const handleReset = () => {
+    setProgress(0);
+    onAnimationStop();
+  };
+
   return (
-    <Card className="viewer-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="viewer-title">Camera Path Instructions</CardTitle>
+    <Card className="viewer-panel">
+      <CardHeader className="viewer-panel-header px-2">
+        <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
+      <CardContent className="viewer-panel-content">
+        <div className="space-y-4">
           <Textarea
-            placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front')"
+            placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            className="viewer-textarea h-20 resize-none"
+            className="min-h-[100px] resize-none"
           />
           <Button
-            variant="outline"
-            size="sm"
-            className="viewer-button w-full"
             onClick={handleGeneratePath}
             disabled={isGenerating || !instruction.trim()}
+            className="viewer-button w-full"
           >
             {isGenerating ? (
-              <div className="flex items-center">
+              <>
                 <Loader2 className="viewer-button-icon animate-spin" />
                 Generating Path...
-              </div>
+              </>
             ) : (
-              <div className="flex items-center">
+              <>
                 <Wand2 className="viewer-button-icon" />
                 Generate Path
-              </div>
+              </>
             )}
           </Button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-4 mt-6">
           <div className="flex items-center justify-between">
-            <Label className="viewer-label">Animation Controls</Label>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                className="viewer-button"
-                onClick={isPlaying ? onAnimationPause : onAnimationStart}
-                disabled={keyframes.length === 0 || isRecording}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className={`viewer-button ${isRecording ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={keyframes.length === 0 || (!isRecording && isPlaying)}
-              >
-                {isRecording ? <Square className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-              </Button>
-            </div>
+            <Label className="viewer-label">Duration</Label>
+            <span className="text-sm text-muted-foreground">{duration}s</span>
           </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <div className="flex items-center">
-                <Clock className="viewer-button-icon" />
-                {(progress / 100 * duration).toFixed(1)}s
-              </div>
-              <div>{duration.toFixed(1)}s</div>
-            </div>
-            <Slider
-              className="viewer-slider"
-              value={[progress]}
-              onValueChange={([value]) => handleProgressChange(value)}
-              min={0}
-              max={100}
-              step={0.1}
-              disabled={keyframes.length === 0 || isRecording}
-            />
+          <Slider
+            value={[duration]}
+            onValueChange={(values) => setDuration(values[0])}
+            min={1}
+            max={10}
+            step={0.5}
+            className="viewer-slider"
+            disabled={isPlaying}
+          />
+          <div className="flex justify-between gap-2">
+            <Button
+              onClick={handlePlayPause}
+              className="viewer-button flex-1"
+              disabled={keyframes.length === 0}
+            >
+              {isPlaying ? (
+                <Pause className="viewer-button-icon" />
+              ) : (
+                <Play className="viewer-button-icon" />
+              )}
+            </Button>
+            <Button
+              onClick={isRecording ? stopRecording : startRecording}
+              className="viewer-button"
+              disabled={keyframes.length === 0}
+            >
+              <Video className="viewer-button-icon" />
+            </Button>
+            <Button
+              onClick={handleReset}
+              className="viewer-button"
+              disabled={!isPlaying && keyframes.length === 0}
+            >
+              <RefreshCcw className="viewer-button-icon" />
+            </Button>
           </div>
         </div>
       </CardContent>

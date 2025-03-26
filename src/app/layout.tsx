@@ -1,23 +1,24 @@
-import { Inter } from "next/font/google";
+import { JetBrains_Mono } from 'next/font/google';
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { Navigation } from "@/components/layout/Navigation";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { HealthCheck } from "@/components/health-check";
 
-const inter = Inter({ subsets: ["latin"] });
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+});
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
+      <body className={jetbrainsMono.className} suppressHydrationWarning>
         <ErrorBoundary>
           <Providers>
-            <HealthCheck />
             {children}
           </Providers>
         </ErrorBoundary>
