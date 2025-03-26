@@ -9,7 +9,9 @@ This document provides a systematic approach to wrapping up development sessions
 # Get current timestamp
 date "+%Y-%m-%d-%H%M"
 ```
-- Create new status report in `/docs/status-reports` using timestamp
+- IMPORTANT: Read `/docs/status-reports/README.md` for required format and naming convention
+- Create new status report in `/docs/status-reports` using format: `M3DV-SR-YYYY-MM-DD-HHMM.md`
+- Update README.md in status-reports directory with new entry
 - Use template format from README.md in that directory
 - Include: Summary, Achievements, Challenges, Next Steps, Notes
 

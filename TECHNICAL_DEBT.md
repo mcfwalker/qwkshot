@@ -14,4 +14,8 @@
 ## Styling
 - [ ] Review and consolidate viewer-* CSS classes
 - [ ] Consider extracting common panel styles into shared components
-- [ ] Ensure consistent spacing and sizing across all panels 
+- [x] Ensure consistent spacing and sizing across all panels 
+- [ ] Review backdrop-blur performance impact on lower-end devices
+- [ ] Consider implementing dark/light theme color variables for easier maintenance
+- [ ] Test color contrast ratios with new lime accent color (#bef264)
+- [ ] Consider implementing CSS custom properties for panel heights 
