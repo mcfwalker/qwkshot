@@ -362,16 +362,18 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
           <Button
             onClick={handleGeneratePath}
             disabled={isGenerating || !instruction.trim()}
-            className="viewer-button w-full"
+            variant="primary"
+            size="lg"
+            className="w-full"
           >
             {isGenerating ? (
               <>
-                <Loader2 className="viewer-button-icon animate-spin" />
+                <Loader2 className="h-6 w-6 animate-spin" />
                 Generating Path...
               </>
             ) : (
               <>
-                <Wand2 className="viewer-button-icon" />
+                <Wand2 className="h-6 w-6" />
                 Generate Path
               </>
             )}
@@ -395,28 +397,32 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
           <div className="flex justify-between gap-2">
             <Button
               onClick={handlePlayPause}
-              className="viewer-button flex-1"
+              variant="ghost"
+              size="icon"
+              className="flex-1"
               disabled={keyframes.length === 0}
             >
               {isPlaying ? (
-                <Pause className="viewer-button-icon" />
+                <Pause className="h-4 w-4" />
               ) : (
-                <Play className="viewer-button-icon" />
+                <Play className="h-4 w-4" />
               )}
             </Button>
             <Button
               onClick={isRecording ? stopRecording : startRecording}
-              className="viewer-button"
+              variant="ghost"
+              size="icon"
               disabled={keyframes.length === 0}
             >
-              <Video className="viewer-button-icon" />
+              <Video className="h-4 w-4" />
             </Button>
             <Button
               onClick={handleReset}
-              className="viewer-button"
+              variant="ghost"
+              size="icon"
               disabled={!isPlaying && keyframes.length === 0}
             >
-              <RefreshCcw className="viewer-button-icon" />
+              <RefreshCcw className="h-4 w-4" />
             </Button>
           </div>
         </div>
