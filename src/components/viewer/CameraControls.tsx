@@ -57,39 +57,39 @@ export default function CameraControls({
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="default"
             onClick={() => handlePresetClick('front')}
-            className="viewer-button"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           >
-            <Camera className="viewer-button-icon" />
+            <Camera className="h-4 w-4 mr-2" />
             Front
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="default"
             onClick={() => handlePresetClick('top')}
-            className="viewer-button"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           >
-            <ArrowUpCircle className="viewer-button-icon" />
+            <ArrowUpCircle className="h-4 w-4 mr-2" />
             Top
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="default"
             onClick={() => handlePresetClick('left')}
-            className="viewer-button"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           >
-            <ArrowLeftCircle className="viewer-button-icon" />
+            <ArrowLeftCircle className="h-4 w-4 mr-2" />
             Left
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="secondary"
+            size="default"
             onClick={() => handlePresetClick('right')}
-            className="viewer-button"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           >
-            <ArrowRightCircle className="viewer-button-icon" />
+            <ArrowRightCircle className="h-4 w-4 mr-2" />
             Right
           </Button>
         </div>
@@ -113,14 +113,14 @@ export default function CameraControls({
 
         <div className="pt-2">
           <Button
-            variant="outline"
-            size="sm"
-            className="viewer-button w-full"
+            variant="secondary"
+            size="default"
+            className="w-full border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
             onClick={() => {
               // Save current camera position logic here
             }}
           >
-            <Save className="viewer-button-icon" />
+            <Save className="h-4 w-4 mr-2" />
             Save View
           </Button>
         </div>

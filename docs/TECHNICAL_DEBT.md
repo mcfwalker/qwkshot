@@ -141,3 +141,37 @@
 - **Impact**: Better documentation will help maintain consistency in prompt engineering and make it easier for new team members to understand the system
 - **Proposed Solution**: Create additional documentation sections for patterns, examples, and testing procedures
 - **Notes**: This is a new area that will evolve as we gather more experience with different prompt patterns and their effectiveness
+
+## CSS and UI Component Styling
+**Status**: Needs Review
+**Priority**: Medium
+**Impact**: UI consistency and maintainability
+**Description**: Current CSS implementation has several issues:
+- Complex style overrides and specificity conflicts
+- Inconsistent button variant implementations
+- Duplicate UI elements appearing in some components
+- Lack of systematic approach to component styling
+
+**Location**: Multiple components, primarily:
+- `src/components/ui/button.tsx`
+- `src/components/viewer/CameraAnimationSystem.tsx`
+- `src/components/viewer/FloorControls.tsx`
+
+**Current Implementation**:
+- Using a mix of Tailwind utilities and custom CSS
+- Button variants defined in `buttonVariants` cva
+- Component-specific style overrides
+
+**Future Improvements**:
+1. Implement a comprehensive style guide
+2. Review and simplify CSS architecture
+3. Standardize component styling patterns
+4. Create documentation for variant usage
+5. Consider implementing a design system
+6. Add visual regression testing
+
+**Reference**: See [Status Report M3DV-SR-2025-03-27-1031](./status-reports/M3DV-SR-2025-03-27-1031.md)
+**Notes**:
+- Current solution works but needs better organization
+- Consider creating a UI component library
+- Need better documentation for styling patterns

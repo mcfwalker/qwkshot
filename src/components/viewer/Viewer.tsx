@@ -41,7 +41,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
-  const [floorTexture, setFloorTexture] = useState<string | undefined>(undefined);
+  const [floorTexture, setFloorTexture] = useState<string | null>(null);
   
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);

@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { Navigation } from "@/components/layout/Navigation";
+import { DevInfo } from "@/components/dev/DevInfo";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
@@ -20,6 +21,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <Providers>
             {children}
+            <DevInfo />
           </Providers>
         </ErrorBoundary>
       </body>

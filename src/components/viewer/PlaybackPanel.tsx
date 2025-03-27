@@ -162,7 +162,7 @@ export function PlaybackPanel({
         <div className="flex justify-between gap-2">
           <Button
             onClick={onPlayPause}
-            variant="ghost"
+            variant="secondary"
             size="icon"
             className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
             disabled={disabled || isRecording}
@@ -175,7 +175,7 @@ export function PlaybackPanel({
           </Button>
           <Button
             onClick={handleDownload}
-            variant="ghost"
+            variant="secondary"
             size="default"
             disabled={disabled || isPlaying || isRecording}
             className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"

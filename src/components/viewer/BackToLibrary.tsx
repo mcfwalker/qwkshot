@@ -8,7 +8,7 @@ export function BackToLibrary() {
   const router = useRouter()
   
   return (
-    <Button variant="ghost" onClick={() => router.push('/library')}>
+    <Button variant="secondary" onClick={() => router.push('/library')}>
       <ArrowLeft className="mr-2 h-4 w-4" />
       Back to Library
     </Button>

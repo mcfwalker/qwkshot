@@ -246,7 +246,8 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
-  const handleProgressChange = (value: number) => {
+  const handleProgressChange = (values: number[]) => {
+    const value = values[0];
     if (!isPlaying && keyframes.length > 0) {
       setProgress(value);
       const normalizedProgress = value / 100;
@@ -421,28 +422,28 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
             </div>
             <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
           </div>
-        </div>
 
-        <div className="mt-8">
-          <Button
-            onClick={handleGeneratePath}
-            disabled={isGenerating || !instruction.trim()}
-            variant="primary"
-            size="lg"
-            className="w-full"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-6 w-6 animate-spin" />
-                Generating Path...
-              </>
-            ) : (
-              <>
-                <Wand2 className="h-6 w-6" />
-                Generate Path
-              </>
-            )}
-          </Button>
+          <div className="mt-8">
+            <Button
+              onClick={handleGeneratePath}
+              disabled={isGenerating || !instruction.trim()}
+              variant="primary"
+              size="lg"
+              className="w-full"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  Generating Path...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-6 w-6" />
+                  Generate Path
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
