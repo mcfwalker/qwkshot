@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-03-26-1912 - Playback Speed UI Enhancement
 - M3DV-SR-2025-03-26-1012 - Camera Path Recording Implementation and Resolution
 - M3DV-SR-2025-03-25-2232 - UI Styling Refinements and Color Scheme Updates
 - M3DV-SR-2025-03-25-1513 - UI Revamp Implementation

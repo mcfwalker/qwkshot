@@ -142,7 +142,43 @@ const Navigation = () => {
 - [x] UI components are properly positioned and spaced
 - [x] Component interactions are intuitive and reliable
 
-## Priority 3: New Feature - Image to GLB
+## Priority 3: LLM Provider Switching
+**Timeline: 5-7 days**
+
+### Feature Overview
+Implement an admin interface to switch between different LLM providers (OpenAI and Google Gemini) for camera path generation, with proper authentication and configuration management.
+
+### Implementation Phases
+1. **Core Infrastructure (2-3 days)**
+   ```typescript
+   interface LLMProvider {
+     generateCameraPath(params: PathGenerationParams): Promise<CameraPath>;
+     validateConfiguration(): Promise<boolean>;
+     getCapabilities(): ProviderCapabilities;
+   }
+   ```
+
+2. **Admin Interface (2 days)**
+   - Create protected admin routes
+   - Build provider configuration UI
+   - Implement provider switching logic
+   - Add monitoring and logging
+
+3. **Integration & Testing (1-2 days)**
+   - Update camera path generation
+   - Add error handling and fallbacks
+   - Implement monitoring
+   - Add documentation
+
+### Success Criteria
+- [ ] Admin interface is secure and accessible
+- [ ] Provider switching works seamlessly
+- [ ] Configuration management is robust
+- [ ] Error handling covers all scenarios
+- [ ] Monitoring provides clear insights
+- [ ] Documentation is comprehensive
+
+## Priority 4: New Feature - Image to GLB
 **Timeline: 10-14 days**
 
 ### System Components
@@ -201,7 +237,7 @@ const Navigation = () => {
 - [ ] Library system is functional
 - [ ] Integration with existing viewer works
 
-## Priority 4: Model Thumbnails
+## Priority 5: Model Thumbnails
 **Timeline: 5-7 days**
 
 ### Feature Overview
