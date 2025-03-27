@@ -38,6 +38,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(5);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | undefined>(undefined);
@@ -61,8 +62,9 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
       return;
     }
 
-    // Calculate orbit position
-    const angle = progress * Math.PI * 2; // Full circle
+    // Calculate orbit position with playback speed adjustment
+    const adjustedProgress = progress * playbackSpeed;
+    const angle = adjustedProgress * Math.PI * 2; // Full circle
     const radius = 5; // Distance from center
     const height = 2; // Height above ground
 
@@ -78,7 +80,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     // Update camera and controls
     cameraRef.current.position.copy(newPosition);
     controlsRef.current.target.copy(target);
-  }, []);
+  }, [playbackSpeed]);
 
   const handleAnimationStart = useCallback(() => {
     if (cameraRef.current && controlsRef.current) {
@@ -201,7 +203,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
         <PlaybackPanel
           isPlaying={isPlaying}
           duration={duration}
-          onDurationChange={setDuration}
+          onPlaybackSpeedChange={setPlaybackSpeed}
           onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
           disabled={!modelRef.current}
           canvasRef={canvasRef}

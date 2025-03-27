@@ -234,7 +234,6 @@
     @apply bg-transparent border-[1.5px] border-[#444444] rounded-md
            text-white placeholder:text-gray-500
            focus-visible:border-white focus-visible:outline-none focus-visible:ring-0
-           hover:border-white
            transition-colors
            px-3 py-2;
   }
@@ -243,40 +242,69 @@
     @apply text-transparent;
   }
 
-  /* Input styles */
+  /* Input styles - match textarea exactly */
   [data-slot="input"] {
     @apply bg-transparent border-[1.5px] border-[#444444] rounded-md
            text-white placeholder:text-gray-500
            focus-visible:border-white focus-visible:outline-none focus-visible:ring-0
-           hover:border-white
            transition-colors
            px-3 py-2;
   }
 
-  [data-slot="input"]:focus::placeholder {
+  /* Remove scrollbar from number inputs */
+  [data-slot="input"][type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  [data-slot="input"][type="number"]::-webkit-outer-spin-button,
+  [data-slot="input"][type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Number input specific styles */
+  .viewer-panel input[type="number"][data-slot="input"] {
+    @apply text-white;
+  }
+
+  .viewer-panel input[type="number"][data-slot="input"]::placeholder {
+    @apply text-gray-500;
+  }
+
+  .viewer-panel input[type="number"][data-slot="input"]:focus::placeholder {
     @apply text-transparent;
   }
 
-  /* Override the default focus styles */
-  .focus-visible\:border-ring[data-slot="input"] {
-    @apply focus-visible:border-white;
+  /* Remove any !important overrides */
+  .dark .viewer-panel input[type="number"][data-slot="input"] {
+    @apply text-white;
   }
 
-  .focus-visible\:ring-ring\/50[data-slot="input"] {
-    @apply focus-visible:ring-0;
+  /* Create a container class for the fields */
+  .camera-path-fields {
+    @apply space-y-4;
   }
 
-  /* Dark mode overrides for input */
-  .dark input[data-slot="input"].border-input {
-    @apply border-[#444444] bg-transparent text-white;
-  }
-
-  .dark input[data-slot="input"].border-input:hover {
+  /* Synchronized hover states using sibling selectors */
+  .camera-path-fields [data-slot="textarea"]:hover,
+  .camera-path-fields [data-slot="textarea"]:hover ~ * [data-slot="input"],
+  .camera-path-fields [data-slot="input"]:hover,
+  .camera-path-fields [data-slot="input"]:hover ~ * [data-slot="textarea"] {
     @apply border-white;
   }
 
-  .dark input[data-slot="input"].border-input:focus-visible {
-    @apply border-white ring-0 outline-none;
+  /* Synchronized focus states */
+  .camera-path-fields [data-slot="textarea"]:focus-within,
+  .camera-path-fields [data-slot="textarea"]:focus-within ~ * [data-slot="input"],
+  .camera-path-fields [data-slot="input"]:focus-within,
+  .camera-path-fields [data-slot="input"]:focus-within ~ * [data-slot="textarea"] {
+    @apply border-white;
+  }
+
+  /* Hide placeholder on focus for both textarea and input */
+  .camera-path-fields [data-slot="textarea"]:focus::placeholder,
+  .camera-path-fields [data-slot="input"]:focus::placeholder {
+    @apply text-transparent;
   }
 
   /* Library specific styles */
@@ -319,6 +347,31 @@
   
   .library-button-icon {
     @apply w-4 h-4 shrink-0 mr-2;
+  }
+
+  /* Playback speed slider marks */
+  .playback-speed-slider {
+    @apply relative;
+  }
+
+  .playback-speed-slider::after {
+    content: '';
+    @apply absolute left-0 right-0 top-[calc(50%-2px)] -z-10;
+    height: 4px;
+  }
+
+  .playback-speed-slider .mark-container {
+    @apply absolute top-[calc(50%-8px)] w-full pointer-events-none;
+    height: 16px;
+  }
+
+  .playback-speed-slider .mark {
+    @apply absolute w-[2px] h-[8px] bg-[#444444] rounded-full -translate-x-1/2;
+  }
+
+  .playback-speed-slider .mark.normal {
+    height: 8px;
+    background-color: rgb(163, 230, 53);
   }
 }
 

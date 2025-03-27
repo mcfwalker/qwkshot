@@ -11,21 +11,35 @@ import { toast } from 'sonner';
 interface PlaybackPanelProps {
   isPlaying: boolean;
   duration: number;
-  onDurationChange: (duration: number) => void;
+  onPlaybackSpeedChange: (speed: number) => void;
   onPlayPause: () => void;
   disabled: boolean;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
+  hasGeneratedPath?: boolean;
 }
+
+const SPEED_OPTIONS = [
+  { value: 0.25, label: '0.25' },
+  { value: 0.5, label: '0.5' },
+  { value: 0.75, label: '0.75' },
+  { value: 1, label: '1' },
+  { value: 1.25, label: '1.25' },
+  { value: 1.5, label: '1.5' },
+  { value: 1.75, label: '1.75' },
+  { value: 2, label: '2' }
+];
 
 export function PlaybackPanel({
   isPlaying,
   duration,
-  onDurationChange,
+  onPlaybackSpeedChange,
   onPlayPause,
   disabled,
-  canvasRef
+  canvasRef,
+  hasGeneratedPath = false
 }: PlaybackPanelProps) {
   const [isRecording, setIsRecording] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -116,6 +130,20 @@ export function PlaybackPanel({
     }
   };
 
+  const handleSpeedChange = (values: number[]) => {
+    // Find the closest speed option to the slider value
+    const value = values[0];
+    const closestOption = SPEED_OPTIONS.reduce((prev, curr) => {
+      return Math.abs(curr.value - value) < Math.abs(prev.value - value) ? curr : prev;
+    });
+    
+    setPlaybackSpeed(closestOption.value);
+    onPlaybackSpeedChange(closestOption.value);
+  };
+
+  // Get the current speed label
+  const currentSpeedLabel = SPEED_OPTIONS.find(option => option.value === playbackSpeed)?.label || 'Normal';
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -136,7 +164,7 @@ export function PlaybackPanel({
             onClick={onPlayPause}
             variant="ghost"
             size="icon"
-            className="flex-1"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
             disabled={disabled || isRecording}
           >
             {isPlaying ? (
@@ -150,7 +178,7 @@ export function PlaybackPanel({
             variant="ghost"
             size="default"
             disabled={disabled || isPlaying || isRecording}
-            className="flex-1"
+            className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           >
             {isRecording ? (
               <>
@@ -166,20 +194,37 @@ export function PlaybackPanel({
           </Button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label className="viewer-label">Playback Speed</Label>
-            <span className="text-sm text-muted-foreground">{duration}s</span>
+            <span className="text-sm text-muted-foreground">{(duration / playbackSpeed).toFixed(1)}s</span>
           </div>
-          <Slider
-            value={[duration]}
-            onValueChange={(values) => onDurationChange(values[0])}
-            min={1}
-            max={10}
-            step={0.5}
-            className="viewer-slider"
-            disabled={isPlaying || disabled || isRecording}
-          />
+          <div className="playback-speed-slider">
+            <div className="mark-container">
+              {SPEED_OPTIONS.map((option) => (
+                <div
+                  key={option.value}
+                  className={`mark ${option.value === 1 ? 'normal' : ''}`}
+                  style={{
+                    left: `${((option.value - 0.25) / (2 - 0.25)) * 100}%`
+                  }}
+                />
+              ))}
+            </div>
+            <Slider
+              value={[playbackSpeed]}
+              onValueChange={handleSpeedChange}
+              min={0.25}
+              max={2}
+              step={0.25}
+              className="viewer-slider"
+              disabled={isPlaying || disabled || isRecording}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-7">
+              <span>0.25x</span>
+              <span>2.0x</span>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

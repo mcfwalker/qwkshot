@@ -31,6 +31,7 @@ interface CameraAnimationSystemProps {
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
+  onPathGenerated?: () => void;
 }
 
 const CameraSystemFallback = () => (
@@ -77,6 +78,7 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
   cameraRef,
   controlsRef,
   canvasRef,
+  onPathGenerated,
 }) => {
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
@@ -232,6 +234,9 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
       setProgress(0);
       onAnimationStart();
       
+      // Notify that a path has been generated
+      onPathGenerated?.();
+      
       toast.success('Camera path generated successfully');
     } catch (error) {
       console.error('Error generating camera path:', error);
@@ -360,7 +365,7 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
-  const handleDurationBlur = () => {
+  const handleDurationBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const numValue = parseFloat(inputDuration);
     if (isNaN(numValue) || numValue < 1) {
       setInputDuration('1');
@@ -380,7 +385,7 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
         <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-6">
-        <div className="space-y-4">
+        <div className="camera-path-fields">
           <Textarea
             placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
             value={instruction}
@@ -400,7 +405,10 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
                   type="number"
                   value={inputDuration}
                   onChange={handleDurationChange}
-                  onBlur={handleDurationBlur}
+                  onBlur={(e) => {
+                    handleDurationBlur(e);
+                    setIsPromptFocused(false);
+                  }}
                   onFocus={() => setIsPromptFocused(true)}
                   min={1}
                   max={20}
