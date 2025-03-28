@@ -94,6 +94,21 @@ Common issues:
    - Clear `.next` cache if you see build issues
    - Monitor health checks for server status
 
+3. **Major Dependency Updates**
+   When updating major versions of core dependencies (e.g., Tailwind, Next.js):
+   ```bash
+   # Clean installation steps
+   rm -rf node_modules .next
+   npm install
+   npm run dev
+   ```
+   
+   Important considerations:
+   - Always test in a clean environment
+   - Verify configuration compatibility
+   - Check for breaking changes in dependency documentation
+   - Test in a browser without extensions for accurate error reporting
+
 ## Additional Resources
 
 - [Product Requirements Document](./PRD.md)
