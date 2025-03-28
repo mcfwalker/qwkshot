@@ -10,8 +10,12 @@
   - Base commit: `2b45a92` (docs: Reorganize documentation structure)
 
 ### Feature Branches
-- `feature/video-export` - Video export functionality
-- `feature/navigation-enhancements` - Navigation system improvements
+- `feature/ui-revamp-layout` - UI modernization and layout improvements
+- `feature/llm-provider-switching` - LLM provider integration and switching
+- `feature/ui-revamp` - Base UI improvements
+- `feature/ui-revamp-integration` - Integration components
+- `feature/ui-revamp-shoot` - Camera and shooting features
+- `feature/ui-revamp-stage` - Stage and scene management
 
 ## Development Workflow
 
@@ -28,6 +32,7 @@
    - Follow naming convention: `feature/descriptive-name`
    - Should be focused on a single feature or improvement
    - Regular rebasing against `stable` recommended
+   - IMPORTANT: Always test after major dependency updates
 
 3. **Main Branch (`main`)**
    - Historical branch
@@ -59,6 +64,12 @@
    - Ensure all tests pass
    - Get code review
    - Squash and merge to maintain clean history
+   - For critical changes, use test branch first:
+     ```bash
+     git checkout -b test/stable-merge
+     git merge feature/your-feature
+     # Test thoroughly before merging to stable
+     ```
 
 ## Environment Setup
 
@@ -84,11 +95,19 @@
    - Solution: Run server in background using `npm run dev &`
    - Prevents chat interactions from interrupting server
 
+3. Dependency Updates
+   - Clear caches when updating major dependencies
+   - Test in clean environment after updates
+   - Verify configuration compatibility
+   - Document breaking changes
+
 ### Best Practices
 1. Always check environment variables before starting development
 2. Run health checks to verify server status
 3. Keep documentation updated with new findings
 4. Regular commits with descriptive messages
+5. Use test branches for critical merges
+6. Clear caches after major dependency updates
 
 ## Future Considerations
 
@@ -105,4 +124,4 @@
 ## References
 - [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) - Detailed setup instructions
 - [TECHNICAL_DEBT.md](./TECHNICAL_DEBT.md) - Known issues and planned improvements
-- Latest status report: [M3DV-SR-2025-03-24-1229.md](./status-reports/M3DV-SR-2025-03-24-1229.md) 
+- Latest status report: [M3DV-SR-2025-03-27-1806.md](./status-reports/M3DV-SR-2025-03-27-1806.md) 

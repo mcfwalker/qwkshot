@@ -1,59 +1,33 @@
-# Modern 3D Viewer Documentation
+# Project Documentation Hub
 
-## Quick Start
-- [Getting Started Guide](./GET_STARTED.md) - Start here for new development sessions
-- [Development Setup](./DEVELOPMENT_SETUP.md) - Environment and project setup
-- [Session Management](./SESSION_MANAGEMENT.md) - Development session workflow
-- [Troubleshooting Guide](./troubleshooting/README.md) - Common issues and solutions
+This directory contains the detailed documentation for the Modern 3D Viewer project.
+The main project [README](../README.md) provides the primary index and links to essential workflow guides located in the project root.
 
-## Project Documentation
-- [Product Requirements Document](./PRD.md) - Complete product specification
-- [Development Roadmap](./DEVELOPMENT_ROADMAP.md) - Development plan and timeline
-- [Technical Debt](./TECHNICAL_DEBT.md) - Known issues and future improvements
-- [Branch Strategy](./BRANCH_STRATEGY.md) - Git workflow and branch management
-- [Test Suite Plan](./testing/README.md) - Testing strategy and implementation
+## Core Documentation
+*   **[Product Requirements (PRD)](./PRD.md)**: High-level goals, target users, core features, and requirements.
+*   **[Technical Design Document](./TECHNICAL_DESIGN.md)**: Detailed architecture, state management, API structure, integration specs, and implementation details.
+*   **[Development Roadmap](./DEVELOPMENT_ROADMAP.md)**: Prioritized development plan and timeline.
+*   **[Technical Debt](./TECHNICAL_DEBT.md)**: Tracking known issues, areas for improvement, and workarounds. ([Archived Debt](./TECHNICAL_DEBT_ARCHIVE.md) - *Optional*)
+*   **[Contributing Guidelines](./CONTRIBUTING.md)**: Code contribution standards and documentation patterns/templates.
 
-## Feature Documentation
-- [Authentication](./features/auth/README.md) - Auth implementation and security
-- [Storage Security](./features/storage/README.md) - Storage configuration and security
+## Specific Topics
+*   **[Features](./features/)**: Documentation for specific features (Authentication, Storage, etc.).
+*   **[UI Documentation](./UI/)**: UI design principles, component structure, and revamp plans.
+*   **[Routing](./routing/)**: Routing patterns, including dynamic parameter handling.
+*   **[Prompt Architecture](./prompt-architecture/)**: Design for LLM prompts used in AI features.
+*   **[AI Strategies](./ai/)**: Specific AI/ML strategy documents (e.g., Cinematic Model Brief).
+*   **[Testing Strategy](./testing/)**: Plan and infrastructure for testing.
 
-## Development Resources
-- [Status Reports](./status-reports/) - Development progress and updates
-- Latest Status: [M3DV-SR-2025-03-24-1229.md](./status-reports/M3DV-SR-2025-03-24-1229.md)
+## Development Process Support
+*   **[Status Reports](./status-reports/)**: Chronological progress updates, decisions, and challenges.
+*   **[Troubleshooting Guide](./troubleshooting/)**: Common issues and solutions encountered during development.
 
-## Documentation Structure
-```
-docs/
-├── features/                    # Feature-specific documentation
-│   ├── auth/                   # Authentication documentation
-│   │   └── README.md
-│   └── storage/                # Storage documentation
-│       └── README.md
-├── status-reports/             # Development status reports
-├── testing/                    # Testing documentation
-│   └── README.md              # Test suite plan
-├── troubleshooting/            # Troubleshooting guides
-│   └── README.md
-├── README.md                   # This file
-├── BRANCH_STRATEGY.md          # Git workflow documentation
-├── DEVELOPMENT_ROADMAP.md      # Development timeline
-├── DEVELOPMENT_SETUP.md        # Setup instructions
-├── GET_STARTED.md             # Session initialization guide
-├── PRD.md                     # Product requirements
-├── SESSION_MANAGEMENT.md      # Development session workflow
-└── TECHNICAL_DEBT.md          # Known issues
-```
+## External Workflow Guides
+*These critical guides are located in the project root for easier access:*
+*   [Development Setup](../DEVELOPMENT_SETUP.md)
+*   [Session Initialization Guide](../GET_STARTED.md)
+*   [End of Session Checklist](../END_SESSION.md)
+*   [Branch Strategy](../BRANCH_STRATEGY.md)
 
-## Documentation Updates
-When updating documentation:
-1. Keep status reports current
-2. Update technical debt for new issues
-3. Maintain cross-references between docs
-4. Add new features under `features/`
-5. Keep troubleshooting guide updated
-
-## Getting Help
-1. Start with the [Troubleshooting Guide](./troubleshooting/README.md)
-2. Check recent [Status Reports](./status-reports/)
-3. Review [Technical Debt](./TECHNICAL_DEBT.md) for known issues
-4. Create detailed bug reports if needed 
+---
+*Please keep this index updated as the documentation evolves.*
