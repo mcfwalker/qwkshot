@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ProviderType } from '@/lib/llm/types';
 import { Database } from '@/types/supabase';
 import { DevEvents } from '@/components/dev/DevInfo';
+import { toast } from 'sonner';
 
 interface DevInfo {
   version: string;
@@ -104,12 +105,19 @@ export default function AdminPage() {
       // Dispatch an event to notify other components about the provider change
       window.dispatchEvent(DevEvents.providerChanged);
 
-      // Refresh dev info to get updated configuration
-      await fetchDevInfo();
+      // Show success message
+      toast.success(`Switched to ${provider} provider successfully`);
+
+      // Hard refresh the page after 1 second to ensure state is fully updated
+      // This is needed because the in-memory state and database may not be fully in sync immediately
+      // The timeout gives the server time to update its state before refreshing
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
     } catch (error) {
       console.error('Error switching provider:', error);
       setError(error instanceof Error ? error.message : 'Failed to switch provider');
-    } finally {
       setIsLoading(false);
     }
   };

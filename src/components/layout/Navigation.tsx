@@ -60,7 +60,7 @@ export function Navigation() {
             variant={pathname.startsWith('/admin') ? "default" : "ghost"} 
             size="sm"
             className="mr-2"
-            onClick={() => handleNavigation('/admin')}
+            onClick={() => window.open('/admin', '_blank')}
           >
             <Settings className="mr-2 h-4 w-4" />
             Admin
