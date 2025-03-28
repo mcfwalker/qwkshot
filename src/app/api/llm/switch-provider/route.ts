@@ -4,6 +4,10 @@ import { ProviderType } from '@/lib/llm/types';
 import { LLMProviderRegistry } from '@/lib/llm/registry';
 import { getProviderConfig, isProviderConfigured } from '@/lib/llm/config';
 
+// Mark as dynamic route with increased timeout
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30; // Increase timeout to 30 seconds
+
 export async function POST(request: Request) {
   try {
     // Check authentication

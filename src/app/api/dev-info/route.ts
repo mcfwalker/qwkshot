@@ -9,6 +9,9 @@ import { getGitInfo } from '@/lib/git'
 import { cookies } from 'next/headers'
 import { ensureLLMSystemInitialized } from '@/lib/llm/init'
 
+// Mark as dynamic route
+export const dynamic = 'force-dynamic';
+
 function serializeProvider(provider: any) {
   if (!provider) return null;
   return {

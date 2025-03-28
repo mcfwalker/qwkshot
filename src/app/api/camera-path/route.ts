@@ -3,6 +3,10 @@ import { SceneGeometry } from '@/lib/scene-analysis';
 import { getActiveProvider } from '@/lib/llm/registry';
 import { ensureLLMSystemInitialized } from '@/lib/llm/init';
 
+// Mark as dynamic route with increased timeout
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Increase to 60 seconds from default of 10
+
 // Simple debug logs at the very start
 console.log('DEBUG - API Route Loading');
 
@@ -73,8 +77,12 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error generating camera path:', error);
     
+    // Ensure we return a proper JSON error response even for timeout errors
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate camera path' },
+      { 
+        error: error instanceof Error ? error.message : 'Failed to generate camera path',
+        details: process.env.NODE_ENV === 'development' ? error : undefined
+      },
       { status: 500 }
     );
   }
