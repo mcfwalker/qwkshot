@@ -47,16 +47,14 @@ export function DevInfo() {
 
   // Function to fetch dev info
   const fetchDevInfo = () => {
-    // Only fetch in development
-    if (process.env.NODE_ENV === 'development') {
-      fetch('/api/dev-info')
-        .then(res => res.json())
-        .then(data => setInfo(data))
-        .catch(error => {
-          console.error('Error fetching dev info:', error);
-          setInfo(null);
-        })
-    }
+    // Fetch in both development and production
+    fetch('/api/dev-info')
+      .then(res => res.json())
+      .then(data => setInfo(data))
+      .catch(error => {
+        console.error('Error fetching dev info:', error);
+        setInfo(null);
+      })
   };
 
   useEffect(() => {
@@ -78,8 +76,8 @@ export function DevInfo() {
     };
   }, [pathname]);
 
-  // Only render in development
-  if (process.env.NODE_ENV !== 'development' || !info) return null
+  // Only render if we have info to display
+  if (!info) return null
 
   return (
     <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
