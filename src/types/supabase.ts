@@ -44,6 +44,20 @@ export interface Database {
           user_id?: string
         }
       }
+      llm_state: {
+        Row: {
+          id: number
+          active_provider: string | null
+        }
+        Insert: {
+          id?: number
+          active_provider?: string | null
+        }
+        Update: {
+          id?: number
+          active_provider?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

@@ -5,13 +5,16 @@ import type { Database } from '@/types/supabase'
 // Helper function to create a properly configured Supabase client for route handlers
 export async function createRouteSupabaseClient() {
   try {
-    // Get the cookie store first - must have this outside the client creation
+    // Get the cookie store - cookies() returns ReadonlyRequestCookies, not a Promise
     const cookieStore = cookies()
     
-    // Create the Supabase client with proper cookie handling
+    // Create the Supabase client with proper cookie handling that doesn't use .get()
     const supabase = createRouteHandlerClient<Database>({
       cookies: () => cookieStore
     })
+
+    // Test the connection to ensure it's working
+    await supabase.auth.getSession()
     
     return supabase
   } catch (error) {

@@ -216,13 +216,41 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
       }
 
       const data = await response.json();
+      console.log('Camera path API response:', data);
       
-      // Convert API response to keyframes with Vector3 objects
-      const newKeyframes = data.keyframes.map((kf: any) => ({
-        position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
-        target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
-        duration: kf.duration
-      }));
+      // Validate that we have keyframes data
+      if (!data.keyframes) {
+        throw new Error('Missing keyframes in API response');
+      }
+      
+      // Ensure keyframes is an array
+      const keyframesArray = Array.isArray(data.keyframes) 
+        ? data.keyframes 
+        : [];
+        
+      if (keyframesArray.length === 0) {
+        throw new Error('No keyframes returned from API');
+      }
+      
+      // Parse keyframes into Vector3 objects
+      const newKeyframes = [];
+      for (let i = 0; i < keyframesArray.length; i++) {
+        const kf = keyframesArray[i];
+        try {
+          newKeyframes.push({
+            position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
+            target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
+            duration: kf.duration
+          });
+        } catch (err) {
+          console.error(`Error parsing keyframe ${i}:`, kf, err);
+          // Skip invalid keyframes rather than failing completely
+        }
+      }
+      
+      if (newKeyframes.length === 0) {
+        throw new Error('Failed to parse any valid keyframes');
+      }
 
       setKeyframes(newKeyframes);
       

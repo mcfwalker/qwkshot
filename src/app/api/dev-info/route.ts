@@ -3,83 +3,122 @@ import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { createRouteSupabaseClient } from '@/lib/supabase-route'
+import { getConfiguredProviders, isProviderConfigured } from '@/lib/llm/config'
+import { LLMProviderRegistry } from '@/lib/llm/registry'
+import { getGitInfo } from '@/lib/git'
+import { cookies } from 'next/headers'
+import { ensureLLMSystemInitialized } from '@/lib/llm/init'
+
+function serializeProvider(provider: any) {
+  if (!provider) return null;
+  return {
+    type: provider.getProviderType(),
+    capabilities: provider.getCapabilities()
+  };
+}
 
 export async function GET() {
   try {
-    // Get version from package.json
-    const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf-8'))
-    const version = packageJson.version
+    // Ensure LLM system is initialized
+    await ensureLLMSystemInitialized();
+    
+    // Get git info
+    const { version, branch, environment } = await getGitInfo();
 
-    // Get current branch
-    const branch = execSync('git branch --show-current').toString().trim()
+    // Get auth status - properly handle cookie access
+    const cookieStore = cookies();
+    const supabase = await createRouteSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const isAuthenticated = !!session;
 
-    // Get environment
-    const environment = process.env.NODE_ENV || 'development'
-
-    // Get last build time (from .next/BUILD_ID)
-    let lastBuild = 'unknown'
-    try {
-      const buildId = readFileSync(join(process.cwd(), '.next/BUILD_ID'), 'utf-8').trim()
-      lastBuild = new Date(parseInt(buildId)).toLocaleTimeString()
-    } catch (e) {
-      // If BUILD_ID doesn't exist, use current time
-      lastBuild = new Date().toLocaleTimeString()
-    }
-
-    // Check various health aspects
-    const healthChecks = {
-      supabase: false,
-      environment: false,
-      build: false
-    }
+    // Get LLM info
+    const registry = LLMProviderRegistry.getInstance();
+    const activeProvider = await registry.getActiveProvider();
+    const configuredProviders = getConfiguredProviders();
 
     // Check Supabase connection
+    let dbStatus = false;
     try {
-      const supabase = await createRouteSupabaseClient()
-      const { data, error } = await supabase.from('models').select('count').limit(1)
-      healthChecks.supabase = !error
+      const { data, error } = await supabase.from('models').select('count').limit(1);
+      dbStatus = !error;
     } catch (e) {
-      healthChecks.supabase = false
+      console.error('Error checking DB status:', e);
     }
 
     // Check environment variables
-    healthChecks.environment = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && 
-                                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    const envStatus = !!(
+      process.env.NEXT_PUBLIC_SUPABASE_URL && 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
 
-    // Check if build is recent (within last 30 minutes in development)
-    try {
-      const buildId = readFileSync(join(process.cwd(), '.next/BUILD_ID'), 'utf-8').trim()
-      const buildTime = parseInt(buildId)
-      const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
-      healthChecks.build = buildTime > thirtyMinutesAgo
-    } catch (e) {
-      healthChecks.build = false
+    // Check database for provider state even if activeProvider is null
+    let activeProviderType = 'none';
+    let activeProviderCapabilities = null;
+    
+    if (activeProvider) {
+      try {
+        activeProviderType = await activeProvider.getProviderType();
+        activeProviderCapabilities = await activeProvider.getCapabilities();
+      } catch (error) {
+        console.error('Error getting provider details:', error);
+      }
+    } else {
+      // Double-check the database if activeProvider is null
+      try {
+        const { data, error } = await supabase
+          .from('llm_state')
+          .select('active_provider')
+          .eq('id', 1)
+          .single();
+          
+        if (!error && data?.active_provider) {
+          activeProviderType = data.active_provider;
+          console.log('Found provider in database but not initialized:', activeProviderType);
+        }
+      } catch (error) {
+        console.error('Error checking database for provider:', error);
+      }
     }
-
-    // Determine overall health (only consider critical services)
-    const health = healthChecks.supabase && healthChecks.environment ? 'ok' : 'error'
+    
+    // Log provider information in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Active provider:', activeProviderType);
+      console.log('Configured providers:', configuredProviders);
+    }
 
     return NextResponse.json({
       version,
       branch,
       environment,
-      lastBuild,
-      health,
-      healthChecks
-    })
-  } catch (error) {
-    console.error('Error getting dev info:', error)
-    return NextResponse.json({
-      version: 'unknown',
-      branch: 'unknown',
-      environment: process.env.NODE_ENV || 'development',
-      lastBuild: new Date().toLocaleTimeString(),
-      health: 'error',
-      healthChecks: {
-        supabase: false,
-        environment: false,
-        build: false
+      status: {
+        auth: isAuthenticated,
+        db: dbStatus,
+        env: envStatus
+      },
+      auth: {
+        isAuthenticated,
+        user: session?.user?.email || null
+      },
+      llm: {
+        activeProvider: activeProvider ? {
+          type: activeProviderType,
+          capabilities: activeProviderCapabilities
+        } : activeProviderType !== 'none' ? {
+          // Return information even if the provider isn't fully initialized
+          type: activeProviderType,
+          capabilities: null
+        } : null,
+        availableProviders: configuredProviders
       }
-    })
+    });
+  } catch (error) {
+    console.error('Error getting dev info:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to get dev info',
+        details: process.env.NODE_ENV === 'development' ? error : undefined
+      }, 
+      { status: 500 }
+    );
   }
 } 
