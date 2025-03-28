@@ -1,3 +1,6 @@
+// Add this line to make this route dynamically rendered
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from 'react'
 import { createServerClient } from '@/lib/supabase-server'
 import { Model } from '@/lib/supabase'
