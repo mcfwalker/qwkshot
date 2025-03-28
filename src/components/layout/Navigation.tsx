@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ViewIcon, FolderOpen, LogOut, Home } from 'lucide-react'
+import { ViewIcon, FolderOpen, LogOut, Home, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -55,6 +55,15 @@ export function Navigation() {
           >
             <FolderOpen className="mr-2 h-4 w-4" />
             Library
+          </Button>
+          <Button 
+            variant={pathname.startsWith('/admin') ? "default" : "ghost"} 
+            size="sm"
+            className="mr-2"
+            onClick={() => handleNavigation('/admin')}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Admin
           </Button>
           <Button 
             variant="ghost" 
