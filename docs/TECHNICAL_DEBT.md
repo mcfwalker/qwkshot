@@ -98,7 +98,7 @@
 
 ## Notes
 - Document created: March 24, 2025
-- Last updated: March 24, 2025
+- Last updated: March 29, 2025
 - Related issues:
   - Cookie warning in library page
   - Server component async patterns
@@ -175,3 +175,127 @@
 - Current solution works but needs better organization
 - Consider creating a UI component library
 - Need better documentation for styling patterns
+
+## Vercel Deployment
+
+### Linting and Type Checking During Build
+**Status**: Temporarily Disabled
+**Priority**: High
+**Impact**: Technical debt, potential issues in production
+**Description**: ESLint and TypeScript validation had to be disabled during the build process to successfully deploy to Vercel
+**Location**: `next.config.js`
+**Current Implementation**:
+```js
+eslint: {
+  // Disabled ESLint during build process
+  ignoreDuringBuilds: true,
+},
+typescript: {
+  // Disabled TypeScript checking during build
+  ignoreBuildErrors: true,
+},
+```
+**Fix Required**: 
+- Address all 73+ ESLint/TypeScript errors properly
+- Re-enable linting and type checking in the build process
+- Document common patterns that cause linting issues
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+### Synchronous Cookie Access in API Routes
+**Status**: Open
+**Priority**: Medium
+**Impact**: Warnings, potential issues in production
+**Description**: Multiple API routes still use synchronous cookie access despite the fix in server components
+**Location**: Multiple API routes including `/api/dev-info`
+**Warning Message**: `Route "/api/dev-info" used cookies().get(...). cookies() should be awaited before using its value.`
+**Current Implementation**:
+- API routes are using cookies synchronously via Supabase auth helpers
+- Warning messages appear in logs but functionality works
+**Fix Required**:
+- Update all API routes to properly await cookie access
+- Update `createRouteSupabaseClient` to properly handle async cookies
+- Follow patterns established in the server component fix
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+### Static vs. Dynamic Route Rendering
+**Status**: Using Workarounds
+**Priority**: Medium
+**Impact**: Affects maintainability and performance
+**Description**: Several routes need to be marked as `force-dynamic` to prevent static rendering errors with cookies
+**Location**: All authenticated routes
+**Current Implementation**:
+```js
+export const dynamic = 'force-dynamic'; // Added to routes using cookies
+```
+**Fix Required**:
+- Better understand Next.js 15 rendering patterns
+- Implement a more strategic approach to dynamic vs. static routes
+- Consider using route groups or other Next.js patterns to better organize rendering strategies
+- Evaluate performance implications of forcing dynamic rendering
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+### Suspense Boundaries for useSearchParams
+**Status**: Implemented but needs review
+**Priority**: Medium
+**Impact**: Required for build, potential UX issues
+**Description**: Components using `useSearchParams` needed Suspense boundaries to prevent hydration errors
+**Location**: All routes using search parameters, including `/auth/sign-in`
+**Current Implementation**:
+```jsx
+<Suspense fallback={<div>Loading...</div>}>
+  <ComponentUsingSearchParams />
+</Suspense>
+```
+**Fix Required**:
+- Review all implementations of Suspense boundaries
+- Add proper loading states for better UX
+- Ensure consistent implementation across components
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+### Serverless Function Timeouts
+**Status**: Increased but requires review
+**Priority**: High
+**Impact**: Affects reliability of LLM API calls
+**Description**: LLM API routes exceed default 10-second Vercel timeout
+**Location**: API routes for camera path generation and LLM interactions
+**Current Implementation**:
+- Manually increased timeouts in Vercel dashboard
+- No fallback mechanisms for slow responses
+**Fix Required**:
+- Implement proper streaming responses for LLM calls
+- Add timeout handling and recovery strategies
+- Consider implementing background queue for long-running tasks
+- Add client-side timeout handling and retry logic
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+### Force Reload After Provider Switching
+**Status**: Working but not optimal
+**Priority**: Low
+**Impact**: Affects user experience
+**Description**: Provider switching requires a full page reload to ensure state consistency
+**Location**: Admin panel
+**Current Implementation**:
+- Forcing page reload after provider change
+- Loses client-side state during reload
+**Fix Required**:
+- Implement event-based state updates
+- Improve client-side state management
+- Consider using React context or global state solution
+
+**Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
+
+## Notes
+- Document created: March 24, 2025
+- Last updated: March 29, 2025
+- Related issues:
+  - Cookie warning in API routes
+  - Build-time linting errors
+  - Static vs. dynamic rendering conflicts
+  - Suspense boundary implementation
+  - Serverless function timeouts
+  - State management across server/client boundary

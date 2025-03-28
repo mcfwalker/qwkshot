@@ -182,6 +182,102 @@ If the application becomes unresponsive:
    git reset --hard HEAD@{n}  # Restore to specific point
    ```
 
+### 7. Vercel Deployment Issues
+
+#### Static Generation Errors
+```
+Error: Dynamic server usage: Route /library couldn't be rendered statically because it used `cookies`
+```
+
+**Cause**: Next.js attempts to statically generate routes that use dynamic features.
+**Impact**: Deployment build fails.
+**Solution**: 
+- Add the `force-dynamic` directive to page route:
+  ```typescript
+  // Add to the top of the route file
+  export const dynamic = 'force-dynamic';
+  ```
+- For multiple related routes, consider using a route group with a shared layout that sets the directive
+
+#### Suspense Boundary Errors
+```
+Error: useSearchParams() should be wrapped in a suspense boundary at page "/auth/sign-in"
+```
+
+**Cause**: Components using `useSearchParams()` require a Suspense boundary.
+**Impact**: Build fails.
+**Solution**:
+- Wrap components using `useSearchParams()` in a Suspense boundary:
+  ```jsx
+  import { Suspense } from 'react';
+  
+  // ... in your component
+  <Suspense fallback={<div>Loading...</div>}>
+    <ComponentUsingSearchParams />
+  </Suspense>
+  ```
+
+#### Serverless Function Timeouts
+```
+Failed to load resource: the server responded with a status of 504 ()
+```
+
+**Cause**: LLM API routes exceed the default 10-second Vercel function timeout.
+**Impact**: API calls for camera path generation fail.
+**Solutions**:
+1. In Vercel Dashboard:
+   - Go to Project > Settings > Functions
+   - Increase the timeout under "General" from default 10s to 60s
+   - Save changes and redeploy
+
+2. For local development:
+   - Test with longer operations to identify potential timeout issues
+   - Consider implementing optimistic UI updates
+
+#### Linting and Type Checking Errors
+```
+ESLint: Error count increased to XX
+TypeScript error: Type 'X' is not assignable to type 'Y'
+```
+
+**Cause**: Stricter validation in production build compared to dev environment.
+**Impact**: Build fails.
+**Temporary Solution**:
+- Disable checks in `next.config.js`:
+  ```js
+  module.exports = {
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+    typescript: {
+      ignoreBuildErrors: true,
+    },
+  };
+  ```
+
+**Proper Solution**:
+- Fix all ESLint errors locally
+- Address all TypeScript type issues
+- Re-enable checks in config before production launch
+
+#### Cookie Warning in API Routes
+```
+Route "/api/some-route" used cookies().get(...). cookies() should be awaited before using its value.
+```
+
+**Cause**: Synchronous cookie access in server components or API routes.
+**Impact**: Warning messages, potential issues in production.
+**Solution**:
+- Update all API routes to use async cookie handling:
+  ```typescript
+  // Before
+  const cookieStore = cookies();
+  
+  // After
+  const cookieStore = await cookies();
+  ```
+- Update Supabase auth client creation to properly handle async cookies
+
 ## Debugging Tools
 
 ### 1. Server Logs
