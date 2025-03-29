@@ -32,56 +32,36 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     try {
       console.log('Starting update for model:', model.id, 'New name:', name.trim())
       
-      // Get current session to verify authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) {
-        console.error('Session error:', sessionError)
-        throw new Error('Authentication error')
-      }
-      console.log('Current user:', session?.user.id)
-
-      // First verify we can access this model
-      const { data: modelCheck, error: checkError } = await supabase
-        .from('models')
-        .select('id')
-        .eq('id', model.id)
-        .single()
-
-      if (checkError) {
-        console.error('Model check error:', checkError)
-        throw new Error('Could not verify model access')
-      }
-
-      if (!modelCheck) {
-        console.error('Model not found')
-        throw new Error('Model not found')
-      }
-
       // Update the model name
       const { error: updateError } = await supabase
         .from('models')
         .update({ name: name.trim() })
         .eq('id', model.id)
 
-      console.log('Update completed:', updateError ? 'with error' : 'successfully')
-
       if (updateError) {
         console.error('Update error:', updateError)
         throw new Error(updateError.message)
       }
 
-      // Force router to refresh data immediately
+      console.log('Update completed successfully')
+
+      // Invalidate the library page cache
+      console.log('Invalidating cache...')
+      await fetch('/api/revalidate?path=/library', { method: 'POST' })
+      
+      // Force router to refresh data
       console.log('Refreshing router...')
       router.refresh()
-
+      
+      // Wait for revalidation and refresh to complete
+      console.log('Waiting for revalidation...')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       toast.success('Model updated successfully')
       
-      // Navigate back to library after a delay
-      console.log('Scheduling navigation...')
-      setTimeout(() => {
-        console.log('Navigating to library...')
-        router.push('/library')
-      }, 1000)
+      // Navigate back to library
+      console.log('Navigating to library...')
+      router.push('/library')
     } catch (error) {
       console.error('Error updating model:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to update model')
