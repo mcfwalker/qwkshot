@@ -5,60 +5,84 @@ import { getConfiguredProviders } from '@/lib/llm/config'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
 import { getGitInfo } from '@/lib/git'
 import { ensureLLMSystemInitialized } from '@/lib/llm/init'
-import type { SystemInfoResponse, SystemErrorResponse } from '@/lib/system/types'
+import type { SystemInfoResponse, SystemErrorResponse, LLMProviderInfo } from '@/lib/system/types'
 
 // Mark as dynamic route with proper typing
 export const dynamic = 'force-dynamic'
 
 export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErrorResponse>> {
   try {
-    // First check authentication
-    const cookieStore = await cookies()
-    const supabase = await createRouteSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    // If not authenticated, return 401
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Initialize LLM system
-    await ensureLLMSystemInitialized()
-    
-    // Get git info
+    // Get git info first - this is public info
     const { version, branch, environment } = await getGitInfo()
 
-    // Get LLM info
-    const registry = LLMProviderRegistry.getInstance()
-    const activeProvider = await registry.getActiveProvider()
-    const configuredProviders = getConfiguredProviders()
-
-    // Check Supabase connection
-    let dbStatus = false
-    try {
-      const { data, error } = await supabase.from('models').select('count').limit(1)
-      dbStatus = !error
-    } catch (e) {
-      console.error('Error checking DB status:', e)
-    }
-
-    // Check environment variables
+    // Check environment variables - also safe to expose
     const envStatus = !!(
       process.env.NEXT_PUBLIC_SUPABASE_URL && 
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
 
-    // Get provider details
-    let activeProviderType = 'none'
-    let activeProviderCapabilities = null
+    // Initialize Supabase client and get session
+    const supabase = await createRouteSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    // Check DB connection regardless of auth status
+    let dbStatus = false
+    try {
+      const { error: dbError } = await supabase.from('models').select('count').limit(1)
+      dbStatus = !dbError
+    } catch (e) {
+      console.error('Error checking DB status:', e)
+    }
+
+    // If not authenticated or session error, return limited info
+    if (!session || sessionError) {
+      return NextResponse.json({
+        version: version || 'unknown',
+        branch,
+        environment,
+        status: {
+          auth: false,
+          db: dbStatus, // Still report actual DB status
+          env: envStatus
+        },
+        auth: {
+          isAuthenticated: false,
+          user: null
+        },
+        llm: {
+          activeProvider: null,
+          availableProviders: getConfiguredProviders()
+        }
+      } satisfies SystemInfoResponse)
+    }
+
+    // Initialize LLM system for authenticated users
+    await ensureLLMSystemInitialized()
+    
+    // Get LLM info
+    const registry = LLMProviderRegistry.getInstance()
+    const activeProvider = await registry.getActiveProvider()
+    const configuredProviders = getConfiguredProviders()
+
+    // Get provider details with improved error handling
+    let activeProviderInfo: LLMProviderInfo | null = null
     
     if (activeProvider) {
       try {
-        activeProviderType = await activeProvider.getProviderType()
-        activeProviderCapabilities = await activeProvider.getCapabilities()
+        const type = await activeProvider.getProviderType()
+        const capabilities = await activeProvider.getCapabilities()
+        
+        activeProviderInfo = {
+          type,
+          capabilities: capabilities ? {
+            name: capabilities.name,
+            version: capabilities.version,
+            maxTokens: capabilities.maxTokens,
+            supportsJson: capabilities.supportsJson,
+            temperature: capabilities.temperature,
+            maxDuration: capabilities.maxDuration
+          } : undefined
+        }
       } catch (error) {
         console.error('Error getting provider details:', error)
       }
@@ -72,7 +96,9 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
           .single()
           
         if (!error && data?.active_provider) {
-          activeProviderType = data.active_provider
+          activeProviderInfo = {
+            type: data.active_provider
+          }
         }
       } catch (error) {
         console.error('Error checking database for provider:', error)
@@ -84,7 +110,7 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
       branch,
       environment,
       status: {
-        auth: true, // We know auth is true if we got here
+        auth: true,
         db: dbStatus,
         env: envStatus
       },
@@ -93,23 +119,17 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
         user: session.user.email || null
       },
       llm: {
-        activeProvider: activeProvider ? {
-          type: activeProviderType,
-          capabilities: activeProviderCapabilities
-        } : activeProviderType !== 'none' ? {
-          type: activeProviderType,
-          capabilities: null
-        } : null,
+        activeProvider: activeProviderInfo,
         availableProviders: configuredProviders
       }
-    })
+    } satisfies SystemInfoResponse)
   } catch (error) {
     console.error('Error getting system info:', error)
     return NextResponse.json(
       { 
         error: 'Failed to get system info',
-        details: process.env.NODE_ENV === 'development' ? error : undefined
-      },
+        details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+      } satisfies SystemErrorResponse,
       { status: 500 }
     )
   }

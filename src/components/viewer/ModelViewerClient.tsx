@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { toast } from 'sonner'
 import { loadModel } from '@/lib/library-service'
+import { MOUSE } from 'three'
 
 interface ModelViewerClientProps {
   model: Model
@@ -61,6 +62,16 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
     // Set up controls
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
+    controls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN
+    }
+    controls.enableZoom = true
+    controls.listenToKeyEvents(window)
+    if (controls.domElement) {
+      controls.domElement.addEventListener('wheel', () => {}, { passive: true })
+    }
     controlsRef.current = controls
 
     // Add lights

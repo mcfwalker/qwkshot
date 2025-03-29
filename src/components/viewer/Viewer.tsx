@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -127,6 +127,15 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
             maxPolarAngle={Math.PI / 2}
             minPolarAngle={0}
             target={[0, 0, 0]}
+            makeDefault
+            listenToKeyEvents={window}
+            domElement={canvasRef.current}
+            enableZoom={true}
+            mouseButtons={{
+              LEFT: MOUSE.ROTATE,
+              MIDDLE: MOUSE.DOLLY,
+              RIGHT: MOUSE.PAN
+            }}
           />
           
           {/* Ambient light for overall scene illumination */}

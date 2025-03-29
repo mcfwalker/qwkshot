@@ -63,30 +63,48 @@ export function DevInfo() {
   // Function to fetch health status
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/system/health')
-      if (!res.ok) throw new Error('Health check failed')
-      const data = await res.json()
-      console.log('Health response:', data) // Debug log
-      setState(prev => ({ ...prev, health: data }))
+      const res = await fetch('/api/system/health', {
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!res.ok) throw new Error('Health check failed');
+      
+      const data = await res.json();
+      console.log('DevInfo received health data:', data); // Debug log
+      setState(prev => ({ ...prev, health: data }));
     } catch (error) {
-      console.error('Error fetching health status:', error)
-      setState(prev => ({ ...prev, error: true }))
+      console.error('Error fetching health status:', error);
+      setState(prev => ({ ...prev, error: true }));
     }
   }
 
   // Function to fetch system info if authenticated
   const fetchInfo = async () => {
     try {
-      const res = await fetch('/api/system/info')
+      const res = await fetch('/api/system/info', {
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
       if (res.status === 401) {
         // Not authenticated - this is okay, just don't show the info
-        return
+        return;
       }
-      if (!res.ok) throw new Error('Failed to fetch system info')
-      const data = await res.json()
-      setState(prev => ({ ...prev, info: data }))
+      
+      if (!res.ok) throw new Error('Failed to fetch system info');
+      
+      const data = await res.json();
+      console.log('DevInfo received system info:', data); // Debug log
+      setState(prev => ({ ...prev, info: data }));
     } catch (error) {
-      console.error('Error fetching system info:', error)
+      console.error('Error fetching system info:', error);
       // Don't set error state here as this is optional
     }
   }

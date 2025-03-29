@@ -1,16 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ViewIcon, FolderOpen, LogOut, Home, Settings } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export function Navigation() {
   const pathname = usePathname()
   const router = useRouter()
+  const supabase = createClientComponentClient()
 
   const handleSignOut = async () => {
     try {
@@ -30,6 +30,11 @@ export function Navigation() {
       console.error('Navigation error:', error)
       toast.error('Failed to navigate. Please try again.')
     }
+  }
+
+  const handleAdminNavigation = () => {
+    // Open admin in same window to maintain session state
+    router.push('/admin')
   }
 
   return (
@@ -60,7 +65,7 @@ export function Navigation() {
             variant={pathname.startsWith('/admin') ? "default" : "ghost"} 
             size="sm"
             className="mr-2"
-            onClick={() => window.open('/admin', '_blank')}
+            onClick={handleAdminNavigation}
           >
             <Settings className="mr-2 h-4 w-4" />
             Admin

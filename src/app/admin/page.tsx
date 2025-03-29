@@ -24,7 +24,7 @@ interface DevInfo {
   llm: {
     activeProvider: {
       type: string;
-      capabilities: {
+      capabilities?: {
         name: string;
         version: string;
         maxTokens: number;
@@ -67,16 +67,45 @@ export default function AdminPage() {
   const fetchDevInfo = async () => {
     try {
       setError(null);
-      const response = await fetch('/api/dev-info');
-      if (!response.ok) {
-        throw new Error('Failed to fetch provider information');
+      setIsLoading(true);
+      
+      // Get the session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/sign-in');
+        return;
       }
+
+      // Fetch system info with auth
+      const response = await fetch('/api/system/info', {
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
+      if (response.status === 401) {
+        router.push('/auth/sign-in');
+        return;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch provider information: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Received system info:', data); // Debug log
+      
+      if (!data.auth.isAuthenticated) {
+        throw new Error('Not authenticated');
+      }
+      
       setDevInfo(data);
-      // Set selected provider from active provider
       setSelectedProvider(data.llm.activeProvider?.type || null);
     } catch (error) {
-      console.error('Error fetching dev info:', error);
+      console.error('Error fetching system info:', error);
       setError('Failed to load provider information. Please refresh the page.');
     } finally {
       setIsLoading(false);
@@ -88,17 +117,27 @@ export default function AdminPage() {
       setError(null);
       setIsLoading(true);
       
+      // Get the session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth/sign-in');
+        return;
+      }
+      
       const response = await fetch('/api/llm/switch-provider', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         },
+        credentials: 'include',
         body: JSON.stringify({ provider }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error || 'Failed to switch provider');
       }
 
@@ -108,16 +147,13 @@ export default function AdminPage() {
       // Show success message
       toast.success(`Switched to ${provider} provider successfully`);
 
-      // Hard refresh the page after 1 second to ensure state is fully updated
-      // This is needed because the in-memory state and database may not be fully in sync immediately
-      // The timeout gives the server time to update its state before refreshing
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Refresh the page data
+      await fetchDevInfo();
       
     } catch (error) {
       console.error('Error switching provider:', error);
       setError(error instanceof Error ? error.message : 'Failed to switch provider');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -211,7 +247,7 @@ export default function AdminPage() {
               <h3 className="text-sm font-medium text-gray-900 mb-4">Switch Provider</h3>
               <div className="flex items-center gap-4">
                 <select
-                  value={devInfo?.llm.activeProvider?.type || ''}
+                  value={selectedProvider || ''}
                   onChange={(e) => handleProviderChange(e.target.value as ProviderType)}
                   className="block w-full md:w-64 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   disabled={isLoading}
@@ -224,8 +260,8 @@ export default function AdminPage() {
                   ))}
                 </select>
                 <span className="text-sm text-gray-500">
-                  {devInfo?.llm.activeProvider?.type
-                    ? `Currently using ${devInfo.llm.activeProvider.type.charAt(0).toUpperCase() + devInfo.llm.activeProvider.type.slice(1)}`
+                  {selectedProvider
+                    ? `Currently using ${selectedProvider.charAt(0).toUpperCase() + selectedProvider.slice(1)}`
                     : 'No provider selected'}
                 </span>
               </div>

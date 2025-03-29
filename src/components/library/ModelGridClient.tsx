@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Model } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface ModelGridClientProps {
   initialModels: Model[]
@@ -15,6 +16,55 @@ interface ModelGridClientProps {
 
 export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   const [models, setModels] = useState<Model[]>(initialModels)
+  const router = useRouter()
+
+  // Refresh models when component mounts or when router is refreshed
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('models')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+        setModels(data || [])
+      } catch (error) {
+        console.error('Error refreshing models:', error)
+      }
+    }
+
+    fetchModels()
+  }, [])
+
+  // Subscribe to realtime changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('model_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'models' 
+        }, 
+        async () => {
+          // Refresh the models list when changes occur
+          const { data, error } = await supabase
+            .from('models')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (!error && data) {
+            setModels(data)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   async function handleDelete(model: Model) {
     if (!confirm('Are you sure you want to delete this model?')) return
@@ -44,6 +94,7 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
       }
 
       toast.success('Model deleted successfully')
+      router.refresh() // Trigger a router refresh to update server components
       setModels(models.filter(m => m.id !== model.id))
     } catch (error) {
       console.error('Error deleting model:', error)

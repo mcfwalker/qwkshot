@@ -1,7 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable static asset handling
-  assetPrefix: process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000',
   // Ensure images can be loaded from Supabase
   images: {
     domains: ['mmoqqgsamsewsbocqxbi.supabase.co'],
@@ -27,7 +25,8 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/:path*',
+        // Only apply headers to API routes and page routes
+        source: '/((?!_next/|static/|favicon.ico).*)',
         headers: [
           {
             key: 'Cache-Control',

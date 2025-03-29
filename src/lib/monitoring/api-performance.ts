@@ -33,72 +33,81 @@ class APIPerformanceMonitor {
   private readonly recentWindow = 5 * 60 * 1000; // 5 minutes
 
   recordRequest(endpoint: string, responseTime: number, success: boolean) {
-    console.log('APIPerformanceMonitor.recordRequest:', { endpoint, responseTime, success });
-    const now = Date.now();
+    try {
+      console.log('APIPerformanceMonitor.recordRequest:', { endpoint, responseTime, success });
+      const now = Date.now();
 
-    // Initialize or get existing metrics
-    if (!globalMetrics[endpoint]) {
-      globalMetrics[endpoint] = {
-        times: [],
-        successes: 0,
-        failures: 0,
-        lastResponseTime: 0,
-        lastUpdate: now
-      };
+      // Initialize or get existing metrics
+      if (!globalMetrics[endpoint]) {
+        globalMetrics[endpoint] = {
+          times: [],
+          successes: 0,
+          failures: 0,
+          lastResponseTime: 0,
+          lastUpdate: now
+        };
+      }
+
+      const metrics = globalMetrics[endpoint];
+
+      // Clean up old data
+      metrics.times = metrics.times
+        .filter(t => (now - t) <= this.recentWindow)
+        .slice(-this.maxSamples);
+
+      // Add new data
+      metrics.times.push(responseTime);
+      metrics.lastResponseTime = responseTime;
+      metrics.lastUpdate = now;
+      
+      if (success) {
+        metrics.successes++;
+      } else {
+        metrics.failures++;
+      }
+
+      console.log('Updated metrics for endpoint:', endpoint, metrics);
+    } catch (error) {
+      console.error('Error recording API metrics:', error instanceof Error ? error.message : String(error));
     }
-
-    const metrics = globalMetrics[endpoint];
-
-    // Clean up old data
-    metrics.times = metrics.times
-      .filter(t => (now - t) <= this.recentWindow)
-      .slice(-this.maxSamples);
-
-    // Add new data
-    metrics.times.push(responseTime);
-    metrics.lastResponseTime = responseTime;
-    metrics.lastUpdate = now;
-    
-    if (success) {
-      metrics.successes++;
-    } else {
-      metrics.failures++;
-    }
-
-    console.log('Updated metrics for endpoint:', endpoint, metrics);
   }
 
   getEndpointStats(endpoint: string): EndpointStats | null {
-    const metrics = globalMetrics[endpoint];
-    console.log('Getting stats for endpoint:', endpoint, metrics);
-    
-    if (!metrics || metrics.times.length === 0) {
+    try {
+      const metrics = globalMetrics[endpoint];
+      console.log('Getting stats for endpoint:', endpoint, metrics);
+      
+      if (!metrics || metrics.times.length === 0) {
+        return null;
+      }
+
+      // Clean up old data before calculating stats
+      const now = Date.now();
+      metrics.times = metrics.times.filter(t => (now - t) <= this.recentWindow);
+
+      if (metrics.times.length === 0) {
+        return null;
+      }
+
+      const averageResponseTime = metrics.times.reduce((a, b) => a + b, 0) / metrics.times.length;
+      const totalRequests = metrics.successes + metrics.failures;
+      const successRate = totalRequests > 0 ? metrics.successes / totalRequests : 1;
+
+      const stats = {
+        endpoint,
+        averageResponseTime,
+        lastResponseTime: metrics.lastResponseTime,
+        status: this.getStatus(averageResponseTime),
+        recentRequests: metrics.times.length,
+        successRate
+      };
+      
+      console.log('Calculated stats:', stats);
+      return stats;
+    } catch (error) {
+      console.error('Error getting endpoint stats:', error instanceof Error ? error.message : String(error));
       return null;
     }
-
-    // Clean up old data before calculating stats
-    const now = Date.now();
-    metrics.times = metrics.times.filter(t => (now - t) <= this.recentWindow);
-
-    if (metrics.times.length === 0) {
-      return null;
-    }
-
-    const averageResponseTime = metrics.times.reduce((a, b) => a + b, 0) / metrics.times.length;
-    const totalRequests = metrics.successes + metrics.failures;
-    const successRate = totalRequests > 0 ? metrics.successes / totalRequests : 1;
-
-    const stats = {
-      endpoint,
-      averageResponseTime,
-      lastResponseTime: metrics.lastResponseTime,
-      status: this.getStatus(averageResponseTime),
-      recentRequests: metrics.times.length,
-      successRate
-    };
-    
-    console.log('Calculated stats:', stats);
-    return stats;
   }
 
   private getStatus(responseTime: number): 'good' | 'warning' | 'critical' {
