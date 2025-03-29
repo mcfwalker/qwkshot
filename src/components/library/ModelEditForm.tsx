@@ -40,23 +40,34 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
       }
       console.log('Current user:', session?.user.id)
 
-      // Update the model name directly
-      const { data, error: updateError } = await supabase
+      // First verify we can access this model
+      const { data: modelCheck, error: checkError } = await supabase
+        .from('models')
+        .select('id')
+        .eq('id', model.id)
+        .single()
+
+      if (checkError) {
+        console.error('Model check error:', checkError)
+        throw new Error('Could not verify model access')
+      }
+
+      if (!modelCheck) {
+        console.error('Model not found')
+        throw new Error('Model not found')
+      }
+
+      // Update the model name
+      const { error: updateError } = await supabase
         .from('models')
         .update({ name: name.trim() })
         .eq('id', model.id)
-        .select()
 
-      console.log('Update response:', { data, error: updateError })
+      console.log('Update completed:', updateError ? 'with error' : 'successfully')
 
       if (updateError) {
         console.error('Update error:', updateError)
         throw new Error(updateError.message)
-      }
-
-      if (!data || data.length === 0) {
-        console.error('No data returned from update')
-        throw new Error('Update failed - no data returned')
       }
 
       // Force router to refresh data immediately
