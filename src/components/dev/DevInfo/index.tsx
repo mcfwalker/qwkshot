@@ -215,10 +215,20 @@ export function DevInfo() {
       fetchData()
     }
     
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event)
+      if (['SIGNED_IN', 'SIGNED_OUT', 'TOKEN_REFRESHED'].includes(event)) {
+        console.log('Refreshing health panel due to auth change')
+        fetchData()
+      }
+    })
+    
     window.addEventListener('provider-changed', handleProviderChange)
     
     return () => {
       window.removeEventListener('provider-changed', handleProviderChange)
+      subscription.unsubscribe()
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current)
       }
