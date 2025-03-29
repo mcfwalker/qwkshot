@@ -30,32 +30,16 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     setIsLoading(true)
 
     try {
-      // Get session to ensure we're authenticated
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('Not authenticated')
-      }
-
-      // First verify we can access this model
-      const { data: modelCheck, error: checkError } = await supabase
-        .from('models')
-        .select('id')
-        .eq('id', model.id)
-        .eq('user_id', session.user.id)
-        .single()
-
-      if (checkError || !modelCheck) {
-        throw new Error('Model not found or unauthorized')
-      }
-
-      // Update the model name
+      // Update the model name directly
       const { error: updateError } = await supabase
         .from('models')
         .update({ name: name.trim() })
         .eq('id', model.id)
-        .eq('user_id', session.user.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Update error:', updateError)
+        throw new Error(updateError.message)
+      }
 
       // Force router to refresh data immediately
       router.refresh()
@@ -65,7 +49,7 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
       // Navigate back to library after a short delay
       setTimeout(() => {
         router.push('/library')
-      }, 500)
+      }, 1000) // Increased delay to ensure refresh completes
     } catch (error) {
       console.error('Error updating model:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to update model')
