@@ -36,13 +36,26 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         throw new Error('Not authenticated')
       }
 
-      // Update the model name using RPC
-      const { error } = await supabase.rpc('update_model_name', {
-        model_id: model.id,
-        new_name: name.trim()
-      })
+      // First verify we can access this model
+      const { data: modelCheck, error: checkError } = await supabase
+        .from('models')
+        .select('id')
+        .eq('id', model.id)
+        .eq('user_id', session.user.id)
+        .single()
 
-      if (error) throw error
+      if (checkError || !modelCheck) {
+        throw new Error('Model not found or unauthorized')
+      }
+
+      // Update the model name
+      const { error: updateError } = await supabase
+        .from('models')
+        .update({ name: name.trim() })
+        .eq('id', model.id)
+        .eq('user_id', session.user.id)
+
+      if (updateError) throw updateError
 
       // Force router to refresh data immediately
       router.refresh()
@@ -55,7 +68,7 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
       }, 500)
     } catch (error) {
       console.error('Error updating model:', error)
-      toast.error('Failed to update model')
+      toast.error(error instanceof Error ? error.message : 'Failed to update model')
     } finally {
       setIsLoading(false)
     }
