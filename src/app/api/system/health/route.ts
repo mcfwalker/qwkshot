@@ -16,22 +16,21 @@ interface EndpointStats {
 // Mark as dynamic to ensure fresh data
 export const dynamic = 'force-dynamic'
 
-// Basic health check that doesn't require authentication
 export async function GET() {
   const startTime = Date.now()
   
   try {
+    // Initialize Supabase client and get session
+    const supabase = await createRouteSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
     // Check if essential environment variables are defined
     const envCheck = {
       supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     }
 
-    // Initialize Supabase client and get session
-    const supabase = await createRouteSupabaseClient()
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-
-    // Check DB connection
+    // Check DB connection regardless of auth
     let dbStatus = false
     try {
       const { error: dbError } = await supabase.from('models').select('count').limit(1)
@@ -40,18 +39,29 @@ export async function GET() {
       console.error('Error checking DB status:', e)
     }
 
-    // Get LLM provider state
+    // Get LLM provider state if authenticated
     let llmProvider = 'none'
     if (session && !sessionError) {
       try {
-        const { data, error } = await supabase
-          .from('llm_state')
-          .select('active_provider')
-          .eq('id', 1)
-          .single()
+        // First check the registry
+        const registry = LLMProviderRegistry.getInstance()
+        const activeProvider = await registry.getActiveProvider()
         
-        if (!error && data?.active_provider) {
-          llmProvider = data.active_provider
+        if (activeProvider) {
+          llmProvider = await activeProvider.getProviderType()
+          console.log('Health check: Active provider from registry:', llmProvider)
+        } else {
+          // Fallback to database check
+          const { data, error } = await supabase
+            .from('llm_state')
+            .select('active_provider')
+            .eq('id', 1)
+            .single()
+          
+          if (!error && data?.active_provider) {
+            llmProvider = data.active_provider
+            console.log('Health check: Active provider from database:', llmProvider)
+          }
         }
       } catch (error) {
         console.error('Error checking LLM state:', error)
@@ -84,7 +94,7 @@ export async function GET() {
     } : null;
 
     // Enhanced health response with auth and LLM state
-    return NextResponse.json({
+    const response = NextResponse.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
@@ -102,15 +112,17 @@ export async function GET() {
         requestRate: metrics.requestRate,
         api: apiHealth
       }
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      }
     })
+
+    // Set proper cache control headers
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    
+    return response
+
   } catch (error) {
     console.error('Health check failed:', error)
-    return NextResponse.json(
+    const response = NextResponse.json(
       { 
         status: 'error',
         timestamp: new Date().toISOString(),
@@ -125,13 +137,12 @@ export async function GET() {
           responseTime: Date.now() - startTime
         }
       },
-      { 
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      }
+      { status: 500 }
     )
+
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    
+    return response
   }
 } 

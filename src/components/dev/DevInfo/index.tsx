@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import type { HealthCheckResponse, SystemInfoResponse } from '@/lib/system/types'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabase'
 
 interface DevInfoState {
   health: HealthCheckResponse | null;
@@ -63,12 +65,16 @@ export function DevInfo() {
   // Function to fetch health status
   const fetchHealth = async () => {
     try {
+      const supabase = createClientComponentClient<Database>()
+      const { data: { session } } = await supabase.auth.getSession()
+      
       const res = await fetch('/api/system/health', {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(session && { 'Authorization': `Bearer ${session.access_token}` })
         }
       });
       
@@ -89,13 +95,16 @@ export function DevInfo() {
   // Function to fetch system info if authenticated
   const fetchInfo = async () => {
     try {
-      // Get the auth cookie
+      const supabase = createClientComponentClient<Database>()
+      const { data: { session } } = await supabase.auth.getSession()
+      
       const res = await fetch('/api/system/info', {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(session && { 'Authorization': `Bearer ${session.access_token}` })
         }
       });
       
