@@ -32,22 +32,29 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         throw new Error('Not authenticated')
       }
 
+      // Update the model name
       const { error } = await supabase
         .from('models')
         .update({ name })
         .eq('id', model.id)
+        .select()
+        .single()
 
       if (error) throw error
 
-      // First refresh the router to trigger revalidation
+      // Invalidate the cache for both the library page and the edit page
+      await fetch('/api/revalidate?path=/library', { method: 'POST' })
+      await fetch(`/api/revalidate?path=/library/edit/${model.id}`, { method: 'POST' })
+      
+      // Force router to refresh data
       router.refresh()
       
-      // Wait for a tick to allow revalidation to start
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Wait for revalidation and refresh to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       toast.success('Model updated successfully')
       
-      // Then navigate back to library
+      // Navigate back to library
       router.push('/library')
     } catch (error) {
       console.error('Error updating model:', error)
@@ -82,15 +89,18 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
 
       if (error) throw error
 
-      // First refresh the router to trigger revalidation
+      // Invalidate the library page cache
+      await fetch('/api/revalidate?path=/library', { method: 'POST' })
+      
+      // Force router to refresh data
       router.refresh()
       
-      // Wait for a tick to allow revalidation to start
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Wait for revalidation and refresh to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       toast.success('Model deleted successfully')
       
-      // Then navigate back to library
+      // Navigate back to library
       router.push('/library')
     } catch (error) {
       console.error('Error deleting model:', error)
