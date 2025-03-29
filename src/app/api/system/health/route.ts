@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { PerformanceMonitor } from '@/lib/system/performance'
 import { apiPerformance, API_THRESHOLDS } from '@/lib/monitoring/api-performance'
+import { createRouteSupabaseClient } from '@/lib/supabase-route'
+import { LLMProviderRegistry } from '@/lib/llm/registry'
 
 interface EndpointStats {
   endpoint: string;
@@ -23,6 +25,37 @@ export async function GET() {
     const envCheck = {
       supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    }
+
+    // Initialize Supabase client and get session
+    const supabase = await createRouteSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    // Check DB connection
+    let dbStatus = false
+    try {
+      const { error: dbError } = await supabase.from('models').select('count').limit(1)
+      dbStatus = !dbError
+    } catch (e) {
+      console.error('Error checking DB status:', e)
+    }
+
+    // Get LLM provider state
+    let llmProvider = 'none'
+    if (session && !sessionError) {
+      try {
+        const { data, error } = await supabase
+          .from('llm_state')
+          .select('active_provider')
+          .eq('id', 1)
+          .single()
+        
+        if (!error && data?.active_provider) {
+          llmProvider = data.active_provider
+        }
+      } catch (error) {
+        console.error('Error checking LLM state:', error)
+      }
     }
 
     // Record performance metrics
@@ -50,18 +83,29 @@ export async function GET() {
       endpoints: apiMetrics
     } : null;
 
-    // Basic health response
+    // Enhanced health response with auth and LLM state
     return NextResponse.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
       ready: Object.values(envCheck).every(Boolean),
       version: process.env.NEXT_PUBLIC_APP_VERSION || 'development',
+      services: {
+        auth: !sessionError && !!session,
+        db: dbStatus,
+        env: Object.values(envCheck).every(Boolean),
+        llm: llmProvider
+      },
       performance: {
         responseTime: metrics.responseTime,
         memory: metrics.memory,
         requestRate: metrics.requestRate,
         api: apiHealth
+      }
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, must-revalidate',
+        'Pragma': 'no-cache'
       }
     })
   } catch (error) {
@@ -71,11 +115,23 @@ export async function GET() {
         status: 'error',
         timestamp: new Date().toISOString(),
         ready: false,
+        services: {
+          auth: false,
+          db: false,
+          env: false,
+          llm: 'none'
+        },
         performance: {
           responseTime: Date.now() - startTime
         }
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      }
     )
   }
 } 
