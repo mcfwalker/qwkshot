@@ -23,6 +23,10 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!name.trim()) {
+      toast.error('Model name cannot be empty')
+      return
+    }
     setIsLoading(true)
 
     try {
@@ -32,45 +36,23 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         throw new Error('Not authenticated')
       }
 
-      // Update the model name - don't use select() or single() here
-      const { error } = await supabase
-        .from('models')
-        .update({ name })
-        .eq('id', model.id)
+      // Update the model name using RPC
+      const { error } = await supabase.rpc('update_model_name', {
+        model_id: model.id,
+        new_name: name.trim()
+      })
 
       if (error) throw error
 
-      // Invalidate the cache for both the library page and the edit page
-      try {
-        await Promise.all([
-          fetch('/api/revalidate?path=/library', { 
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }),
-          fetch(`/api/revalidate?path=/library/edit/${model.id}`, { 
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          })
-        ])
-      } catch (revalidateError) {
-        console.error('Error revalidating:', revalidateError)
-        // Continue with navigation even if revalidation fails
-      }
-      
-      // Force router to refresh data
+      // Force router to refresh data immediately
       router.refresh()
-      
-      // Wait for revalidation and refresh to complete
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       toast.success('Model updated successfully')
       
-      // Navigate back to library
-      router.push('/library')
+      // Navigate back to library after a short delay
+      setTimeout(() => {
+        router.push('/library')
+      }, 500)
     } catch (error) {
       console.error('Error updating model:', error)
       toast.error('Failed to update model')
