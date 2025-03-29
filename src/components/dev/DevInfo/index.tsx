@@ -12,7 +12,7 @@ interface DevInfoState {
 
 // Create a small custom event system for provider changes
 export const DevEvents = {
-  providerChanged: new Event('llm-provider-changed')
+  providerChanged: new Event('provider-changed')
 };
 
 function formatBytes(bytes: number): string {
@@ -67,11 +67,15 @@ export function DevInfo() {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          'Accept': 'application/json'
         }
       });
       
-      if (!res.ok) throw new Error('Health check failed');
+      if (!res.ok) {
+        console.error('DevInfo: Health check failed:', res.status, res.statusText);
+        throw new Error('Health check failed');
+      }
       
       const data = await res.json();
       console.log('DevInfo received health data:', data); // Debug log
@@ -85,20 +89,26 @@ export function DevInfo() {
   // Function to fetch system info if authenticated
   const fetchInfo = async () => {
     try {
+      // Get the auth cookie
       const res = await fetch('/api/system/info', {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          'Accept': 'application/json'
         }
       });
       
       if (res.status === 401) {
         // Not authenticated - this is okay, just don't show the info
+        console.log('DevInfo: Not authenticated');
         return;
       }
       
-      if (!res.ok) throw new Error('Failed to fetch system info');
+      if (!res.ok) {
+        console.error('DevInfo: Failed to fetch system info:', res.status, res.statusText);
+        throw new Error('Failed to fetch system info');
+      }
       
       const data = await res.json();
       console.log('DevInfo received system info:', data); // Debug log
@@ -109,50 +119,67 @@ export function DevInfo() {
     }
   }
 
-  // Combined fetch function with rate limiting
+  // Combined fetch function with rate limiting and retry
   const fetchData = async () => {
-    const now = Date.now()
-    const timeSinceLastFetch = now - lastFetchTimeRef.current
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastFetchTimeRef.current;
     
     if (timeSinceLastFetch < 10000 && lastFetchTimeRef.current !== 0) {
-      return
+      return;
     }
     
-    lastFetchTimeRef.current = now
+    lastFetchTimeRef.current = now;
     
     if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current)
-      fetchTimeoutRef.current = null
+      clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = null;
     }
 
-    setState(prev => ({ ...prev, isLoading: true }))
+    setState(prev => ({ ...prev, isLoading: true }));
     
     try {
+      // Fetch data with retry
+      const retryFetch = async (fn: () => Promise<void>, retries = 3) => {
+        try {
+          await fn();
+        } catch (error) {
+          if (retries > 0) {
+            console.log(`DevInfo: Retrying... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await retryFetch(fn, retries - 1);
+          } else {
+            throw error;
+          }
+        }
+      };
+
       await Promise.all([
-        fetchHealth(),
-        fetchInfo()
-      ])
-      setState(prev => ({ ...prev, error: false }))
+        retryFetch(fetchHealth),
+        retryFetch(fetchInfo)
+      ]);
+      
+      setState(prev => ({ ...prev, error: false }));
     } catch (error) {
-      console.error('Error fetching data:', error)
-      setState(prev => ({ ...prev, error: true }))
+      console.error('Error fetching data:', error);
+      setState(prev => ({ ...prev, error: true }));
     } finally {
-      setState(prev => ({ ...prev, isLoading: false }))
+      setState(prev => ({ ...prev, isLoading: false }));
     }
-  }
+  };
 
   useEffect(() => {
     fetchData()
     
+    // Listen for provider changes
     const handleProviderChange = () => {
       console.log('Provider change detected, refreshing data')
       fetchData()
     }
     
-    window.addEventListener('llm-provider-changed', handleProviderChange)
+    window.addEventListener('provider-changed', handleProviderChange)
     
     return () => {
-      window.removeEventListener('llm-provider-changed', handleProviderChange)
+      window.removeEventListener('provider-changed', handleProviderChange)
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current)
       }

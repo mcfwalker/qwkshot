@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createRouteSupabaseClient } from '@/lib/supabase-route'
 import { getConfiguredProviders } from '@/lib/llm/config'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
@@ -36,13 +35,14 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
 
     // If not authenticated or session error, return limited info
     if (!session || sessionError) {
+      console.log('System info: No valid session found');
       return NextResponse.json({
         version: version || 'unknown',
         branch,
         environment,
         status: {
           auth: false,
-          db: dbStatus, // Still report actual DB status
+          db: dbStatus,
           env: envStatus
         },
         auth: {
@@ -55,6 +55,8 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
         }
       } satisfies SystemInfoResponse)
     }
+
+    console.log('System info: Valid session found for user:', session.user.email);
 
     // Initialize LLM system for authenticated users
     await ensureLLMSystemInitialized()
@@ -83,6 +85,7 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
             maxDuration: capabilities.maxDuration
           } : undefined
         }
+        console.log('System info: Active provider info retrieved:', type);
       } catch (error) {
         console.error('Error getting provider details:', error)
       }
@@ -99,13 +102,14 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
           activeProviderInfo = {
             type: data.active_provider
           }
+          console.log('System info: Provider found in database:', data.active_provider);
         }
       } catch (error) {
         console.error('Error checking database for provider:', error)
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       version,
       branch,
       environment,
@@ -123,6 +127,12 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
         availableProviders: configuredProviders
       }
     } satisfies SystemInfoResponse)
+
+    // Ensure proper cache headers
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    
+    return response
   } catch (error) {
     console.error('Error getting system info:', error)
     return NextResponse.json(
@@ -130,7 +140,13 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
         error: 'Failed to get system info',
         details: process.env.NODE_ENV === 'development' ? String(error) : undefined
       } satisfies SystemErrorResponse,
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      }
     )
   }
 } 

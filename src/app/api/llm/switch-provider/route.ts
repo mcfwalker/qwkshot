@@ -61,6 +61,11 @@ export async function POST(request: Request) {
         success: true, 
         message: `Switched to ${provider} provider`,
         provider 
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
     } catch (configError) {
       console.error('Error configuring provider:', configError);
