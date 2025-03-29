@@ -51,6 +51,16 @@ function getStatusColor(status: 'good' | 'warning' | 'critical'): string {
   }
 }
 
+// Get the base URL for API requests
+const getApiBaseUrl = () => {
+  // In development, use relative paths
+  if (process.env.NODE_ENV === 'development') {
+    return ''
+  }
+  // In production, use the NEXT_PUBLIC_API_URL or fall back to the current origin
+  return process.env.NEXT_PUBLIC_API_URL || window.location.origin
+}
+
 export function DevInfo() {
   const [state, setState] = useState<DevInfoState>({
     health: null,
@@ -62,6 +72,7 @@ export function DevInfo() {
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
   const supabase = createClientComponentClient<Database>()
+  const baseUrl = getApiBaseUrl()
   
   // Function to fetch health status
   const fetchHealth = async () => {
@@ -75,7 +86,7 @@ export function DevInfo() {
         console.error('Error getting session:', e)
       }
       
-      const res = await fetch('/api/system/health', {
+      const res = await fetch(`${baseUrl}/api/system/health`, {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
@@ -111,7 +122,7 @@ export function DevInfo() {
         console.error('Error getting session:', e)
       }
       
-      const res = await fetch('/api/system/info', {
+      const res = await fetch(`${baseUrl}/api/system/info`, {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
