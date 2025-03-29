@@ -3,6 +3,7 @@ import { PerformanceMonitor } from '@/lib/system/performance'
 import { apiPerformance, API_THRESHOLDS } from '@/lib/monitoring/api-performance'
 import { createRouteSupabaseClient } from '@/lib/supabase-route'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
+import { cookies } from 'next/headers'
 
 interface EndpointStats {
   endpoint: string;
@@ -16,13 +17,36 @@ interface EndpointStats {
 // Mark as dynamic to ensure fresh data
 export const dynamic = 'force-dynamic'
 
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
 export async function GET() {
   const startTime = Date.now()
   
   try {
-    // Initialize Supabase client and get session
+    // Initialize Supabase client
     const supabase = await createRouteSupabaseClient()
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    // Get session without throwing errors
+    let session = null
+    let sessionError = null
+    try {
+      const sessionResult = await supabase.auth.getSession()
+      session = sessionResult.data.session
+      sessionError = sessionResult.error
+    } catch (e) {
+      console.error('Error getting session:', e)
+      sessionError = e
+    }
 
     // Check if essential environment variables are defined
     const envCheck = {
@@ -114,9 +138,12 @@ export async function GET() {
       }
     })
 
-    // Set proper cache control headers
+    // Set proper cache control and CORS headers
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
     response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     
     return response
 
@@ -140,8 +167,12 @@ export async function GET() {
       { status: 500 }
     )
 
+    // Set proper cache control and CORS headers
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
     response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     
     return response
   }

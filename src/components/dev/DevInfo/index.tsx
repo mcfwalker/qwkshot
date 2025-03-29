@@ -61,12 +61,19 @@ export function DevInfo() {
   
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
+  const supabase = createClientComponentClient<Database>()
   
   // Function to fetch health status
   const fetchHealth = async () => {
     try {
-      const supabase = createClientComponentClient<Database>()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get session without throwing
+      let session = null
+      try {
+        const { data } = await supabase.auth.getSession()
+        session = data.session
+      } catch (e) {
+        console.error('Error getting session:', e)
+      }
       
       const res = await fetch('/api/system/health', {
         credentials: 'include',
@@ -74,7 +81,7 @@ export function DevInfo() {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
           'Accept': 'application/json',
-          ...(session && { 'Authorization': `Bearer ${session.access_token}` })
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
         }
       });
       
@@ -95,8 +102,14 @@ export function DevInfo() {
   // Function to fetch system info if authenticated
   const fetchInfo = async () => {
     try {
-      const supabase = createClientComponentClient<Database>()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get session without throwing
+      let session = null
+      try {
+        const { data } = await supabase.auth.getSession()
+        session = data.session
+      } catch (e) {
+        console.error('Error getting session:', e)
+      }
       
       const res = await fetch('/api/system/info', {
         credentials: 'include',
@@ -104,7 +117,7 @@ export function DevInfo() {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
           'Accept': 'application/json',
-          ...(session && { 'Authorization': `Bearer ${session.access_token}` })
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
         }
       });
       
