@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Model } from '@/lib/supabase'
-import { supabase } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabase'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,12 +19,19 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
   const router = useRouter()
   const [name, setName] = useState(model.name)
   const [isLoading, setIsLoading] = useState(false)
+  const supabase = createClientComponentClient<Database>()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setIsLoading(true)
 
     try {
+      // Get session to ensure we're authenticated
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Not authenticated')
+      }
+
       const { error } = await supabase
         .from('models')
         .update({ name })
@@ -53,6 +61,12 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     setIsLoading(true)
 
     try {
+      // Get session to ensure we're authenticated
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Not authenticated')
+      }
+
       // Delete the file from storage
       const { error: storageError } = await supabase.storage
         .from('models')
