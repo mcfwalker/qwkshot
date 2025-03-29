@@ -29,7 +29,7 @@ export async function GET() {
     const { version, branch, environment } = await getGitInfo();
 
     // Get auth status - properly handle cookie access
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = await createRouteSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     const isAuthenticated = !!session;

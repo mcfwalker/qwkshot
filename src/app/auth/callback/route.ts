@@ -8,8 +8,15 @@ export async function GET(request: Request) {
   const redirectTo = requestUrl.searchParams.get('redirectTo') || '/library'
 
   if (code) {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => {
+        return {
+          get: cookieStore.get.bind(cookieStore),
+          getAll: cookieStore.getAll.bind(cookieStore)
+        } as any
+      } 
+    })
     
     try {
       await supabase.auth.exchangeCodeForSession(code)
