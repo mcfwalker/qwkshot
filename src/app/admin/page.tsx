@@ -5,7 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { ProviderType } from '@/lib/llm/types';
 import { Database } from '@/types/supabase';
-import { DevEvents } from '@/components/dev/DevInfo';
+import { DevEvents } from '@/components/dev/DevInfo/index';
 import { toast } from 'sonner';
 
 interface DevInfo {

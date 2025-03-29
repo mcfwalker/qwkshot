@@ -2,7 +2,7 @@
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { DevInfo } from "@/components/dev/DevInfo";
+import { DevInfo } from "@/components/dev/DevInfo/index";
 import { initializeLLMSystem, ensureLLMSystemInitialized } from '@/lib/llm/init';
 
 // const jetbrainsMono = JetBrains_Mono({

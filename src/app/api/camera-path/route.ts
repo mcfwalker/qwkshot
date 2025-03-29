@@ -16,11 +16,9 @@ export async function POST(request: Request) {
     await ensureLLMSystemInitialized();
 
     const body = await request.json();
-    console.log('Camera path request:', {
-      hasInstruction: !!body.instruction,
-      hasSceneGeometry: !!body.sceneGeometry,
-      duration: body.duration
-    });
+    
+    // Log the full request body
+    console.log('Full camera path request:', JSON.stringify(body, null, 2));
 
     const { instruction, sceneGeometry, duration } = body;
 
@@ -45,7 +43,12 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log(`Generating camera path using ${await provider.getProviderType()} provider`);
+    console.log(`Using ${await provider.getProviderType()} provider for camera path generation`);
+    console.log('Sending to LLM:', {
+      instruction,
+      sceneGeometry: JSON.stringify(sceneGeometry, null, 2),
+      duration
+    });
 
     // Generate camera path using the active provider
     const result = await provider.generateCameraPath({
@@ -53,6 +56,9 @@ export async function POST(request: Request) {
       sceneGeometry,
       duration
     });
+
+    // Log the raw result
+    console.log('Raw LLM result:', JSON.stringify(result, null, 2));
 
     // Ensure the response format is consistent
     const response = {
@@ -71,13 +77,19 @@ export async function POST(request: Request) {
       }))
     };
 
-    console.log('Generated keyframes:', response);
+    console.log('Formatted response:', JSON.stringify(response, null, 2));
     return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error generating camera path:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
     
-    // Ensure we return a proper JSON error response even for timeout errors
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Failed to generate camera path',

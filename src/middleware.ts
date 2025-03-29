@@ -2,8 +2,11 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
+import { apiPerformance } from '@/lib/monitoring/api-performance'
 
 export async function middleware(request: NextRequest) {
+  const startTime = Date.now()
+  
   try {
     // Create a response to modify
     const res = NextResponse.next()
@@ -48,9 +51,29 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // Record performance metrics for API routes
+    if (path.startsWith('/api/')) {
+      const duration = Date.now() - startTime
+      console.log('Recording API request:', { path, duration, success: res.status < 400 }) // Debug log
+      apiPerformance.recordRequest(
+        path,
+        duration,
+        res.status < 400
+      )
+    }
+
     // For all other routes, continue with the response
     return res
   } catch (error) {
+    // Record failed request
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      const duration = Date.now() - startTime
+      apiPerformance.recordRequest(
+        request.nextUrl.pathname,
+        duration,
+        false
+      )
+    }
     console.error('Middleware error:', error)
     // On critical error, redirect to error page
     if (error instanceof Error && error.message.includes('critical')) {
@@ -69,7 +92,9 @@ export const config = {
     // Match protected routes
     '/viewer/:path*',
     '/library/:path*',
-    // Exclude static files and API routes
+    // Match API routes
+    '/api/:path*',
+    // Exclude static files
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 } 
