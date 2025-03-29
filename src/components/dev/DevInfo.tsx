@@ -113,8 +113,35 @@ export function DevInfo() {
     };
   }, []); // Remove pathname dependency - only fetch on mount
 
-  // Only render if we have info to display and are not in an error state
-  if (!info || error) return null
+  // Show basic panel even when there are errors
+  if (!info || error) {
+    return (
+      <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-400">●</span>
+            <span>System Info Unavailable</span>
+          </div>
+          <div className="text-gray-400">Unable to fetch system status</div>
+          {error && (
+            <div className="flex items-center gap-2">
+              <span className="text-red-400">●</span>
+              <span>API Error</span>
+            </div>
+          )}
+          <button 
+            onClick={() => {
+              setRetryCount(0);
+              fetchDevInfo();
+            }}
+            className="mt-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
