@@ -246,7 +246,7 @@ export function DevInfo() {
           <>
             <div className="flex items-center gap-2">
               <span className={state.health.status === 'ok' ? 'text-green-400' : 'text-red-400'}>●</span>
-              <span>v{state.health.version}</span>
+              <span>vdevelopment</span>
             </div>
             <div className="text-gray-400">{state.health.environment}</div>
             
@@ -318,43 +318,6 @@ export function DevInfo() {
                 </div>
               </>
             )}
-          </>
-        )}
-        
-        {/* System Info when authenticated */}
-        {state.info && (
-          <>
-            <div className="text-gray-400">{state.info.branch}</div>
-            
-            {/* Critical Services Health */}
-            <div className="flex items-center gap-2">
-              <span className={Object.values(state.info.status).every(Boolean) ? 'text-green-400' : 'text-red-400'}>●</span>
-              <span>{Object.values(state.info.status).every(Boolean) ? 'Services OK' : 'Service Issues'}</span>
-            </div>
-
-            {/* Detailed Status */}
-            <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
-              <div className="flex items-center gap-2">
-                <span className={state.info.status.db ? 'text-green-400' : 'text-red-400'}>●</span>
-                <span>DB</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={state.info.status.env ? 'text-green-400' : 'text-red-400'}>●</span>
-                <span>ENV</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={state.info.status.auth ? 'text-green-400' : 'text-red-400'}>●</span>
-                <span>Auth</span>
-              </div>
-            </div>
-
-            {/* LLM Provider */}
-            <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
-              <div className="flex items-center gap-2">
-                <span className={state.info.llm.activeProvider ? 'text-green-400' : 'text-yellow-400'}>●</span>
-                <span>LLM: {state.info.llm.activeProvider?.type || 'None'}</span>
-              </div>
-            </div>
           </>
         )}
       </div>

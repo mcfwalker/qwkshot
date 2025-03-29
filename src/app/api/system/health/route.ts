@@ -3,7 +3,7 @@ import { PerformanceMonitor } from '@/lib/system/performance'
 import { apiPerformance, API_THRESHOLDS } from '@/lib/monitoring/api-performance'
 import { createRouteSupabaseClient } from '@/lib/supabase-route'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
 interface EndpointStats {
   endpoint: string;
@@ -19,11 +19,15 @@ export const dynamic = 'force-dynamic'
 
 // Handle CORS preflight requests
 export async function OPTIONS() {
+  const headersList = await headers()
+  const origin = headersList.get('origin') || ''
+  
   return NextResponse.json({}, {
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400',
     },
   })
@@ -31,6 +35,8 @@ export async function OPTIONS() {
 
 export async function GET() {
   const startTime = Date.now()
+  const headersList = await headers()
+  const origin = headersList.get('origin') || ''
   
   try {
     // Initialize Supabase client
@@ -38,14 +44,11 @@ export async function GET() {
     
     // Get session without throwing errors
     let session = null
-    let sessionError = null
     try {
       const sessionResult = await supabase.auth.getSession()
       session = sessionResult.data.session
-      sessionError = sessionResult.error
     } catch (e) {
       console.error('Error getting session:', e)
-      sessionError = e
     }
 
     // Check if essential environment variables are defined
@@ -65,7 +68,7 @@ export async function GET() {
 
     // Get LLM provider state if authenticated
     let llmProvider = 'none'
-    if (session && !sessionError) {
+    if (session) {
       try {
         // First check the registry
         const registry = LLMProviderRegistry.getInstance()
@@ -125,7 +128,7 @@ export async function GET() {
       ready: Object.values(envCheck).every(Boolean),
       version: process.env.NEXT_PUBLIC_APP_VERSION || 'development',
       services: {
-        auth: !sessionError && !!session,
+        auth: !!session,
         db: dbStatus,
         env: Object.values(envCheck).every(Boolean),
         llm: llmProvider
@@ -141,9 +144,10 @@ export async function GET() {
     // Set proper cache control and CORS headers
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
     response.headers.set('Pragma', 'no-cache')
-    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Origin', origin)
     response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
     
     return response
 
@@ -170,9 +174,10 @@ export async function GET() {
     // Set proper cache control and CORS headers
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
     response.headers.set('Pragma', 'no-cache')
-    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Origin', origin)
     response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
     
     return response
   }
