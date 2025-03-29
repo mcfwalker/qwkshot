@@ -37,7 +37,41 @@ export interface HealthCheckResponse {
   environment: string;
   ready: boolean;
   version: string;
-  performance?: PerformanceMetrics;
+  services: {
+    auth: boolean;
+    db: boolean;
+    env: boolean;
+    llm: string;
+  };
+  performance: {
+    responseTime: number;
+    memory: {
+      heapUsed: number;
+      heapTotal: number;
+      external: number;
+    };
+    requestRate: {
+      current: number;
+      average: number;
+    };
+    api?: {
+      status: 'good' | 'warning' | 'critical';
+      averageResponseTime: number;
+      successRate: number;
+      thresholds: {
+        warning: number;
+        critical: number;
+      };
+      endpoints: Array<{
+        endpoint: string;
+        averageResponseTime: number;
+        lastResponseTime: number;
+        status: 'good' | 'warning' | 'critical';
+        recentRequests: number;
+        successRate: number;
+      }>;
+    };
+  };
 }
 
 // System status indicators

@@ -269,37 +269,54 @@ export function DevInfo() {
                     <span>Requests/min: {state.health.performance.requestRate.current}</span>
                   </div>
                 )}
-                
-                {/* API Performance Section */}
-                {state.health.performance.api && (
-                  <div className="mt-1 border-t border-gray-700 pt-1">
-                    <div className="flex items-center gap-2">
-                      <span className={getStatusColor(state.health.performance.api.status)}>●</span>
-                      <span>API Health</span>
-                      <span className="text-xs text-gray-500">
-                        ({formatResponseTime(state.health.performance.api.averageResponseTime)} avg)
-                      </span>
-                    </div>
-                    
-                    {/* Endpoint Details */}
-                    <div className="ml-4 mt-1">
-                      {state.health.performance.api.endpoints.map((endpoint) => (
-                        <div key={endpoint.endpoint} className="flex flex-col gap-0.5 mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className={getStatusColor(endpoint.status)}>●</span>
-                            <span className="text-gray-300">{endpoint.endpoint}</span>
-                          </div>
-                          <div className="ml-4 text-xs text-gray-500">
-                            <div>Last: {formatResponseTime(endpoint.lastResponseTime)}</div>
-                            <div>Success: {formatPercentage(endpoint.successRate)}</div>
-                            <div>Requests: {endpoint.recentRequests}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
+            )}
+
+            {/* Service Status */}
+            {state.health.services && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className={
+                    Object.values(state.health.services).every(val => 
+                      val === true || (typeof val === 'string' && val !== 'none')
+                    ) 
+                      ? 'text-green-400' 
+                      : 'text-red-400'
+                  }>●</span>
+                  <span>
+                    {Object.values(state.health.services).every(val => 
+                      val === true || (typeof val === 'string' && val !== 'none')
+                    )
+                      ? 'Services OK' 
+                      : 'Service Issues'
+                    }
+                  </span>
+                </div>
+
+                {/* Detailed Service Status */}
+                <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className={state.health.services.db ? 'text-green-400' : 'text-red-400'}>●</span>
+                    <span>DB</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={state.health.services.env ? 'text-green-400' : 'text-red-400'}>●</span>
+                    <span>ENV</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={state.health.services.auth ? 'text-green-400' : 'text-red-400'}>●</span>
+                    <span>Auth</span>
+                  </div>
+                </div>
+
+                {/* LLM Provider */}
+                <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className={state.health.services.llm !== 'none' ? 'text-green-400' : 'text-yellow-400'}>●</span>
+                    <span>LLM: {state.health.services.llm}</span>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}
