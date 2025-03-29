@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 
 interface Status {
@@ -44,21 +44,55 @@ export const DevEvents = {
 export function DevInfo() {
   const [info, setInfo] = useState<DevInfo | null>(null)
   const pathname = usePathname()
-
-  // Function to fetch dev info
+  const [error, setError] = useState<boolean>(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastFetchTimeRef = useRef<number>(0)
+  
+  // Function to fetch dev info with rate limiting protection
   const fetchDevInfo = () => {
+    // Implement rate limiting - only fetch if it's been at least 10 seconds since last fetch
+    const now = Date.now()
+    const timeSinceLastFetch = now - lastFetchTimeRef.current
+    
+    if (timeSinceLastFetch < 10000 && lastFetchTimeRef.current !== 0) {
+      console.log('Skipping dev info fetch - too soon since last fetch');
+      return;
+    }
+    
+    lastFetchTimeRef.current = now;
+    
+    // Clear any existing timeout
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = null;
+    }
+    
     // Fetch in both development and production
     fetch('/api/dev-info')
       .then(res => res.json())
-      .then(data => setInfo(data))
+      .then(data => {
+        setInfo(data);
+        setError(false);
+        setRetryCount(0);
+      })
       .catch(error => {
         console.error('Error fetching dev info:', error);
-        setInfo(null);
+        setError(true);
+        
+        // Implement exponential backoff for retries to avoid rate limiting
+        const backoffTime = Math.min(30000, 1000 * Math.pow(2, retryCount));
+        console.log(`Will retry dev info fetch in ${backoffTime/1000} seconds`);
+        
+        fetchTimeoutRef.current = setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          fetchDevInfo();
+        }, backoffTime);
       })
   };
 
   useEffect(() => {
-    // Initial fetch on page load or route change
+    // Only fetch on initial component mount
     fetchDevInfo();
     
     // Listen for provider change events
@@ -73,11 +107,14 @@ export function DevInfo() {
     // Clean up
     return () => {
       window.removeEventListener('llm-provider-changed', handleProviderChange);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
     };
-  }, [pathname]);
+  }, []); // Remove pathname dependency - only fetch on mount
 
-  // Only render if we have info to display
-  if (!info) return null
+  // Only render if we have info to display and are not in an error state
+  if (!info || error) return null
 
   return (
     <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
