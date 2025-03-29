@@ -39,6 +39,8 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-03-28-2129 - Authentication Fixes and Deployment Optimization
+- M3DV-SR-2025-03-28-1623 - Vercel Deployment Setup and Configuration
 - M3DV-SR-2025-03-28-1122 - LLM Provider Switching Feature Implementation and Bug Fix
 - M3DV-SR-2025-03-28-0733 - Documentation Refactor and Reorganization
 - M3DV-SR-2025-03-27-1806 - PostCSS and Tailwind v4 Configuration Resolution
