@@ -53,12 +53,13 @@ function getStatusColor(status: 'good' | 'warning' | 'critical'): string {
 
 // Get the base URL for API requests
 const getApiBaseUrl = () => {
-  // In development, use relative paths
-  if (process.env.NODE_ENV === 'development') {
+  // In development or if we're on the server, use relative paths
+  if (typeof window === 'undefined' || process.env.NODE_ENV === 'development') {
     return ''
   }
-  // In production, use the NEXT_PUBLIC_API_URL or fall back to the current origin
-  return process.env.NEXT_PUBLIC_API_URL || window.location.origin
+  
+  // In production on the client, use the current origin
+  return window.location.origin
 }
 
 export function DevInfo() {
@@ -72,7 +73,6 @@ export function DevInfo() {
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
   const supabase = createClientComponentClient<Database>()
-  const baseUrl = getApiBaseUrl()
   
   // Function to fetch health status
   const fetchHealth = async () => {
@@ -85,6 +85,9 @@ export function DevInfo() {
       } catch (e) {
         console.error('Error getting session:', e)
       }
+      
+      // Get the base URL at request time to ensure we're on the client
+      const baseUrl = getApiBaseUrl()
       
       const res = await fetch(`${baseUrl}/api/system/health`, {
         credentials: 'include',
@@ -121,6 +124,9 @@ export function DevInfo() {
       } catch (e) {
         console.error('Error getting session:', e)
       }
+      
+      // Get the base URL at request time to ensure we're on the client
+      const baseUrl = getApiBaseUrl()
       
       const res = await fetch(`${baseUrl}/api/system/info`, {
         credentials: 'include',
