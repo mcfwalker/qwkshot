@@ -32,19 +32,34 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         throw new Error('Not authenticated')
       }
 
-      // Update the model name
+      // Update the model name - don't use select() or single() here
       const { error } = await supabase
         .from('models')
         .update({ name })
         .eq('id', model.id)
-        .select()
-        .single()
 
       if (error) throw error
 
       // Invalidate the cache for both the library page and the edit page
-      await fetch('/api/revalidate?path=/library', { method: 'POST' })
-      await fetch(`/api/revalidate?path=/library/edit/${model.id}`, { method: 'POST' })
+      try {
+        await Promise.all([
+          fetch('/api/revalidate?path=/library', { 
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }),
+          fetch(`/api/revalidate?path=/library/edit/${model.id}`, { 
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          })
+        ])
+      } catch (revalidateError) {
+        console.error('Error revalidating:', revalidateError)
+        // Continue with navigation even if revalidation fails
+      }
       
       // Force router to refresh data
       router.refresh()
