@@ -30,26 +30,47 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     setIsLoading(true)
 
     try {
+      console.log('Starting update for model:', model.id, 'New name:', name.trim())
+      
+      // Get current session to verify authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        throw new Error('Authentication error')
+      }
+      console.log('Current user:', session?.user.id)
+
       // Update the model name directly
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('models')
         .update({ name: name.trim() })
         .eq('id', model.id)
+        .select()
+
+      console.log('Update response:', { data, error: updateError })
 
       if (updateError) {
         console.error('Update error:', updateError)
         throw new Error(updateError.message)
       }
 
+      if (!data || data.length === 0) {
+        console.error('No data returned from update')
+        throw new Error('Update failed - no data returned')
+      }
+
       // Force router to refresh data immediately
+      console.log('Refreshing router...')
       router.refresh()
 
       toast.success('Model updated successfully')
       
-      // Navigate back to library after a short delay
+      // Navigate back to library after a delay
+      console.log('Scheduling navigation...')
       setTimeout(() => {
+        console.log('Navigating to library...')
         router.push('/library')
-      }, 1000) // Increased delay to ensure refresh completes
+      }, 1000)
     } catch (error) {
       console.error('Error updating model:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to update model')
