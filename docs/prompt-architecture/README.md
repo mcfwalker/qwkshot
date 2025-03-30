@@ -1,13 +1,28 @@
 # Prompt Architecture
 
 ## Overview
-This document describes the prompt architecture used for camera path generation in the Modern 3D Viewer. The system uses a two-part prompt structure with clear separation of concerns between system constraints and user inputs.
+This document describes the prompt architecture used in the Path-to-Path (p2p) pipeline's Prompt Compiler component. The system uses a structured approach to transform user instructions into optimized prompts for LLM-based camera path generation.
 
 ## Core Components
 
-### 1. System Message
-The system message establishes the fundamental rules and constraints for camera path generation:
+### 1. Prompt Compiler Interface
+```typescript
+interface PromptCompiler {
+  // Core functionality
+  compilePrompt: (params: PromptParams) => Promise<CompiledPrompt>;
+  optimizeTokens: (prompt: string) => Promise<string>;
+  trackMetadata: (prompt: CompiledPrompt) => Promise<void>;
+  
+  // Advanced features
+  addSceneContext: (prompt: string, scene: SceneGeometry) => string;
+  formatForLLM: (prompt: string, format: 'chatml' | 'json' | 'markdown') => string;
+}
+```
 
+### 2. Prompt Structure
+The compiler maintains a two-part prompt structure with clear separation of concerns:
+
+#### System Message
 ```typescript
 Core constraints:
 1. Duration Constraint:
@@ -16,14 +31,18 @@ Core constraints:
    - You have full control over individual keyframe timing to achieve the best result
 
 2. Spatial Constraints:
-   - Camera must stay above the floor
-   - Camera must maintain safe distance from model
+   - Camera must stay above the floor (y > ${sceneGeometry.floor.height})
+   - Camera must maintain safe distance from model (between ${sceneGeometry.safeDistance.min} and ${sceneGeometry.safeDistance.max} units)
    - Camera should generally point towards the model's center
+
+3. Motion Constraints:
+   - Support for different motion types (push-in, orbit, crane, track, static)
+   - Smooth transitions between motion segments
+   - Proper easing for natural movement
+   - Safety checks for collision avoidance
 ```
 
-### 2. User Prompt
-The user prompt provides specific instructions and requirements for a particular animation:
-
+#### User Prompt
 ```typescript
 Generate camera keyframes for the following instruction: "[user instruction]"
 
@@ -35,21 +54,30 @@ Scene information:
 - Bounding sphere radius: r
 - Floor height: h
 - Safe distance range: min to max units
-...
+
+Current camera state:
+- Position: (x, y, z)
+- Looking at: (x, y, z)
+- Current view: [front/back/side]
+
+Model orientation:
+- Front direction: (x, y, z)
+- Up direction: (x, y, z)
 ```
 
 ## Design Decisions
 
-### 1. Separation of Concerns
-- **System Message**: Handles core constraints and rules
-- **User Prompt**: Communicates specific requirements
-- **LLM Freedom**: System has control over internal timing decisions
+### 1. Prompt Optimization
+- **Token Management**: Optimize prompt length while maintaining essential information
+- **Context Relevance**: Prioritize most relevant scene information
+- **Format Flexibility**: Support different LLM input formats (ChatML, JSON, Markdown)
+- **Metadata Tracking**: Track prompt versions and performance metrics
 
-### 2. Duration Management
-- User specifies total animation duration
-- System ensures exact duration matching
-- LLM has freedom to determine individual keyframe durations
-- No prescriptive rules about keyframe duration ranges
+### 2. Scene Context Integration
+- **Dynamic Updates**: Real-time scene geometry information
+- **Safety Constraints**: Built-in safety checks and boundaries
+- **Motion Context**: Current camera state and model orientation
+- **Spatial Awareness**: Model dimensions and boundaries
 
 ### 3. Response Format
 ```json
@@ -58,7 +86,9 @@ Scene information:
     {
       "position": {"x": number, "y": number, "z": number},
       "target": {"x": number, "y": number, "z": number},
-      "duration": number
+      "duration": number,
+      "easing": "linear" | "ease-in" | "ease-out" | "ease-in-out",
+      "type": "push-in" | "orbit" | "crane" | "track" | "static"
     }
   ]
 }
@@ -66,23 +96,38 @@ Scene information:
 
 ## Implementation Details
 
-### 1. Duration Handling
-- Duration is a core constraint in the system message
-- User's requested duration is prominently placed in the user prompt
-- System validates that keyframe durations sum to requested total
-- No redundant duration specifications
+### 1. Prompt Compilation Process
+1. **Input Processing**
+   - Parse user instruction
+   - Extract key parameters
+   - Validate constraints
 
-### 2. Scene Context
-- Current camera position and orientation
-- Model dimensions and boundaries
-- Safety constraints (floor height, distance ranges)
-- Model orientation (front/up vectors)
+2. **Context Integration**
+   - Add scene geometry
+   - Include current camera state
+   - Apply safety constraints
 
-### 3. Quality Assurance
-- System message emphasizes smooth, cinematic movement
-- Spatial constraints ensure camera stays within safe bounds
-- Duration constraints ensure timing accuracy
-- Response format ensures consistent, parseable output
+3. **Format Optimization**
+   - Structure for LLM
+   - Optimize token usage
+   - Add metadata
+
+4. **Output Generation**
+   - Format for target LLM
+   - Validate structure
+   - Track version
+
+### 2. Quality Assurance
+- **Validation**: Ensure all required information is present
+- **Safety**: Verify constraints are properly communicated
+- **Format**: Check response format compatibility
+- **Performance**: Monitor prompt effectiveness
+
+### 3. Error Handling
+- **Missing Data**: Graceful handling of incomplete scene information
+- **Invalid Input**: Clear error messages for invalid instructions
+- **Format Issues**: Recovery from malformed prompts
+- **LLM Errors**: Fallback strategies for LLM failures
 
 ## Future Improvements
 
@@ -90,18 +135,23 @@ Scene information:
 - Add model semantic information
 - Include previous animation history
 - Provide style preferences
+- Support multiple languages
 
-### 2. Response Enrichment
-- Add keyframe transition types
-- Include camera movement curves
-- Support multiple movement styles
+### 2. Advanced Features
+- Dynamic prompt optimization
+- A/B testing capabilities
+- Performance analytics
+- Style transfer support
 
-### 3. Validation
-- Add pre-execution validation of generated paths
-- Implement runtime safety checks
-- Add fallback behaviors for edge cases
+### 3. Integration
+- Better LLM provider support
+- Enhanced error recovery
+- Improved monitoring
+- Training data collection
 
 ## Related Documentation
-- [Camera Path Generation](../features/camera-path/README.md)
-- [Animation System](../features/animation/README.md)
-- [Status Report M3DV-SR-2025-03-26-1012](../status-reports/M3DV-SR-2025-03-26-1012.md) 
+- [Path-to-Path Pipeline Overview](../features/p2p/ARCHITECTURE.md)
+- [LLM Engine Documentation](../features/p2p/llm-engine/README.md)
+- [Scene Interpreter Documentation](../features/p2p/scene-interpreter/README.md)
+- [Viewer Integration Documentation](../features/p2p/viewer-integration/README.md)
+- [Feedback System Documentation](../features/p2p/feedback/README.md) 

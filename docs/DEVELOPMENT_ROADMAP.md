@@ -270,6 +270,202 @@ Implement automatic thumbnail generation for 3D models in the library view, prov
 - [ ] Proper storage management
 - [ ] Efficient caching implementation
 
+## Priority 6: Path-to-Path (p2p) Pipeline Implementation
+**Timeline: 14-21 days**
+
+### Feature Overview
+Implement the complete Path-to-Path pipeline, transforming the current basic camera path generation into a sophisticated, modular system with enhanced capabilities and better user experience.
+
+### Implementation Phases
+
+#### Phase 1: Prompt Compiler Enhancement (4-5 days)
+```typescript
+interface PromptCompiler {
+  // Core functionality
+  compilePrompt: (params: PromptParams) => Promise<CompiledPrompt>;
+  optimizeTokens: (prompt: string) => Promise<string>;
+  trackMetadata: (prompt: CompiledPrompt) => Promise<void>;
+  
+  // Advanced features
+  addSceneContext: (prompt: string, scene: SceneGeometry) => string;
+  formatForLLM: (prompt: string, format: 'chatml' | 'json' | 'markdown') => string;
+}
+
+interface PromptParams {
+  userInstruction: string;
+  sceneGeometry: SceneGeometry;
+  duration: number;
+  style?: 'cinematic' | 'technical' | 'documentary';
+  verbosity?: 'concise' | 'detailed';
+}
+```
+
+#### Phase 2: LLM Engine Enhancement (4-5 days)
+```typescript
+interface LLMEngine {
+  // Core functionality
+  generatePath: (params: PathGenerationParams) => Promise<CameraPath>;
+  validateResponse: (response: any) => Promise<boolean>;
+  
+  // Advanced features
+  parseIntent: (prompt: string) => Promise<CameraIntent>;
+  composeSegments: (intent: CameraIntent) => Promise<MotionSegment[]>;
+  applySpatialReasoning: (segments: MotionSegment[], scene: SceneGeometry) => Promise<MotionSegment[]>;
+}
+
+interface MotionSegment {
+  type: 'push-in' | 'orbit' | 'crane' | 'track' | 'static';
+  duration: number;
+  easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  parameters: Record<string, any>;
+}
+```
+
+#### Phase 3: Scene Interpreter Enhancement (3-4 days)
+```typescript
+interface SceneInterpreter {
+  // Core functionality
+  parseSegments: (segments: MotionSegment[]) => Promise<Keyframe[]>;
+  interpolateMotion: (keyframes: Keyframe[], curve: 'linear' | 'catmullrom' | 'bezier') => Promise<Frame[]>;
+  
+  // Advanced features
+  validateSafety: (frames: Frame[], scene: SceneGeometry) => Promise<Frame[]>;
+  previewPath: (frames: Frame[], scene: THREE.Scene) => void;
+}
+```
+
+#### Phase 4: Viewer Integration Enhancement (2-3 days)
+```typescript
+interface ViewerIntegration {
+  // Core functionality
+  animateCamera: (frames: Frame[]) => Promise<void>;
+  renderPreview: (path: CameraPath) => void;
+  
+  // Advanced features
+  exportPath: (path: CameraPath, format: 'video' | 'gif' | 'json') => Promise<string>;
+  editPath: (path: CameraPath) => Promise<CameraPath>;
+}
+```
+
+#### Phase 5: Feedback & Logging System (1-2 days)
+```typescript
+interface FeedbackSystem {
+  // Core functionality
+  logSession: (session: PathGenerationSession) => Promise<void>;
+  collectFeedback: (sessionId: string) => Promise<UserFeedback>;
+  
+  // Advanced features
+  monitorHealth: () => Promise<SystemHealth>;
+  prepareTrainingData: (sessions: PathGenerationSession[]) => Promise<TrainingData>;
+}
+```
+
+### Success Criteria
+- [ ] Prompt Compiler
+  - [ ] Structured prompt formatting
+  - [ ] Token optimization
+  - [ ] Metadata tracking
+  - [ ] Scene context integration
+
+- [ ] LLM Engine
+  - [ ] Motion segment support
+  - [ ] Spatial reasoning
+  - [ ] Camera framing
+  - [ ] Response validation
+
+- [ ] Scene Interpreter
+  - [ ] Segment parsing
+  - [ ] Advanced interpolation
+  - [ ] Safety validation
+  - [ ] Path preview
+
+- [ ] Viewer Integration
+  - [ ] Smooth animation
+  - [ ] Preview rendering
+  - [ ] Export capabilities
+  - [ ] Path editing
+
+- [ ] Feedback System
+  - [ ] Session logging
+  - [ ] User feedback
+  - [ ] Health monitoring
+  - [ ] Training data
+
+### Technical Considerations
+1. **Performance**
+   - Optimize prompt compilation
+   - Efficient interpolation
+   - Smooth preview rendering
+   - Background processing
+
+2. **Error Handling**
+   - Graceful fallbacks
+   - User-friendly errors
+   - Recovery mechanisms
+   - State preservation
+
+3. **Testing**
+   - Unit tests for each component
+   - Integration tests
+   - Performance benchmarks
+   - User experience testing
+
+4. **Documentation**
+   - API documentation
+   - Usage examples
+   - Architecture diagrams
+   - Troubleshooting guides
+
+### Resource Requirements
+- 1 Full-time developer
+- 1 Part-time UX designer
+- 1 Part-time QA engineer
+- Access to LLM APIs
+- Testing infrastructure
+
+### Risk Assessment
+1. **Technical Risks**
+   - LLM response consistency
+   - Performance with complex paths
+   - Browser compatibility
+   - Memory management
+
+2. **Mitigation Strategies**
+   - Comprehensive testing
+   - Performance monitoring
+   - Fallback mechanisms
+   - Regular reviews
+
+### Timeline Overview
+```mermaid
+gantt
+    title P2P Pipeline Implementation
+    dateFormat  YYYY-MM-DD
+    section Prompt Compiler
+    Core Implementation    :a1, 2024-03-30, 2d
+    Advanced Features     :a2, after a1, 2d
+    Testing & Refinement  :a3, after a2, 1d
+    
+    section LLM Engine
+    Core Implementation    :b1, after a3, 2d
+    Advanced Features     :b2, after b1, 2d
+    Testing & Refinement  :b3, after b2, 1d
+    
+    section Scene Interpreter
+    Core Implementation    :c1, after b3, 2d
+    Advanced Features     :c2, after c1, 1d
+    Testing & Refinement  :c3, after c2, 1d
+    
+    section Viewer Integration
+    Core Implementation    :d1, after c3, 1d
+    Advanced Features     :d2, after d1, 1d
+    Testing & Refinement  :d3, after d2, 1d
+    
+    section Feedback System
+    Core Implementation    :e1, after d3, 1d
+    Testing & Refinement  :e2, after e1, 1d
+```
+
 ## Timeline Overview
 ```mermaid
 gantt
