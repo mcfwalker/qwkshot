@@ -9,6 +9,7 @@ This document outlines our standardized approach to cache invalidation and data 
 - Uses Next.js's revalidation API
 - Triggered after successful data modifications
 - Path-based invalidation for specific routes
+- Multiple path revalidation when needed
 
 ### 2. Router Refresh
 - Forces Next.js to refresh cached data
@@ -22,45 +23,80 @@ This document outlines our standardized approach to cache invalidation and data 
 
 ## Standard Revalidation Sequence
 
-### 1. Basic Pattern
+### 1. Basic Pattern with RPC
 ```typescript
-// After successful data modification
-await fetch('/api/revalidate?path=/library', { method: 'POST' })
-router.refresh()
-await new Promise(resolve => setTimeout(resolve, 500))
-router.push('/destination')
+// After successful data modification using RPC
+const { error } = await supabase.rpc('update_model_name', {
+  model_id: modelId,
+  new_name: newName.trim()
+})
+
+if (!error) {
+  // Revalidate both edit and library pages
+  await Promise.all([
+    fetch('/api/revalidate?path=/library', { method: 'POST' }),
+    fetch(`/api/revalidate?path=/library/edit/${modelId}`, { method: 'POST' })
+  ])
+  
+  router.refresh()
+  await new Promise(resolve => setTimeout(resolve, 500))
+  router.push('/destination')
+}
 ```
 
 ### 2. With Error Handling
 ```typescript
 try {
-  // Perform data modification
-  const { error } = await supabase.from('models').update(data)
+  // Perform data modification via RPC
+  const { error } = await supabase.rpc('update_model_name', {
+    model_id: modelId,
+    new_name: newName.trim()
+  })
+  
   if (error) throw error
 
-  // Revalidate and refresh
-  await fetch('/api/revalidate?path=/library', { method: 'POST' })
-  router.refresh()
+  // Revalidate multiple paths in parallel
+  try {
+    await Promise.all([
+      fetch('/api/revalidate?path=/library', { method: 'POST' }),
+      fetch(`/api/revalidate?path=/library/edit/${modelId}`, { method: 'POST' })
+    ])
+  } catch (revalidateError) {
+    console.error('Revalidation error:', revalidateError)
+    // Continue with navigation even if revalidation fails
+  }
   
-  // Wait for revalidation
+  router.refresh()
   await new Promise(resolve => setTimeout(resolve, 500))
   
-  // Show success and navigate
   toast.success('Operation successful')
   router.push('/library')
 } catch (error) {
-  console.error('Error:', error)
+  console.error('Operation error:', error)
   toast.error('Operation failed')
 }
 ```
 
 ## Implementation Details
 
-### 1. Revalidation API
+### 1. Revalidation API with CORS Support
 ```typescript
 // app/api/revalidate/route.ts
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': 'POST',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Origin': '*'
+    },
+  })
+}
 
 export async function POST(request: Request) {
   try {
@@ -70,36 +106,70 @@ export async function POST(request: Request) {
     if (!path) {
       return NextResponse.json(
         { message: 'Missing path parameter' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
       )
     }
 
     revalidatePath(path)
-    return NextResponse.json({ revalidated: true, now: Date.now() })
+    return NextResponse.json(
+      { revalidated: true, now: Date.now() },
+      {
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
+    )
   } catch (error) {
     return NextResponse.json(
       { message: 'Error revalidating' },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
     )
   }
 }
 ```
 
-### 2. Usage in Components
+### 2. Usage in Components with RPC
 ```typescript
 async function handleModelUpdate() {
   setIsLoading(true)
   try {
-    // 1. Update data
-    const { error } = await supabase
-      .from('models')
-      .update({ name: newName })
-      .eq('id', modelId)
+    // Input validation
+    if (!newName?.trim()) {
+      toast.error('Model name cannot be empty')
+      return
+    }
+
+    // 1. Update data using RPC
+    const { error } = await supabase.rpc('update_model_name', {
+      model_id: modelId,
+      new_name: newName.trim()
+    })
 
     if (error) throw error
 
-    // 2. Revalidate cache
-    await fetch('/api/revalidate?path=/library', { method: 'POST' })
+    // 2. Revalidate multiple paths
+    try {
+      await Promise.all([
+        fetch('/api/revalidate?path=/library', { method: 'POST' }),
+        fetch(`/api/revalidate?path=/library/edit/${modelId}`, { method: 'POST' })
+      ])
+    } catch (revalidateError) {
+      console.error('Revalidation error:', revalidateError)
+      // Continue with navigation even if revalidation fails
+    }
     
     // 3. Refresh router
     router.refresh()
@@ -111,6 +181,7 @@ async function handleModelUpdate() {
     toast.success('Model updated successfully')
     router.push('/library')
   } catch (error) {
+    console.error('Update error:', error)
     toast.error('Failed to update model')
   } finally {
     setIsLoading(false)
@@ -120,46 +191,59 @@ async function handleModelUpdate() {
 
 ## Best Practices
 
-### 1. Always Use the Full Sequence
-- Data modification
-- Cache invalidation
-- Router refresh
-- Revalidation wait
-- Navigation
+### 1. Use RPC for Data Modifications
+- Prefer RPC over direct table operations
+- Ensures consistent business logic
+- Better error handling and type safety
 
-### 2. Error Handling
-- Catch and handle errors appropriately
-- Show meaningful error messages
-- Maintain loading states
+### 2. Multiple Path Revalidation
+- Identify all affected routes
+- Use Promise.all for parallel revalidation
+- Handle revalidation errors gracefully
 
-### 3. User Feedback
+### 3. Error Handling
+- Validate inputs before operations
+- Use try-catch blocks consistently
+- Log errors for debugging
+- Show user-friendly error messages
+
+### 4. User Feedback
 - Show loading states during operations
 - Provide success/error messages
 - Use consistent timing for operations
 
 ## Common Pitfalls
 
-### 1. Premature Navigation ❌
+### 1. PGRST Errors
 ```typescript
 // DON'T do this
-await supabase.from('models').update(data)
-router.push('/library') // No revalidation!
+const { error } = await supabase
+  .from('models')
+  .update({ name: newName })
+  .select()
+  .single() // Can cause PGRST116 error
 ```
 
-### 2. Missing Error Handling ❌
+### 2. Missing CORS Headers
 ```typescript
 // DON'T do this
-const { error } = await supabase.from('models').update(data)
-await fetch('/api/revalidate?path=/library', { method: 'POST' })
-// No error handling!
+return NextResponse.json({ revalidated: true }) // Missing CORS headers
 ```
 
-### 3. Insufficient Wait Time ❌
+### 3. Insufficient Error Handling
 ```typescript
 // DON'T do this
-await fetch('/api/revalidate?path=/library', { method: 'POST' })
-router.refresh()
-router.push('/library') // No wait for revalidation!
+await Promise.all([
+  fetch('/api/revalidate?path=/library', { method: 'POST' }),
+  fetch(`/api/revalidate?path=/library/edit/${modelId}`, { method: 'POST' })
+]) // Missing try-catch for revalidation
+```
+
+### 4. Premature Navigation
+```typescript
+// DON'T do this
+await supabase.rpc('update_model_name', params)
+router.push('/library') // Missing revalidation sequence
 ```
 
 ## Related Documentation

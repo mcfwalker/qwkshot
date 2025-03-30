@@ -83,7 +83,97 @@ interface ViewerState {
 // const useViewerStore = create<ViewerState>((set, get) => ({ ... }));
 ```
 
-### 1.4. 3D Rendering
+### 1.4. Data Mutation Patterns
+- **Approach:** Use Supabase RPC (Remote Procedure Calls) for data modifications
+- **Benefits:**
+  - Centralized business logic in database functions
+  - Better error handling and type safety
+  - Atomic operations with proper validation
+- **Implementation:**
+```typescript
+// Example RPC Function (SQL)
+create or replace function update_model_name(
+  model_id uuid,
+  new_name text
+) returns void as $$
+begin
+  -- Verify ownership
+  if not exists (
+    select 1 from models 
+    where id = model_id 
+    and user_id = auth.uid()
+  ) then
+    raise exception 'Model not found or unauthorized';
+  end if;
+
+  -- Update the model
+  update models 
+  set name = new_name,
+      updated_at = now()
+  where id = model_id;
+end;
+$$ language plpgsql security definer;
+
+// Client Usage
+const { error } = await supabase.rpc('update_model_name', {
+  model_id: modelId,
+  new_name: name.trim()
+})
+```
+
+### 1.5. Cache Management
+- **Strategy:** Multi-path revalidation with delayed navigation
+- **Implementation:**
+  - Use Next.js's `revalidatePath` for cache invalidation
+  - Parallel revalidation for related routes
+  - Delayed navigation to ensure data consistency
+- **Example:**
+```typescript
+// Revalidate multiple paths in parallel
+await Promise.all([
+  fetch('/api/revalidate?path=/library', { method: 'POST' }),
+  fetch(`/api/revalidate?path=/library/edit/${modelId}`, { method: 'POST' })
+])
+router.refresh()
+await new Promise(resolve => setTimeout(resolve, 500))
+```
+
+### 1.6. Error Handling Strategy
+- **Client-Side:**
+  - Input validation before operations
+  - Graceful handling of RPC errors
+  - User-friendly error messages via toast notifications
+  - Loading states for operations
+- **Server-Side:**
+  - RPC function validation
+  - Proper error responses with CORS headers
+  - Logging for debugging
+- **Example:**
+```typescript
+try {
+  // Input validation
+  if (!name?.trim()) {
+    toast.error('Name cannot be empty')
+    return
+  }
+
+  // RPC call with error handling
+  const { error } = await supabase.rpc('update_model_name', {
+    model_id: modelId,
+    new_name: name.trim()
+  })
+
+  if (error) throw error
+
+  // Success handling
+  toast.success('Model updated successfully')
+} catch (error) {
+  console.error('Operation failed:', error)
+  toast.error('Failed to update model')
+}
+```
+
+### 1.7. 3D Rendering
 - **Library:** Three.js
 - **Integration:** Using `@react-three/fiber` and `@react-three/drei` for declarative scene graph management within React components.
 
@@ -314,11 +404,13 @@ export async function GET(request: NextRequest) {
 *(Note: Using `state` parameter for `redirectTo` is a common pattern)*
 
 ### 3.7. Security Implementation Details
-- Rely on Supabase Auth's secure HTTPOnly cookies for session management.
-- Ensure CSRF protection is handled (often default in Next.js/Supabase setup).
-- Validate and sanitize user inputs on server-side (API routes, Server Actions).
-- Implement Rate Limiting on sensitive API endpoints (e.g., sign-in attempts).
-- Perform environment variable validation on startup.
+- Rely on Supabase Auth's secure HTTPOnly cookies for session management
+- Ensure CORS protection with proper headers
+- Validate and sanitize user inputs on server-side (API routes, Server Actions)
+- Implement Rate Limiting on sensitive API endpoints
+- Use RPC functions with `security definer` for sensitive operations
+- Perform environment variable validation on startup
+- Verify model ownership in database functions
 
 *(See also: [Authentication Feature Documentation](./features/auth/README.md), [Storage Security Documentation](./features/storage/README.md))*
 
@@ -330,46 +422,80 @@ export async function GET(request: NextRequest) {
 - Validate request bodies/params (e.g., using Zod).
 - Standardize response formats (e.g., `{ data: ... }` or `{ error: ... }`).
 
+### 4.1 RPC Endpoints
+- **Purpose:** Handle data mutations with proper validation and security
+- **Location:** Defined in Supabase migrations
+- **Implementation:**
+  - Use `security definer` for elevated privileges
+  - Include ownership verification
+  - Return appropriate error messages
+  - Handle transaction management
+- **Example:**
+```sql
+-- Example RPC function for model deletion
+create or replace function delete_model(
+  model_id uuid
+) returns void as $$
+begin
+  -- Verify ownership
+  if not exists (
+    select 1 from models 
+    where id = model_id 
+    and user_id = auth.uid()
+  ) then
+    raise exception 'Model not found or unauthorized';
+  end if;
+
+  -- Delete associated data first
+  delete from model_metadata where model_id = model_id;
+  delete from models where id = model_id;
+end;
+$$ language plpgsql security definer;
+```
+
+### 4.2 API Routes
+- **Purpose:** Handle client-side operations and cache management
+- **Implementation:**
+  - Include proper CORS headers
+  - Handle authentication
+  - Manage cache invalidation
+  - Return standardized responses
+- **Example:**
 ```typescript
-// Example: /api/camera-paths/generate/route.ts
-import { NextResponse, type NextRequest } from 'next/server';
-import { createRouteHandlerSupabaseClient } from '@/lib/supabase-server';
-import { generatePath } from '@/lib/camera-path-service'; // Hypothetical service
-import { z } from 'zod';
-
-const generationSchema = z.object({
-  prompt: z.string().min(10),
-  duration: z.number().positive(),
-  // ... other params
-});
-
-export async function POST(request: NextRequest) {
-  const supabase = createRouteHandlerSupabaseClient();
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+// Example revalidation route
+export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const validationResult = generationSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json({ error: 'Invalid input', details: validationResult.error.flatten() }, { status: 400 });
+    const { searchParams } = new URL(request.url)
+    const path = searchParams.get('path')
+    
+    if (!path) {
+      return NextResponse.json(
+        { message: 'Missing path parameter' },
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      )
     }
 
-    const params = validationResult.data;
-    // Fetch necessary scene context based on session/params if needed
-
-    const pathData = await generatePath(params /*, sceneContext */);
-
-    return NextResponse.json({ data: pathData });
-
+    revalidatePath(path)
+    return NextResponse.json(
+      { revalidated: true, now: Date.now() },
+      {
+        headers: {
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
+    )
   } catch (error) {
-    console.error("Camera path generation error:", error);
-    // More specific error handling based on error type
-    return NextResponse.json({ error: 'Failed to generate camera path' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Error revalidating' },
+      { status: 500 }
+    )
   }
 }
 ```
@@ -575,52 +701,20 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
 
 ## 7. Error Handling Strategy
 - **Client-Side:**
-    - Use React Error Boundaries for catching rendering errors in component trees.
-    - Use `try...catch` blocks for asynchronous operations (API calls, state updates).
-    - Provide user feedback via toast notifications (`sonner` or similar).
-    - Implement specific error handling for common issues (network errors, auth errors, validation errors).
-- **Server-Side (API Routes / Server Actions):**
-    - Use `try...catch` blocks extensively.
-    - Validate inputs rigorously (e.g., using Zod).
-    - Return appropriate HTTP status codes (400, 401, 403, 404, 500).
-    - Log errors with sufficient context (e.g., using Pino or Next.js default logging).
-    - Avoid leaking sensitive information in error messages sent to the client.
-- **Fallback Strategies:** Define behavior when critical services (LLM, Model Gen) fail (e.g., disable feature, show message, offer retry).
-
-```typescript
-// Example Error Boundary
-// src/components/ErrorBoundary.tsx
-import React, { Component, ErrorInfo, ReactNode } from "react";
-
-interface Props { children: ReactNode; fallback?: ReactNode; }
-interface State { hasError: boolean; error?: Error; }
-
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = { hasError: false };
-
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-    // Log error to external service here
-  }
-
-  public render() {
-    if (this.state.hasError) {
-      return this.props.fallback || <h1>Sorry.. there was an error</h1>;
-    }
-    return this.props.children;
-  }
-}
-export default ErrorBoundary;
-
-// Usage in layout or specific components:
-// <ErrorBoundary fallback={<p>Failed to load viewer.</p>}>
-//   <ViewerComponent />
-// </ErrorBoundary>
-```
+  - Use React Error Boundaries for component tree errors
+  - Handle RPC errors with proper user feedback
+  - Implement loading states and progress indicators
+  - Use toast notifications for user feedback
+- **Server-Side:**
+  - Implement RPC functions with proper validation
+  - Return appropriate HTTP status codes
+  - Include CORS headers in all responses
+  - Log errors with sufficient context
+- **Database:**
+  - Use RPC functions for data validation
+  - Implement proper error messages
+  - Handle transactions appropriately
+  - Verify ownership before operations
 
 ## 8. Testing Strategy Implementation
 - **Unit Tests:** Jest + React Testing Library for individual components and utility functions. Mock dependencies (Supabase client, external APIs, Three.js specifics where needed).
