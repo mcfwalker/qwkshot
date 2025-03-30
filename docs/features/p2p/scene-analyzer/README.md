@@ -1,157 +1,147 @@
 # Scene Analyzer
 
 ## Overview
-The Scene Analyzer is responsible for analyzing and understanding the 3D scene structure and spatial relationships. It processes GLB files to extract meaningful information that helps the Prompt Compiler and LLM Engine generate better camera paths.
+The Scene Analyzer is a core component of the Prompt-to-Path (P2P) pipeline that analyzes 3D scenes to extract meaningful information for camera path generation. It processes GLB files to understand spatial relationships, identify features, and calculate safety boundaries.
 
-## Interface
+## Features
 
-### Core Functions
+### 1. GLB File Analysis
+- File validation and parsing
+- Geometry analysis (vertices, faces, bounding volumes)
+- Material extraction
+- Metadata processing
+
+### 2. Spatial Analysis
+- Bounding box and sphere calculations
+- Reference point extraction (center, highest, lowest, etc.)
+- Symmetry detection
+- Complexity assessment
+
+### 3. Safety Features
+- Safe distance calculation
+- Height restrictions
+- Restricted zone identification
+- Movement boundary validation
+
+### 4. Feature Detection
+- Key point identification
+- Landmark detection
+- Spatial relationship mapping
+- Feature description generation
+
+## Usage
+
+### Basic Usage
 ```typescript
-interface SceneAnalyzer {
-  // Analyze a GLB file and extract scene information
-  analyzeScene(glbFile: File): Promise<SceneAnalysis>;
-  
-  // Extract spatial reference points
-  extractReferencePoints(scene: SceneAnalysis): Promise<ReferencePoints>;
-  
-  // Calculate safety boundaries
-  calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SafetyBoundaries>;
-  
-  // Get basic scene understanding
-  getSceneUnderstanding(scene: SceneAnalysis): Promise<SceneUnderstanding>;
-}
+import { SceneAnalyzerImpl } from '@/features/p2p/scene-analyzer/SceneAnalyzer';
+import { SceneAnalyzerConfig } from '@/types/p2p';
+
+// Create analyzer instance
+const config: SceneAnalyzerConfig = {
+  maxFileSize: 100 * 1024 * 1024, // 100MB
+  supportedFormats: ['model/gltf-binary'],
+  analysisOptions: {
+    extractFeatures: true,
+    calculateSymmetry: true,
+    analyzeMaterials: true,
+  },
+  debug: false,
+  performanceMonitoring: true,
+  errorReporting: true,
+  maxRetries: 3,
+  timeout: 30000,
+};
+
+const analyzer = new SceneAnalyzerImpl(config, logger);
+
+// Analyze a GLB file
+const analysis = await analyzer.analyzeScene(glbFile);
+
+// Extract reference points
+const points = await analyzer.extractReferencePoints(analysis);
+
+// Calculate safety boundaries
+const safety = await analyzer.calculateSafetyBoundaries(analysis);
+
+// Get scene understanding
+const understanding = await analyzer.getSceneUnderstanding(analysis);
 ```
 
-### Types
+### Advanced Usage
 ```typescript
-interface SceneAnalysis {
-  geometry: {
-    vertices: Vector3[];
-    faces: Face[];
-    boundingBox: Box3;
-  };
-  materials: Material[];
-  metadata: {
-    name: string;
-    version: string;
-    generator: string;
-  };
-  spatialInfo: {
-    center: Vector3;
-    dimensions: Vector3;
-    scale: number;
-  };
+// Validate analysis results
+const validation = analyzer.validateAnalysis(analysis);
+if (!validation.isValid) {
+  console.error('Analysis validation failed:', validation.errors);
 }
 
-interface ReferencePoints {
-  center: Vector3;
-  highest: Vector3;
-  lowest: Vector3;
-  leftmost: Vector3;
-  rightmost: Vector3;
-  frontmost: Vector3;
-  backmost: Vector3;
-}
-
-interface SafetyBoundaries {
-  minDistance: number;
-  maxDistance: number;
-  minHeight: number;
-  maxHeight: number;
-  restrictedZones: Box3[];
-}
-
-interface SceneUnderstanding {
-  complexity: 'simple' | 'moderate' | 'complex';
-  symmetry: {
-    hasSymmetry: boolean;
-    symmetryPlanes: Plane[];
-  };
-  features: {
-    type: string;
-    position: Vector3;
-    description: string;
-  }[];
-}
+// Get performance metrics
+const metrics = analyzer.getPerformanceMetrics();
+console.log('Analysis duration:', metrics.duration);
 ```
 
 ## Implementation Details
 
 ### 1. GLB Processing
-- Parse GLB file structure
-- Extract geometry and materials
-- Calculate basic spatial information
-- Identify key features
+- Uses Three.js GLTFLoader for file parsing
+- Extracts geometry and material information
+- Calculates basic spatial properties
+- Processes metadata and version information
 
 ### 2. Spatial Analysis
-- Calculate bounding volumes
-- Identify reference points
-- Determine symmetry
-- Analyze complexity
+- Calculates bounding volumes using Three.js Box3 and Sphere
+- Identifies key reference points based on spatial bounds
+- Detects symmetry planes (TODO)
+- Assesses scene complexity based on geometry metrics
 
 ### 3. Safety Calculations
-- Define safe camera distances
-- Identify restricted zones
-- Calculate height limits
-- Set movement boundaries
+- Determines safe camera distances based on model size
+- Sets height restrictions based on model bounds
+- Identifies restricted zones for camera movement
+- Validates movement constraints
 
-### 4. Feature Extraction
-- Identify key points
-- Calculate spatial relationships
-- Generate feature descriptions
-- Track important landmarks
-
-## Usage Examples
-
-### Basic Usage
-```typescript
-const analyzer = new SceneAnalyzer();
-const analysis = await analyzer.analyzeScene(glbFile);
-const safety = await analyzer.calculateSafetyBoundaries(analysis);
-```
-
-### Advanced Usage
-```typescript
-const analysis = await analyzer.analyzeScene(glbFile);
-const refPoints = await analyzer.extractReferencePoints(analysis);
-const understanding = await analyzer.getSceneUnderstanding(analysis);
-```
+### 4. Feature Detection
+- Identifies key points in the scene
+- Maps spatial relationships between features
+- Generates descriptive information
+- Tracks important landmarks
 
 ## Performance Considerations
 
 ### 1. Processing Efficiency
-- Optimize GLB parsing
-- Cache analysis results
-- Lazy loading of features
+- Optimized GLB parsing
+- Efficient spatial calculations
+- Caching of analysis results
 - Memory management
 
 ### 2. Accuracy
-- Precise spatial calculations
+- Precise spatial measurements
 - Reliable feature detection
 - Accurate safety boundaries
 - Consistent reference points
 
 ## Testing
 
-### 1. Unit Tests
-- GLB parsing
-- Spatial calculations
-- Feature extraction
-- Safety validation
+### Unit Tests
+- GLB file validation
+- Spatial analysis accuracy
+- Safety boundary calculation
+- Feature detection reliability
+- Performance metrics tracking
 
-### 2. Integration Tests
-- Full scene analysis
+### Integration Tests
+- Full scene analysis pipeline
 - Reference point accuracy
-- Safety boundary validation
+- Safety constraint validation
 - Performance benchmarks
 
 ## Future Improvements
 
 ### 1. Planned Features
-- Advanced feature detection
-- Better symmetry analysis
-- Enhanced safety calculations
-- Performance optimization
+- Advanced symmetry detection
+- Enhanced feature recognition
+- Improved safety calculations
+- Better performance optimization
 
 ### 2. Research Areas
 - GLB processing optimization
@@ -160,6 +150,6 @@ const understanding = await analyzer.getSceneUnderstanding(analysis);
 - Safety calculation improvements
 
 ## Related Components
-- [Metadata Manager](../metadata-manager/README.md)
 - [Prompt Compiler](../prompt-compiler/README.md)
+- [Metadata Manager](../metadata-manager/README.md)
 - [Scene Interpreter](../scene-interpreter/README.md) 
