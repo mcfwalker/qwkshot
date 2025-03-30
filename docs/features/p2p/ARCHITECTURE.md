@@ -5,7 +5,25 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 
 ## Pipeline Components
 
-### 1. Prompt Compiler
+### 1. Scene Analyzer
+- **Purpose**: Analyze and understand 3D scene structure and spatial relationships
+- **Key Features**:
+  - GLB file parsing and analysis
+  - Spatial reference point extraction
+  - Safety boundary calculation
+  - Basic scene understanding
+- **Interface**: See [Scene Analyzer Documentation](./scene-analyzer/README.md)
+
+### 2. Metadata Manager
+- **Purpose**: Handle user-specified metadata and model information
+- **Key Features**:
+  - User metadata storage
+  - Model orientation handling
+  - Feature point tracking
+  - Database integration
+- **Interface**: See [Metadata Manager Documentation](./metadata-manager/README.md)
+
+### 3. Prompt Compiler
 - **Purpose**: Transform user instructions into optimized LLM prompts
 - **Key Features**:
   - Natural language processing
@@ -14,7 +32,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Metadata tracking
 - **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
 
-### 2. LLM Engine
+### 4. LLM Engine
 - **Purpose**: Generate camera paths from compiled prompts
 - **Key Features**:
   - Intent parsing
@@ -23,7 +41,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Response validation
 - **Interface**: See [LLM Engine Documentation](./llm-engine/README.md)
 
-### 3. Scene Interpreter
+### 5. Scene Interpreter
 - **Purpose**: Convert LLM output into executable camera paths
 - **Key Features**:
   - Motion segment parsing
@@ -32,7 +50,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Path preview
 - **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md)
 
-### 4. Viewer Integration
+### 6. Viewer Integration
 - **Purpose**: Execute and visualize camera paths
 - **Key Features**:
   - Camera animation
@@ -41,7 +59,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Export capabilities
 - **Interface**: See [Viewer Integration Documentation](./viewer-integration/README.md)
 
-### 5. Feedback System
+### 7. Feedback System
 - **Purpose**: Monitor and improve pipeline performance
 - **Key Features**:
   - Session logging
@@ -54,37 +72,49 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 
 ```mermaid
 graph TD
-    A[User Input] --> B[Prompt Compiler]
-    B --> C[LLM Engine]
-    C --> D[Scene Interpreter]
-    D --> E[Viewer Integration]
-    E --> F[Feedback System]
-    F --> B
+    A[User Input] --> B[Scene Analyzer]
+    B --> C[Metadata Manager]
+    C --> D[Prompt Compiler]
+    D --> E[LLM Engine]
+    E --> F[Scene Interpreter]
+    F --> G[Viewer Integration]
+    G --> H[Feedback System]
+    H --> D
 ```
 
 ## Data Flow
 
-1. **Input Processing**
+1. **Scene Analysis**
+   - GLB file is parsed and analyzed
+   - Spatial relationships are extracted
+   - Safety boundaries are calculated
+
+2. **Metadata Processing**
+   - User metadata is retrieved
+   - Model information is processed
+   - Feature points are identified
+
+3. **Input Processing**
    - User provides natural language instruction
    - Scene context is gathered
    - Duration and constraints are specified
 
-2. **Prompt Generation**
+4. **Prompt Generation**
    - Prompt Compiler processes input
    - Optimizes for LLM consumption
    - Adds necessary context
 
-3. **Path Generation**
+5. **Path Generation**
    - LLM generates motion segments
    - Scene Interpreter validates and processes
    - Safety checks are applied
 
-4. **Execution**
+6. **Execution**
    - Viewer Integration executes path
    - Provides interactive controls
    - Enables export options
 
-5. **Feedback Loop**
+7. **Feedback Loop**
    - System collects performance data
    - User feedback is gathered
    - Improvements are identified
@@ -104,6 +134,8 @@ graph TD
 ## Performance Considerations
 
 ### 1. Optimization Points
+- GLB parsing efficiency
+- Metadata management
 - Prompt token management
 - Path generation efficiency
 - Animation smoothness
@@ -132,14 +164,14 @@ graph TD
 ## Future Enhancements
 
 ### 1. Planned Features
-- Advanced motion types
-- Enhanced preview capabilities
-- Improved error recovery
+- Advanced GLB analysis
+- Enhanced spatial understanding
+- Improved metadata management
 - Better performance monitoring
 
 ### 2. Research Areas
-- LLM optimization
-- Motion quality improvement
+- GLB processing optimization
+- Spatial reasoning improvement
 - User experience enhancement
 - Performance optimization
 
@@ -147,4 +179,5 @@ graph TD
 - [Product Requirements Document](../../PRD.md)
 - [Technical Design Document](../../TECHNICAL_DESIGN.md)
 - [Development Roadmap](../../DEVELOPMENT_ROADMAP.md)
+- [P2P Development Roadmap](./P2P_DEVELOPMENT_ROADMAP.md)
 - [Original Pipeline Overview](./P2P_OVERVIEW.md) 

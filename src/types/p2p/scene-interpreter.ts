@@ -1,0 +1,104 @@
+import { Vector3, Camera } from 'three';
+import {
+  P2PError,
+  ValidationResult,
+  PerformanceMetrics,
+  P2PConfig,
+  SafetyConstraints,
+  Logger,
+} from './shared';
+import { CameraPath } from './llm-engine';
+
+/**
+ * Configuration for the Scene Interpreter
+ */
+export interface SceneInterpreterConfig extends P2PConfig {
+  smoothingFactor: number;
+  maxKeyframes: number;
+  interpolationMethod: 'linear' | 'smooth' | 'ease';
+}
+
+/**
+ * Camera command for Three.js
+ */
+export interface CameraCommand {
+  position: Vector3;
+  target: Vector3;
+  duration: number;
+  easing?: (t: number) => number;
+}
+
+/**
+ * Main Scene Interpreter interface
+ */
+export interface SceneInterpreter {
+  /**
+   * Initialize the interpreter with configuration
+   */
+  initialize(config: SceneInterpreterConfig): Promise<void>;
+
+  /**
+   * Convert a camera path into executable commands
+   */
+  interpretPath(path: CameraPath): CameraCommand[];
+
+  /**
+   * Execute a single camera command
+   */
+  executeCommand(
+    camera: Camera,
+    command: CameraCommand
+  ): Promise<void>;
+
+  /**
+   * Execute a sequence of camera commands
+   */
+  executeCommands(
+    camera: Camera,
+    commands: CameraCommand[]
+  ): Promise<void>;
+
+  /**
+   * Validate camera commands
+   */
+  validateCommands(commands: CameraCommand[]): ValidationResult;
+
+  /**
+   * Get performance metrics
+   */
+  getPerformanceMetrics(): PerformanceMetrics;
+}
+
+/**
+ * Scene Interpreter factory interface
+ */
+export interface SceneInterpreterFactory {
+  create(config: SceneInterpreterConfig, logger: Logger): SceneInterpreter;
+}
+
+/**
+ * Scene Interpreter error types
+ */
+export class SceneInterpreterError extends P2PError {
+  constructor(message: string, code: string) {
+    super(message, code, 'SceneInterpreter');
+  }
+}
+
+export class InterpretationError extends SceneInterpreterError {
+  constructor(message: string) {
+    super(message, 'INTERPRETATION_ERROR');
+  }
+}
+
+export class ExecutionError extends SceneInterpreterError {
+  constructor(message: string) {
+    super(message, 'EXECUTION_ERROR');
+  }
+}
+
+export class ValidationError extends SceneInterpreterError {
+  constructor(message: string) {
+    super(message, 'VALIDATION_ERROR');
+  }
+} 

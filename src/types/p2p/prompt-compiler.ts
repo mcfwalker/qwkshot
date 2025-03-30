@@ -1,4 +1,13 @@
 import { Vector3, Box3 } from 'three';
+import type {
+  P2PError,
+  ValidationResult,
+  PerformanceMetrics,
+  P2PConfig,
+  Logger,
+} from './shared';
+import type { SceneAnalysis } from './scene-analyzer';
+import type { ModelMetadata } from './metadata-manager';
 
 export type CameraStyle = 'cinematic' | 'documentary' | 'technical' | 'artistic';
 
@@ -34,48 +43,6 @@ export interface OptimizationStep {
   details: string;
 }
 
-export interface PerformanceMetrics {
-  compilationTime: number;
-  optimizationTime: number;
-  contextIntegrationTime: number;
-  totalTokens: number;
-  optimizationSteps: OptimizationStep[];
-}
-
-export interface CompilePromptParams {
-  instruction: string;
-  duration?: number;
-  style?: CameraStyle;
-  constraints?: Partial<CameraConstraints>;
-  sceneContext?: Partial<SceneContext>;
-  userId?: string;
-}
-
-export interface CompiledPrompt {
-  systemMessage: string;
-  userMessage: string;
-  constraints: CameraConstraints;
-  metadata: PromptMetadata;
-}
-
-export interface OptimizedPrompt extends CompiledPrompt {
-  tokenCount: number;
-  optimizationLevel: 'minimal' | 'balanced' | 'detailed';
-}
-
-export interface ContextualPrompt extends OptimizedPrompt {
-  sceneContext: SceneContext;
-  safetyChecks: SafetyCheck[];
-}
-
-export interface SafetyCheck {
-  type: 'distance' | 'speed' | 'angle' | 'framing';
-  status: 'safe' | 'warning' | 'error';
-  message: string;
-  value: number;
-  threshold: number;
-}
-
 export interface PromptMetadata {
   timestamp: Date;
   version: string;
@@ -85,9 +52,49 @@ export interface PromptMetadata {
   userId?: string;
 }
 
+/**
+ * Configuration for the Prompt Compiler
+ */
+export interface PromptCompilerConfig extends P2PConfig {
+  maxTokens: number;
+  temperature: number;
+}
+
+/**
+ * Compiled prompt with metadata
+ */
+export interface CompiledPrompt {
+  systemMessage: string;
+  userMessage: string;
+  constraints: CameraConstraints;
+  metadata: PromptMetadata;
+}
+
+/**
+ * Main Prompt Compiler interface
+ */
 export interface PromptCompiler {
-  compilePrompt(params: CompilePromptParams): Promise<CompiledPrompt>;
-  optimizePrompt(prompt: CompiledPrompt): Promise<OptimizedPrompt>;
-  addSceneContext(prompt: OptimizedPrompt, scene: SceneContext): Promise<ContextualPrompt>;
-  trackMetadata(prompt: ContextualPrompt): Promise<PromptMetadata>;
+  /**
+   * Initialize the compiler with configuration
+   */
+  initialize(config: PromptCompilerConfig): Promise<void>;
+
+  /**
+   * Compile a user prompt into an optimized format
+   */
+  compilePrompt(
+    text: string,
+    analysis: SceneAnalysis,
+    metadata: ModelMetadata
+  ): Promise<CompiledPrompt>;
+
+  /**
+   * Validate a compiled prompt
+   */
+  validatePrompt(prompt: CompiledPrompt): ValidationResult;
+
+  /**
+   * Get performance metrics
+   */
+  getPerformanceMetrics(): PerformanceMetrics;
 } 

@@ -4,6 +4,28 @@ This document outlines the major components and responsibilities of the LLM-driv
 
 ---
 
+## 🔍 Scene Analyzer Responsibilities
+
+| **Task**                | **What it does**                                                                  |
+|-------------------------|-----------------------------------------------------------------------------------|
+| Parse GLB files         | Extract geometry, materials, and basic scene information                          |
+| Analyze spatial structure| Identify key points, boundaries, and spatial relationships                        |
+| Calculate safety zones  | Determine safe camera distances and movement boundaries                          |
+| Extract reference points| Identify important features and landmarks in the scene                           |
+
+---
+
+## 📊 Metadata Manager Responsibilities
+
+| **Task**                | **What it does**                                                                  |
+|-------------------------|-----------------------------------------------------------------------------------|
+| Store user metadata     | Save and retrieve user-specified model information and preferences               |
+| Handle model orientation| Track and manage model orientation and reference points                          |
+| Track feature points    | Store and manage user-defined features and landmarks                            |
+| Database integration    | Interface with Supabase for persistent storage                                   |
+
+---
+
 ## 🧩 Prompt Compiler Responsibilities
 
 | **Task**                | **What it does**                                                                  |
