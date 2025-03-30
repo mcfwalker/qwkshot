@@ -3,119 +3,95 @@
 ## Current Branch Structure
 
 ### Main Branches
-- `main` - Original main branch containing the full project history
-- `stable` - Primary development branch
-  - Purpose: Contains all stable, working code including deployment improvements
-  - Created: March 24, 2025
-  - Base commit: `2b45a92` (docs: Reorganize documentation structure)
+- `main` - Primary development and production branch
+  - Purpose: Contains all stable, working code
+  - Source of truth for production deployments
+  - All new feature branches should be created from here
+
 - `deployment/vercel` - Deployment-specific branch
   - Purpose: Contains Vercel-specific configurations and optimizations
-  - Created: March 28, 2025
-  - Base commit: From `stable` branch
-  - Note: This branch should be regularly updated with improvements from `stable`
-
-### Backup Branches
-- `stable-backup-YYYY-MM-DD` - Backup of known-good stable state
-  - Purpose: Safety net for restoring from a known-good state
-  - Created: Before major changes or merges
-  - Naming convention: Include date for easy reference
-  - Example: `stable-backup-2025-03-29`
+  - Used for testing production deployment fixes
+  - Should be regularly synchronized with `main`
 
 ### Feature Branches
-- `feature/ui-revamp-layout` - UI modernization and layout improvements
-- `feature/llm-provider-switching` - LLM provider integration and switching
-- `feature/ui-revamp` - Base UI improvements
-- `feature/ui-revamp-integration` - Integration components
-- `feature/ui-revamp-shoot` - Camera and shooting features
-- `feature/ui-revamp-stage` - Stage and scene management
+- Created as needed using pattern `feature/*`
+- Always branched from `main`
+- Merged back to `main` when complete
+- Deleted after successful merge
 
 ## Development Workflow
 
 ### Branch Usage Guidelines
 
-1. **Stable Branch (`stable`)**
-   - Primary branch for new feature development
-   - Contains all stable code including deployment improvements
-   - All new feature branches should be created from here
+1. **Main Branch (`main`)**
+   - Primary branch for all development
+   - Source of truth for production code
    - Must maintain a working state at all times
+   - All feature branches created from here
    - Regular testing and validation required
 
 2. **Deployment Branch (`deployment/vercel`)**
-   - Contains Vercel-specific configurations
-   - Should be regularly updated with improvements from `stable`
-   - Used for Vercel deployments
-   - Maintains deployment-specific optimizations
+   - Special purpose branch for deployment-specific issues
+   - Used ONLY for:
+     - Testing Vercel configuration changes
+     - Debugging production-only issues
+     - Implementing deployment-specific optimizations
+   - NOT used for regular feature development
+   - Workflow for deployment fixes:
+     ```bash
+     # When encountering a production-specific issue:
+     git checkout deployment/vercel
+     git pull origin main            # Get latest changes
+     # Make deployment-specific fixes
+     git commit -m "fix: describe deployment fix"
+     git push origin deployment/vercel
+     # Test in Vercel preview deployment
+     # If successful, merge back to main:
+     git checkout main
+     git merge deployment/vercel
+     git push origin main
+     ```
 
 3. **Feature Branches (`feature/*`)**
-   - Created from `stable` branch
+   - Created from `main` branch
    - Follow naming convention: `feature/descriptive-name`
    - Should be focused on a single feature or improvement
-   - Regular rebasing against `stable` recommended
-   - IMPORTANT: Always test after major dependency updates
-
-4. **Main Branch (`main`)**
-   - Historical branch
-   - Currently maintained for reference
-   - May be deprecated in favor of `stable` in future
+   - Regular rebasing against `main` recommended
+   - Deleted after successful merge
 
 ### Development Process
 
-1. **Creating Backup (Before Major Changes)**
+1. **Starting New Work**
    ```bash
-   # Create backup branch with date
-   git checkout stable
-   git checkout -b stable-backup-$(date +%Y-%m-%d)
-   git push origin stable-backup-$(date +%Y-%m-%d)
-   
-   # Return to stable for changes
-   git checkout stable
-   ```
-
-2. **Starting New Work**
-   ```bash
-   git checkout stable
-   git pull origin stable
+   git checkout main
+   git pull origin main
    git checkout -b feature/new-feature-name
    ```
 
-3. **Regular Development**
+2. **Regular Development**
    - Commit regularly with descriptive messages
    - Keep changes focused and atomic
    - Test changes locally before pushing
 
-4. **Updating Feature Branches**
+3. **Updating Feature Branches**
    ```bash
    git checkout feature/your-feature
-   git rebase stable
+   git rebase main
    ```
 
-5. **Merging Changes**
-   - Create pull request against `stable` branch
+4. **Merging Changes**
+   - Create pull request against `main` branch
    - Ensure all tests pass
    - Get code review
    - Squash and merge to maintain clean history
-   - For critical changes, use test branch first:
-     ```bash
-     git checkout -b test/stable-merge
-     git merge feature/your-feature
-     # Test thoroughly before merging to stable
-     ```
+   - Delete feature branch after successful merge
 
-6. **Updating Deployment Branch**
+5. **Updating Deployment Branch**
    ```bash
    git checkout deployment/vercel
-   git merge stable
+   git merge main
    # Test deployment branch
    git push origin deployment/vercel
-   ```
-
-7. **Restoring from Backup (If Needed)**
-   ```bash
-   # If things go wrong, restore from backup
-   git checkout stable
-   git reset --hard stable-backup-YYYY-MM-DD
-   git push origin stable --force
-   # Note: Only use force push if absolutely necessary and you're sure about the backup
    ```
 
 ### Best Practices
@@ -125,9 +101,8 @@
 4. Regular commits with descriptive messages
 5. Use test branches for critical merges
 6. Clear caches after major dependency updates
-7. Create backup branches before major changes or merges
-8. Keep backup branches for at least a week before cleanup
-9. Document any force pushes and their reasons
+7. Create backup branches before major changes if needed
+8. Document any force pushes and their reasons
 
 ## Environment Setup
 
@@ -159,23 +134,12 @@
    - Verify configuration compatibility
    - Document breaking changes
 
-### Best Practices
-1. Always check environment variables before starting development
-2. Run health checks to verify server status
-3. Keep documentation updated with new findings
-4. Regular commits with descriptive messages
-5. Use test branches for critical merges
-6. Clear caches after major dependency updates
-7. Create backup branches before major changes or merges
-8. Keep backup branches for at least a week before cleanup
-9. Document any force pushes and their reasons
-
 ## Future Considerations
 
-1. **Branch Strategy Evolution**
-   - Consider making `stable` the default branch
-   - Plan migration path for existing feature branches
-   - Document process for handling legacy code
+1. **Branch Strategy Maintenance**
+   - Regular review of branch structure
+   - Clean up of merged feature branches
+   - Monitor deployment branch synchronization
 
 2. **Documentation Updates**
    - Regular reviews of this document
@@ -185,4 +149,28 @@
 ## References
 - [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) - Detailed setup instructions
 - [TECHNICAL_DEBT.md](./TECHNICAL_DEBT.md) - Known issues and planned improvements
-- Latest status report: [M3DV-SR-2025-03-27-1806.md](./status-reports/M3DV-SR-2025-03-27-1806.md) 
+- Latest status report: [M3DV-SR-2025-03-27-1806.md](./status-reports/M3DV-SR-2025-03-27-1806.md)
+
+### Deployment Process
+
+1. **Regular Feature Deployments**
+   - Feature branches get automatic preview deployments
+   - Merged to `main` for production deployment
+   - Vercel automatically deploys `main` to production
+
+2. **Production-Specific Issues**
+   - Use `deployment/vercel` branch
+   - Test changes in preview deployment
+   - Merge working fixes back to `main`
+   - Vercel deploys to production
+
+3. **Vercel Environments**
+   - Preview Deployments:
+     - Created for every push to any branch
+     - Used for testing before production
+     - URL format: `project-name-git-branch-name.vercel.app`
+   
+   - Production Deployment:
+     - Only from the `main` branch
+     - Your live site
+     - URL: `your-domain.com` or `project-name.vercel.app` 
