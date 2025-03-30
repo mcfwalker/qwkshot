@@ -68,6 +68,7 @@ export interface CompiledPrompt {
   userMessage: string;
   constraints: CameraConstraints;
   metadata: PromptMetadata;
+  tokenCount?: number;
 }
 
 /**
