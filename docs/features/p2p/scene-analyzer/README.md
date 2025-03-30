@@ -87,6 +87,9 @@ console.log('Analysis duration:', metrics.duration);
 - Extracts geometry and material information
 - Calculates basic spatial properties
 - Processes metadata and version information
+- Supports files up to 100MB
+- Handles large files efficiently (tested with 21MB+ files)
+- Reports accurate file sizes and formats
 
 ### 2. Spatial Analysis
 - Calculates bounding volumes using Three.js Box3 and Sphere

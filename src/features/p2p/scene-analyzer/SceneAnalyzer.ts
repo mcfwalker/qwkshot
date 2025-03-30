@@ -1,5 +1,6 @@
-import { Vector3, Box3, Plane, Material, Object3D } from 'three';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Vector3, Box3, Plane, Material, Object3D, Euler } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   SceneAnalyzer,
   SceneAnalyzerConfig,
@@ -15,6 +16,16 @@ import {
   Orientation,
 } from '../../../types/p2p';
 import { SceneAnalyzerError, GLBParseError, AnalysisError } from '../../../types/p2p/scene-analyzer';
+import * as THREE from 'three';
+
+interface GeometricData {
+  position: Vector3;
+  rotation: Euler;
+  scale: Vector3;
+  boundingBox: Box3;
+  vertices: number;
+  faces: number;
+}
 
 /**
  * Implementation of the Scene Analyzer interface
@@ -29,6 +40,8 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
     operations: [],
   };
   private gltfLoader: GLTFLoader;
+  private geometricData: GeometricData[] = [];
+  private sceneDimensions: { width: number; height: number; depth: number; center: Vector3 } | null = null;
 
   constructor(config: SceneAnalyzerConfig, logger: Logger) {
     this.config = config;
@@ -44,27 +57,67 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
   async analyzeScene(file: File): Promise<SceneAnalysis> {
     const startTime = Date.now();
     this.metrics.startTime = startTime;
+    this.metrics.operations = [];
 
     try {
       // Validate file
+      const validateStart = Date.now();
       if (!this.isValidFile(file)) {
         throw new Error('Invalid file format or size');
       }
+      this.metrics.operations.push({
+        name: 'validateFile',
+        duration: Date.now() - validateStart,
+        success: true
+      });
 
       // Load GLB file
+      const loadStart = Date.now();
       const gltf = await this.loadGLB(file);
+      this.metrics.operations.push({
+        name: 'loadGLB',
+        duration: Date.now() - loadStart,
+        success: true
+      });
+
       const scene = gltf.scene;
 
+      // Add file size to GLTF metadata
+      gltf.parser.json.asset = {
+        ...gltf.parser.json.asset,
+        name: file.name,
+        size: file.size,
+      };
+
       // Perform GLB analysis
+      const glbStart = Date.now();
       const glbAnalysis = await this.analyzeGLB(gltf);
+      this.metrics.operations.push({
+        name: 'analyzeGLB',
+        duration: Date.now() - glbStart,
+        success: true
+      });
 
       // Perform spatial analysis
+      const spatialStart = Date.now();
       const spatialAnalysis = await this.analyzeSpatial(scene);
+      this.metrics.operations.push({
+        name: 'analyzeSpatial',
+        duration: Date.now() - spatialStart,
+        success: true
+      });
 
       // Perform feature analysis
+      const featureStart = Date.now();
       const featureAnalysis = await this.analyzeFeatures(scene);
+      this.metrics.operations.push({
+        name: 'analyzeFeatures',
+        duration: Date.now() - featureStart,
+        success: true
+      });
 
       // Calculate safety constraints
+      const safetyStart = Date.now();
       const safetyConstraints = await this.calculateSafetyBoundaries({
         glb: glbAnalysis,
         spatial: spatialAnalysis,
@@ -74,13 +127,27 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
         features: [],
         performance: {} as PerformanceMetrics,
       });
+      this.metrics.operations.push({
+        name: 'calculateSafetyBoundaries',
+        duration: Date.now() - safetyStart,
+        success: true
+      });
 
       // Calculate orientation
+      const orientationStart = Date.now();
       const orientation = await this.calculateOrientation(scene);
+      this.metrics.operations.push({
+        name: 'calculateOrientation',
+        duration: Date.now() - orientationStart,
+        success: true
+      });
 
       const endTime = Date.now();
       this.metrics.endTime = endTime;
       this.metrics.duration = endTime - startTime;
+
+      // Log performance metrics
+      this.logger.performance(this.metrics);
 
       return {
         glb: glbAnalysis,
@@ -182,12 +249,21 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
   // Private helper methods
 
   private isValidFile(file: File): boolean {
+    if (!file) {
+      this.logger.error('No file provided');
+      return false;
+    }
+
+    // Check file size
     if (file.size > this.config.maxFileSize) {
+      this.logger.error(`File size ${file.size} exceeds maximum allowed size ${this.config.maxFileSize}`);
       throw new Error('File size exceeds maximum allowed size');
     }
 
-    const format = file.type.toLowerCase();
-    if (!this.config.supportedFormats.includes(format)) {
+    // Check file type
+    const fileType = file.type.toLowerCase();
+    if (!fileType.includes('gltf-binary')) {
+      this.logger.error(`Unsupported file type: ${fileType}`);
       throw new Error('Unsupported file format');
     }
 
@@ -195,73 +271,179 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
   }
 
   private async loadGLB(file: File): Promise<GLTF> {
+    const startTime = performance.now();
     try {
-      this.logger.debug('Starting GLB file load:', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
+      console.log('Starting GLB loading process...');
+      // Read file as ArrayBuffer
+      const bufferStartTime = performance.now();
+      const buffer = await file.arrayBuffer();
+      console.log('ArrayBuffer created in:', performance.now() - bufferStartTime, 'ms');
+      console.log('Buffer size:', buffer.byteLength, 'bytes');
+      this.logger.debug('Successfully read GLB file as ArrayBuffer');
+
+      // Use parseAsync with ArrayBuffer for direct binary loading
+      console.log('Starting GLB parsing...');
+      const parseStartTime = performance.now();
+      const gltf = await this.gltfLoader.parseAsync(buffer, '');
+      console.log('GLB parsing completed in:', performance.now() - parseStartTime, 'ms');
+      this.logger.debug('Successfully parsed GLB file');
+
+      // Extract only geometric data
+      console.log('Starting geometric data extraction...');
+      const extractStartTime = performance.now();
+      const scene = gltf.scene;
+      let meshCount = 0;
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          meshCount++;
+          // Store only geometric properties
+          const geometry = object.geometry;
+          if (geometry) {
+            // Calculate bounding box
+            geometry.computeBoundingBox();
+            const bbox = geometry.boundingBox;
+            
+            // Store key geometric data
+            this.geometricData.push({
+              position: object.position,
+              rotation: object.rotation,
+              scale: object.scale,
+              boundingBox: bbox,
+              vertices: geometry.attributes.position.count,
+              faces: geometry.index ? geometry.index.count / 3 : 0
+            });
+          }
+        }
+      });
+      console.log('Geometric data extraction completed in:', performance.now() - extractStartTime, 'ms');
+      console.log('Found', meshCount, 'meshes');
+
+      // Calculate overall scene bounds
+      console.log('Calculating scene bounds...');
+      const boundsStartTime = performance.now();
+      const sceneBounds = new THREE.Box3();
+      this.geometricData.forEach(data => {
+        if (data.boundingBox) {
+          const tempObject = new THREE.Object3D();
+          const tempGeometry = new THREE.BufferGeometry();
+          tempGeometry.setAttribute('position', new THREE.Float32BufferAttribute(data.boundingBox.getSize(new THREE.Vector3()).toArray(), 3));
+          tempObject.add(new THREE.Mesh(tempGeometry));
+          sceneBounds.expandByObject(tempObject);
+        }
+      });
+      console.log('Scene bounds calculation completed in:', performance.now() - boundsStartTime, 'ms');
+
+      // Store scene dimensions
+      this.sceneDimensions = {
+        width: sceneBounds.max.x - sceneBounds.min.x,
+        height: sceneBounds.max.y - sceneBounds.min.y,
+        depth: sceneBounds.max.z - sceneBounds.min.z,
+        center: sceneBounds.getCenter(new THREE.Vector3())
+      };
+
+      const duration = performance.now() - startTime;
+      console.log('Total GLB loading process completed in:', duration, 'ms');
+      this.logger.performance({
+        startTime,
+        endTime: performance.now(),
+        duration,
+        operations: [{
+          name: 'GLB loading',
+          duration,
+          success: true
+        }]
       });
 
-      // Get file content as ArrayBuffer
-      const buffer = await file.arrayBuffer();
-      this.logger.debug('Successfully read ArrayBuffer, size:', buffer.byteLength);
-
-      try {
-        // Create a data URL from the buffer
-        const base64 = Buffer.from(buffer).toString('base64');
-        const dataUrl = `data:model/gltf-binary;base64,${base64}`;
-        
-        // Load using the data URL
-        const gltf = await this.gltfLoader.loadAsync(dataUrl);
-        this.logger.debug('Successfully loaded GLB using data URL');
-        return gltf;
-      } catch (parseError) {
-        const parseErrorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-        this.logger.error('Failed to parse GLB:', new Error(parseErrorMessage));
-        throw new Error(parseErrorMessage);
-      }
+      return gltf;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error('Failed to load GLB file:', new Error(errorMessage));
-      throw new Error(`Failed to load GLB file: ${errorMessage}`);
+      const duration = performance.now() - startTime;
+      console.error('GLB loading failed after:', duration, 'ms');
+      console.error('Error details:', error);
+      this.logger.error('Failed to load GLB file', error instanceof Error ? error : new Error('Unknown error'));
+      throw new Error('Failed to load GLB file');
     }
   }
 
   private async analyzeGLB(gltf: GLTF): Promise<GLBAnalysis> {
-    const scene = gltf.scene;
-    const bbox = new Box3().setFromObject(scene);
-    const size = new Vector3();
-    bbox.getSize(size);
-    const center = new Vector3();
-    bbox.getCenter(center);
+    const startTime = performance.now();
+    try {
+      console.log('Starting GLB analysis...');
+      const scene = gltf.scene;
+      let totalVertices = 0;
+      let totalFaces = 0;
+      const materials: Material[] = [];
 
-    return {
-      fileInfo: {
-        name: 'model.glb', // Default name since we can't access parser.path
-        size: 0, // TODO: Get actual file size
-        format: 'model/gltf-binary',
-        version: gltf.parser.json.version,
-      },
-      geometry: {
-        vertexCount: this.countVertices(scene),
-        faceCount: this.countFaces(scene),
-        boundingBox: bbox,
-        center,
-        dimensions: size,
-      },
-      materials: this.extractMaterials(scene),
-      metadata: gltf.parser.json.asset || {},
-      performance: {
-        startTime: Date.now(),
-        endTime: Date.now(),
-        duration: 0,
-        operations: [],
-      },
-    };
+      // Calculate total geometry stats
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          const geometry = object.geometry;
+          if (geometry) {
+            totalVertices += geometry.attributes.position.count;
+            totalFaces += geometry.index ? geometry.index.count / 3 : 0;
+          }
+          if (object.material) {
+            materials.push(object.material);
+          }
+        }
+      });
+
+      // Calculate bounding box
+      const bbox = new THREE.Box3();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.computeBoundingBox();
+          bbox.expandByObject(object);
+        }
+      });
+
+      const center = bbox.getCenter(new THREE.Vector3());
+      const dimensions = bbox.getSize(new THREE.Vector3());
+
+      const duration = performance.now() - startTime;
+      console.log('GLB analysis completed in:', duration, 'ms');
+
+      return {
+        fileInfo: {
+          name: gltf.parser.json.asset?.name || 'analyzed.glb',
+          size: gltf.parser.json.asset?.size || 0,
+          format: 'model/gltf-binary',
+          version: gltf.parser.json.version,
+        },
+        geometry: {
+          vertexCount: totalVertices,
+          faceCount: totalFaces,
+          boundingBox: bbox,
+          center,
+          dimensions,
+        },
+        materials,
+        metadata: gltf.parser.json,
+        performance: {
+          startTime,
+          endTime: performance.now(),
+          duration,
+          operations: [],
+        },
+      };
+    } catch (error) {
+      console.error('GLB analysis failed:', error);
+      throw error;
+    }
   }
 
   private async analyzeSpatial(scene: Object3D): Promise<SpatialAnalysis> {
-    const bbox = new Box3().setFromObject(scene);
+    // Create a bounding box from the scene's geometry
+    const bbox = new Box3();
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.geometry.computeBoundingBox();
+        const objectBBox = object.geometry.boundingBox;
+        if (objectBBox) {
+          bbox.union(objectBBox);
+        }
+      }
+    });
+
     const size = new Vector3();
     bbox.getSize(size);
     const center = new Vector3();
