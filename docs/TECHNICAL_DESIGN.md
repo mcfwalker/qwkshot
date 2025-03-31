@@ -504,7 +504,181 @@ export async function POST(request: Request) {
 
 *(Extracted interfaces from original PRD Section 6)*
 
-### 5.1. Camera Path
+### 5.1. P2P Pipeline Architecture
+
+#### 5.1.1 Component Hierarchy
+```typescript
+interface P2PPipeline {
+  initialize(config: P2PPipelineConfig): Promise<void>;
+  processModel(input: ModelInput): Promise<{
+    modelId: string;
+    analysis: SceneAnalysis;
+    metadata: ModelMetadata;
+  }>;
+  generatePath(modelId: string, instruction: UserInstruction): Promise<AnimationOutput>;
+  previewKeyframe(modelId: string, keyframeIndex: number, animation: AnimationOutput): Promise<void>;
+  executeAnimation(modelId: string, animation: AnimationOutput): Promise<void>;
+  getPerformanceMetrics(): PerformanceMetrics;
+}
+
+interface P2PPipelineConfig {
+  sceneAnalyzer: SceneAnalyzerConfig;
+  metadataManager: MetadataManagerConfig;
+  promptCompiler: PromptCompilerConfig;
+  llmEngine: LLMEngineConfig;
+  sceneInterpreter: SceneInterpreterConfig;
+}
+```
+
+#### 5.1.2 Scene Analysis
+```typescript
+interface SceneAnalysis {
+  glb: {
+    fileInfo: {
+      name: string;
+      size: number;
+      format: string;
+      version: string;
+    };
+    geometry: {
+      vertexCount: number;
+      faceCount: number;
+      boundingBox: Box3;
+      center: Vector3;
+      dimensions: Vector3;
+    };
+    materials: Material[];
+    metadata: Record<string, any>;
+    performance: PerformanceMetrics;
+  };
+  spatial: {
+    bounds: {
+      min: Vector3;
+      max: Vector3;
+      center: Vector3;
+      dimensions: Vector3;
+    };
+    referencePoints: {
+      center: Vector3;
+      highest: Vector3;
+      lowest: Vector3;
+      leftmost: Vector3;
+      rightmost: Vector3;
+      frontmost: Vector3;
+      backmost: Vector3;
+    };
+    symmetry: {
+      hasSymmetry: boolean;
+      symmetryPlanes: any[];
+    };
+    complexity: 'simple' | 'moderate' | 'high';
+    performance: PerformanceMetrics;
+  };
+  featureAnalysis: {
+    features: Feature[];
+    landmarks: Landmark[];
+    constraints: Constraint[];
+    performance: PerformanceMetrics;
+  };
+  safetyConstraints: {
+    minDistance: number;
+    maxDistance: number;
+    minHeight: number;
+    maxHeight: number;
+    restrictedZones: Box3[];
+  };
+  orientation: {
+    front: Vector3;
+    up: Vector3;
+    right: Vector3;
+    center: Vector3;
+    scale: number;
+  };
+  features: Feature[];
+  performance: PerformanceMetrics;
+}
+```
+
+#### 5.1.3 Environmental Analysis
+```typescript
+interface EnvironmentalAnalysis {
+  environment: {
+    bounds: {
+      min: Vector3;
+      max: Vector3;
+      center: Vector3;
+      dimensions: Vector3;
+    };
+    floor: {
+      center: Vector3;
+      normal: Vector3;
+      size: Vector3;
+    };
+  };
+  object: {
+    bounds: {
+      min: Vector3;
+      max: Vector3;
+      center: Vector3;
+      dimensions: Vector3;
+    };
+    position: Vector3;
+    rotation: Vector3;
+    scale: Vector3;
+  };
+  distances: {
+    toBoundary: {
+      front: number;
+      back: number;
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    };
+    safeRange: {
+      min: number;
+      max: number;
+    };
+  };
+  cameraConstraints: {
+    minHeight: number;
+    maxHeight: number;
+    minDistance: number;
+    maxDistance: number;
+    restrictedZones: Box3[];
+  };
+  performance: PerformanceMetrics;
+}
+```
+
+#### 5.1.4 Error Handling
+```typescript
+interface P2PError extends Error {
+  code: string;
+  component: string;
+  details?: any;
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+  details?: any;
+}
+
+interface PerformanceMetrics {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  operations: {
+    name: string;
+    duration: number;
+    success: boolean;
+    error?: string;
+  }[];
+}
+```
+
+### 5.2. Camera Path
 ```typescript
 interface CameraPath {
   id: string;
@@ -554,7 +728,7 @@ interface PathGenerationParams {
 ```
 *(See also: [Prompt Architecture Documentation](./docs/prompt-architecture/README.md))*
 
-### 5.2. Model Generation
+### 5.3. Model Generation
 ```typescript
 interface ModelGenerationJob {
   id: string; // Job ID from the generation service
@@ -613,22 +787,31 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  // organization: process.env.OPENAI_ORGANIZATION // If needed
 });
 
 export async function generateCameraPathFromLLM(params: PathGenerationParams): Promise<CameraKeyframe[]> {
-  const systemPrompt = `You are a helpful assistant designing camera paths... Your output MUST be a JSON array of keyframes: [{ position: {x,y,z}, target: {x,y,z}, duration: number }]. Total duration must sum to ${params.duration}.`; // Simplified
-  const userPrompt = `Generate keyframes for: "${params.prompt}". Scene context: ${JSON.stringify(params.sceneContext)}. Total duration: ${params.duration}s.`; // Simplified
+  // Get scene and environmental analysis
+  const sceneAnalysis = await analyzeScene(params.modelId);
+  const envAnalysis = await analyzeEnvironment(sceneAnalysis);
+
+  // Compile prompt with context
+  const compiledPrompt = await compilePrompt(
+    params.prompt,
+    sceneAnalysis,
+    envAnalysis
+  );
+
+  const systemPrompt = `You are a helpful assistant designing camera paths... Your output MUST be a JSON array of keyframes: [{ position: {x,y,z}, target: {x,y,z}, duration: number }]. Total duration must sum to ${params.duration}.`;
+  const userPrompt = `Generate keyframes for: "${params.prompt}". Scene context: ${JSON.stringify(params.sceneContext)}. Environmental constraints: ${JSON.stringify(envAnalysis.cameraConstraints)}. Total duration: ${params.duration}s.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview", // Or preferred model
+      model: "gpt-4-turbo-preview",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      response_format: { type: "json_object" }, // If model supports it reliably
-      // temperature: 0.7, max_tokens: ..., etc.
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices[0]?.message?.content;
@@ -636,19 +819,17 @@ export async function generateCameraPathFromLLM(params: PathGenerationParams): P
       throw new Error("LLM returned empty content");
     }
 
-    // IMPORTANT: Add robust parsing and validation here
     const parsed = JSON.parse(content);
-    // Validate structure (e.g., using Zod) and duration sum
     if (!parsed.keyframes || !Array.isArray(parsed.keyframes)) {
-         throw new Error("LLM response missing keyframes array");
+      throw new Error("LLM response missing keyframes array");
     }
-    // Further validation...
 
-    return parsed.keyframes as CameraKeyframe[];
+    // Validate against environmental constraints
+    const validatedKeyframes = validateKeyframes(parsed.keyframes, envAnalysis.cameraConstraints);
+    return validatedKeyframes;
 
   } catch (error) {
     console.error("LLM service error:", error);
-    // Handle specific OpenAI errors if possible
     throw new Error("Failed to generate camera path from LLM");
   }
 }
@@ -722,6 +903,64 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
 - **End-to-End (E2E) Tests:** Cypress or Playwright to simulate full user workflows (sign-in, upload model, generate path, view animation).
 - **Visual Regression Tests:** Percy or similar tools integrated into CI to catch unintended UI changes.
 - **Code Coverage:** Aim for >80% coverage on critical paths, tracked via tools like `istanbul` or built-in Jest coverage.
+
+### 8.1 P2P Pipeline Testing
+```typescript
+// Example test structure for P2P components
+describe('P2P Pipeline Integration', () => {
+  let pipeline: P2PPipeline;
+  let sceneAnalyzer: SceneAnalyzer;
+  let environmentalAnalyzer: EnvironmentalAnalyzer;
+  let promptCompiler: PromptCompiler;
+
+  beforeEach(() => {
+    // Initialize components with mock data
+    sceneAnalyzer = new SceneAnalyzerImpl(mockConfig, mockLogger);
+    environmentalAnalyzer = new EnvironmentalAnalyzerImpl(mockConfig, mockLogger);
+    promptCompiler = new PromptCompilerImpl(mockConfig);
+    pipeline = new P2PPipelineImpl(
+      mockConfig,
+      mockLogger,
+      sceneAnalyzer,
+      environmentalAnalyzer,
+      promptCompiler,
+      mockLLMEngine,
+      mockSceneInterpreter
+    );
+  });
+
+  describe('Scene Analysis', () => {
+    it('should analyze GLB file correctly', async () => {
+      const analysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
+      expect(analysis.spatial.bounds).toBeDefined();
+      expect(analysis.features).toBeDefined();
+    });
+  });
+
+  describe('Environmental Analysis', () => {
+    it('should calculate correct environment bounds', async () => {
+      const sceneAnalysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
+      const envAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
+      expect(envAnalysis.environment.bounds).toBeDefined();
+      expect(envAnalysis.cameraConstraints).toBeDefined();
+    });
+  });
+
+  describe('Prompt Compilation', () => {
+    it('should compile prompt with scene context', async () => {
+      const sceneAnalysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
+      const envAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
+      const compiledPrompt = await promptCompiler.compilePrompt(
+        'Show me the front of the model',
+        sceneAnalysis,
+        mockModelMetadata
+      );
+      expect(compiledPrompt.systemMessage).toContain('camera path');
+      expect(compiledPrompt.constraints).toBeDefined();
+    });
+  });
+});
+```
 
 *(See the [Test Suite Plan](./docs/testing/README.md) for detailed structure and goals)*
 
