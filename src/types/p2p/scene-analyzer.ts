@@ -64,7 +64,7 @@ export interface SpatialAnalysis {
     hasSymmetry: boolean;
     symmetryPlanes: Plane[];
   };
-  complexity: 'simple' | 'moderate' | 'complex';
+  complexity: 'simple' | 'moderate' | 'high';
   performance: PerformanceMetrics;
 }
 

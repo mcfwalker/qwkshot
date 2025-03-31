@@ -513,7 +513,7 @@ interface CameraPath {
   keyframes: CameraKeyframe[];
   metadata: {
     generatedFromPrompt?: string;
-    complexity?: 'simple' | 'medium' | 'complex';
+    complexity?: 'simple' | 'medium' | 'high';
     totalDuration: number; // Calculated or stored, ensure consistency
     authorId: string; // User ID
     createdAt: string; // ISO timestamp
@@ -536,7 +536,7 @@ interface CameraKeyframe {
 interface PathGenerationParams {
   prompt: string;
   duration: number; // Total desired animation duration
-  complexity?: 'simple' | 'medium' | 'complex';
+  complexity?: 'simple' | 'medium' | 'high';
   // Context passed from frontend:
   sceneContext: {
       modelCenter: { x: number; y: number; z: number };

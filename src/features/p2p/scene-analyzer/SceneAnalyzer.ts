@@ -1,237 +1,552 @@
-import { Vector3, Box3, Plane, Material, Object3D, Euler } from 'three';
+import { Box3, Object3D, Plane, Vector3, Mesh, Matrix4, Matrix3, Quaternion, Euler, Layers } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {
-  SceneAnalyzer,
-  SceneAnalyzerConfig,
-  GLBAnalysis,
-  SpatialAnalysis,
-  FeatureAnalysis,
-  SceneAnalysis,
-  ValidationResult,
-  PerformanceMetrics,
-  SafetyConstraints,
-  Feature,
-  Logger,
-  Orientation,
-} from '../../../types/p2p';
-import { SceneAnalyzerError, GLBParseError, AnalysisError } from '../../../types/p2p/scene-analyzer';
+import { Logger, SceneAnalyzerConfig } from '../../../types/p2p';
 import * as THREE from 'three';
 
-interface GeometricData {
-  position: Vector3;
-  rotation: Euler;
-  scale: Vector3;
-  boundingBox: Box3;
-  vertices: number;
-  faces: number;
+interface AnalysisError extends Error {
+  name: 'AnalysisError';
 }
 
-/**
- * Implementation of the Scene Analyzer interface
- */
-export class SceneAnalyzerImpl implements SceneAnalyzer {
-  private config: SceneAnalyzerConfig;
-  private logger: Logger;
-  private metrics: PerformanceMetrics = {
-    startTime: 0,
-    endTime: 0,
-    duration: 0,
-    operations: [],
-  };
-  private gltfLoader: GLTFLoader;
-  private geometricData: GeometricData[] = [];
-  private sceneDimensions: { width: number; height: number; depth: number; center: Vector3 } | null = null;
+interface Feature {
+  id: string;
+  type: string;
+  position: Vector3;
+  description: string;
+  metadata?: Record<string, any>;
+}
 
-  constructor(config: SceneAnalyzerConfig, logger: Logger) {
+interface PerformanceOperation {
+  name: string;
+  duration: number;
+  success: boolean;
+}
+
+interface PerformanceMetrics {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  operations: PerformanceOperation[];
+}
+
+interface GLBAnalysis {
+  fileInfo: {
+    format: string;
+    name: string;
+    size: number;
+    version: string;
+  };
+  geometry: {
+    boundingBox: Box3;
+    center: Vector3;
+    dimensions: Vector3;
+    vertexCount: number;
+    faceCount: number;
+  };
+  materials: any[];
+  metadata: any;
+  performance: PerformanceMetrics;
+}
+
+interface SpatialAnalysis {
+  bounds: {
+    min: Vector3;
+    max: Vector3;
+    center: Vector3;
+    dimensions: Vector3;
+  };
+  complexity: 'simple' | 'moderate' | 'high';
+  referencePoints: {
+    center: Vector3;
+    highest: Vector3;
+    lowest: Vector3;
+    leftmost: Vector3;
+    rightmost: Vector3;
+    frontmost: Vector3;
+    backmost: Vector3;
+  };
+  symmetry: {
+    hasSymmetry: boolean;
+    symmetryPlanes: Plane[];
+  };
+  performance: PerformanceMetrics;
+}
+
+interface FeatureAnalysis {
+  features: Feature[];
+  landmarks: Feature[];
+  constraints: any[];
+  performance: PerformanceMetrics;
+}
+
+interface SafetyConstraints {
+  minHeight: number;
+  maxHeight: number;
+  minDistance: number;
+  maxDistance: number;
+  restrictedZones: any[];
+}
+
+interface Orientation {
+  front: Vector3;
+  up: Vector3;
+  right: Vector3;
+  center: Vector3;
+  scale: number;
+}
+
+interface SceneAnalysis {
+  glb: GLBAnalysis;
+  spatial: SpatialAnalysis;
+  featureAnalysis: FeatureAnalysis;
+  safetyConstraints: SafetyConstraints;
+  orientation: Orientation;
+  features: Feature[];
+  performance: PerformanceMetrics;
+}
+
+interface GLTF {
+  scene: Object3D;
+  scenes: Object3D[];
+  animations: any[];
+  cameras: any[];
+  asset: {
+    generator?: string;
+    version: string;
+    name?: string;
+    size?: number;
+  };
+  parser: {
+    json: {
+      asset: {
+        generator?: string;
+        version: string;
+        name?: string;
+        size?: number;
+      };
+    };
+  };
+}
+
+export class SceneAnalyzerImpl {
+  private config: SceneAnalyzerConfig;
+  private gltfLoader: GLTFLoader;
+  private initialized: boolean = false;
+
+  constructor(config: SceneAnalyzerConfig, private logger: Logger) {
     this.config = config;
-    this.logger = logger;
     this.gltfLoader = new GLTFLoader();
   }
 
   async initialize(config: SceneAnalyzerConfig): Promise<void> {
     this.config = config;
+    this.initialized = true;
     this.logger.info('Scene Analyzer initialized with config:', config);
   }
 
+  protected async validateFile(file: File): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Scene Analyzer not initialized');
+    }
+
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    if (!this.config.supportedFormats.includes(file.type)) {
+      throw new Error(`Unsupported file format: ${file.type}`);
+    }
+
+    if (file.size > this.config.maxFileSize) {
+      throw new Error(`File size exceeds limit: ${file.size} > ${this.config.maxFileSize}`);
+    }
+  }
+
+  protected async loadGLB(file: File): Promise<GLTF> {
+    const buffer = await file.arrayBuffer();
+    const gltf = await this.gltfLoader.parseAsync(buffer, '');
+    return {
+      scene: gltf.scene,
+      scenes: gltf.scenes || [],
+      animations: gltf.animations || [],
+      cameras: gltf.cameras || [],
+      asset: {
+        generator: gltf.parser.json.asset.generator || 'unknown',
+        version: gltf.parser.json.asset.version,
+        name: gltf.parser.json.asset.name,
+        size: gltf.parser.json.asset.size,
+      },
+      parser: gltf.parser,
+    };
+  }
+
+  protected async analyzeGLB(gltf: GLTF): Promise<GLBAnalysis> {
+    const startTime = performance.now();
+    const boundingBox = new Box3();
+    let vertexCount = 0;
+    let faceCount = 0;
+    const materials: any[] = [];
+
+    gltf.scene.traverse((object) => {
+      if (object.type === 'Mesh') {
+        const mesh = object as THREE.Mesh;
+        boundingBox.expandByObject(mesh);
+        if (mesh.geometry) {
+          vertexCount += mesh.geometry.attributes.position?.count || 0;
+          faceCount += (mesh.geometry.index?.count || 0) / 3;
+        }
+        if (mesh.material) {
+          materials.push(mesh.material);
+        }
+      }
+    });
+
+    const center = new Vector3();
+    boundingBox.getCenter(center);
+    const dimensions = new Vector3();
+    boundingBox.getSize(dimensions);
+
+    const endTime = performance.now();
+
+    return {
+      fileInfo: {
+        format: 'model/gltf-binary',
+        name: gltf.parser.json.asset.name || 'unknown',
+        size: gltf.parser.json.asset.size || 0,
+        version: gltf.parser.json.asset.version,
+      },
+      geometry: {
+        boundingBox,
+        center,
+        dimensions,
+        vertexCount,
+        faceCount,
+      },
+      materials,
+      metadata: gltf.parser.json,
+      performance: {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        operations: [],
+      },
+    };
+  }
+
+  protected async analyzeSpatial(scene: Object3D): Promise<SpatialAnalysis> {
+    const startTime = performance.now();
+    const boundingBox = new Box3().setFromObject(scene);
+    const center = new Vector3();
+    boundingBox.getCenter(center);
+    const dimensions = new Vector3();
+    boundingBox.getSize(dimensions);
+
+    const referencePoints = {
+      center,
+      highest: new Vector3(center.x, boundingBox.max.y, center.z),
+      lowest: new Vector3(center.x, boundingBox.min.y, center.z),
+      leftmost: new Vector3(boundingBox.min.x, center.y, center.z),
+      rightmost: new Vector3(boundingBox.max.x, center.y, center.z),
+      frontmost: new Vector3(center.x, center.y, boundingBox.min.z),
+      backmost: new Vector3(center.x, center.y, boundingBox.max.z),
+    };
+
+    const complexity = this.calculateComplexity(scene);
+    const endTime = performance.now();
+
+    return {
+      bounds: {
+        min: boundingBox.min.clone(),
+        max: boundingBox.max.clone(),
+        center: center.clone(),
+        dimensions: dimensions.clone(),
+      },
+      complexity,
+      referencePoints,
+      symmetry: {
+        hasSymmetry: false,
+        symmetryPlanes: [],
+      },
+      performance: {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        operations: [],
+      },
+    };
+  }
+
+  protected async analyzeFeatures(scene: Object3D): Promise<FeatureAnalysis> {
+    const startTime = performance.now();
+    const features: Feature[] = [];
+    const landmarks: Feature[] = [];
+    const constraints: any[] = [];
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        const position = new Vector3();
+        object.getWorldPosition(position);
+
+        features.push({
+          id: object.uuid,
+          type: 'mesh',
+          position,
+          description: `Mesh at (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`,
+        });
+
+        if (this.isLandmark(object)) {
+          landmarks.push({
+            id: object.uuid,
+            type: 'landmark',
+            position,
+            description: `Landmark at (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`,
+          });
+        }
+      }
+    });
+
+    const endTime = performance.now();
+
+    return {
+      features,
+      landmarks,
+      constraints,
+      performance: {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        operations: [],
+      },
+    };
+  }
+
+  // Scene-level safety boundary calculation
+  protected async calculateSafetyBoundaries(scene: Object3D): Promise<SafetyConstraints> {
+    const boundingBox = new Box3().setFromObject(scene);
+    const dimensions = new Vector3();
+    boundingBox.getSize(dimensions);
+
+    // Ensure positive values for safety constraints
+    const minDistance = Math.max(Math.min(dimensions.x, dimensions.z) * 0.1, 0.1);
+    const maxDistance = Math.max(dimensions.x, dimensions.z) * 2;
+    const minHeight = Math.min(boundingBox.min.y, 0);
+    const maxHeight = Math.max(boundingBox.max.y, 1);
+
+    return {
+      minHeight,
+      maxHeight,
+      minDistance,
+      maxDistance,
+      restrictedZones: [],
+    };
+  }
+
+  // Analysis-level safety boundary retrieval
+  async getSafetyBoundaries(analysis: SceneAnalysis): Promise<SafetyConstraints> {
+    return analysis.safetyConstraints;
+  }
+
+  protected async calculateOrientation(scene: Object3D): Promise<Orientation> {
+    const boundingBox = new Box3().setFromObject(scene);
+    const center = new Vector3();
+    boundingBox.getCenter(center);
+    const dimensions = new Vector3();
+    boundingBox.getSize(dimensions);
+
+    return {
+      front: new Vector3(0, 0, -1),
+      up: new Vector3(0, 1, 0),
+      right: new Vector3(1, 0, 0),
+      center,
+      scale: Math.max(dimensions.x, dimensions.y, dimensions.z),
+    };
+  }
+
+  protected async calculateSymmetry(analysis: SceneAnalysis): Promise<SpatialAnalysis['symmetry']> {
+    const startTime = performance.now();
+    const symmetryPlanes: Plane[] = [];
+    let hasSymmetry = false;
+
+    // Check for reflection symmetry along main axes
+    const { center } = analysis.spatial.bounds;
+    const axes = [
+      new Vector3(1, 0, 0), // X-axis
+      new Vector3(0, 1, 0), // Y-axis
+      new Vector3(0, 0, 1), // Z-axis
+    ];
+
+    for (const axis of axes) {
+      if (this.checkReflectionSymmetry(analysis, center, axis)) {
+        symmetryPlanes.push(new Plane(axis, -center.dot(axis)));
+        hasSymmetry = true;
+      }
+    }
+
+    const endTime = performance.now();
+    this.logger.performance({
+      startTime,
+      endTime,
+      duration: endTime - startTime,
+      operations: [{ name: 'calculateSymmetry', duration: endTime - startTime, success: true }],
+    });
+
+    return {
+      hasSymmetry,
+      symmetryPlanes,
+    };
+  }
+
+  private calculateComplexity(scene: Object3D): 'simple' | 'moderate' | 'high' {
+    let vertexCount = 0;
+    let meshCount = 0;
+
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        vertexCount += object.geometry.attributes.position?.count || 0;
+        meshCount++;
+      }
+    });
+
+    if (vertexCount < 1000 && meshCount < 10) return 'simple';
+    if (vertexCount < 10000 && meshCount < 50) return 'moderate';
+    return 'high';
+  }
+
+  private isLandmark(mesh: THREE.Mesh): boolean {
+    const boundingBox = new Box3().setFromObject(mesh);
+    const size = new Vector3();
+    boundingBox.getSize(size);
+    const volume = size.x * size.y * size.z;
+    return volume > 1.0;
+  }
+
+  private checkReflectionSymmetry(analysis: SceneAnalysis, center: Vector3, axis: Vector3): boolean {
+    // Implement reflection symmetry check
+    // For now, use a simple check based on feature positions
+    const features = analysis.features;
+    const tolerance = 0.1;
+
+    for (const feature of features) {
+      const reflected = this.reflectPoint(feature.position, center, axis);
+      if (!this.hasMatchingFeature(features, reflected, tolerance)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private reflectPoint(point: Vector3, center: Vector3, axis: Vector3): Vector3 {
+    const reflected = point.clone().sub(center);
+    reflected.sub(axis.clone().multiplyScalar(2 * reflected.dot(axis)));
+    return reflected.add(center);
+  }
+
+  private hasMatchingFeature(features: Feature[], position: Vector3, tolerance: number): boolean {
+    return features.some(feature => 
+      feature.position.distanceTo(position) < tolerance
+    );
+  }
+
+  async extractReferencePoints(analysis: SceneAnalysis) {
+    return analysis.spatial.referencePoints;
+  }
+
   async analyzeScene(file: File): Promise<SceneAnalysis> {
-    const startTime = Date.now();
-    this.metrics.startTime = startTime;
-    this.metrics.operations = [];
+    const startTime = performance.now();
+    const operations: PerformanceOperation[] = [];
 
     try {
-      // Validate file
-      const validateStart = Date.now();
-      if (!this.isValidFile(file)) {
-        throw new Error('Invalid file format or size');
-      }
-      this.metrics.operations.push({
-        name: 'validateFile',
-        duration: Date.now() - validateStart,
-        success: true
-      });
+      await this.validateFile(file);
+      operations.push({ name: 'validateFile', duration: 0, success: true });
 
-      // Load GLB file
-      const loadStart = Date.now();
       const gltf = await this.loadGLB(file);
-      this.metrics.operations.push({
-        name: 'loadGLB',
-        duration: Date.now() - loadStart,
-        success: true
-      });
+      operations.push({ name: 'loadGLB', duration: 0, success: true });
 
-      const scene = gltf.scene;
-
-      // Add file size to GLTF metadata
-      gltf.parser.json.asset = {
-        ...gltf.parser.json.asset,
-        name: file.name,
-        size: file.size,
-      };
-
-      // Perform GLB analysis
-      const glbStart = Date.now();
       const glbAnalysis = await this.analyzeGLB(gltf);
-      this.metrics.operations.push({
-        name: 'analyzeGLB',
-        duration: Date.now() - glbStart,
-        success: true
-      });
+      operations.push({ name: 'analyzeGLB', duration: 0, success: true });
 
-      // Perform spatial analysis
-      const spatialStart = Date.now();
-      const spatialAnalysis = await this.analyzeSpatial(scene);
-      this.metrics.operations.push({
-        name: 'analyzeSpatial',
-        duration: Date.now() - spatialStart,
-        success: true
-      });
+      const spatialAnalysis = await this.analyzeSpatial(gltf.scene);
+      operations.push({ name: 'analyzeSpatial', duration: 0, success: true });
 
-      // Perform feature analysis
-      const featureStart = Date.now();
-      const featureAnalysis = await this.analyzeFeatures(scene);
-      this.metrics.operations.push({
-        name: 'analyzeFeatures',
-        duration: Date.now() - featureStart,
-        success: true
-      });
+      const featureAnalysis = await this.analyzeFeatures(gltf.scene);
+      operations.push({ name: 'analyzeFeatures', duration: 0, success: true });
 
-      // Calculate safety constraints
-      const safetyStart = Date.now();
-      const safetyConstraints = await this.calculateSafetyBoundaries({
-        glb: glbAnalysis,
-        spatial: spatialAnalysis,
-        featureAnalysis,
-        safetyConstraints: {} as SafetyConstraints,
-        orientation: {} as Orientation,
-        features: [],
-        performance: {} as PerformanceMetrics,
-      });
-      this.metrics.operations.push({
-        name: 'calculateSafetyBoundaries',
-        duration: Date.now() - safetyStart,
-        success: true
-      });
+      const safetyConstraints = await this.calculateSafetyBoundaries(gltf.scene);
+      operations.push({ name: 'calculateSafetyBoundaries', duration: 0, success: true });
 
-      // Calculate orientation
-      const orientationStart = Date.now();
-      const orientation = await this.calculateOrientation(scene);
-      this.metrics.operations.push({
-        name: 'calculateOrientation',
-        duration: Date.now() - orientationStart,
-        success: true
-      });
+      const orientation = await this.calculateOrientation(gltf.scene);
+      operations.push({ name: 'calculateOrientation', duration: 0, success: true });
 
-      const endTime = Date.now();
-      this.metrics.endTime = endTime;
-      this.metrics.duration = endTime - startTime;
-
-      // Log performance metrics
-      this.logger.performance(this.metrics);
-
-      return {
+      const symmetry = await this.calculateSymmetry({
         glb: glbAnalysis,
         spatial: spatialAnalysis,
         featureAnalysis,
         safetyConstraints,
         orientation,
         features: featureAnalysis.features,
-        performance: this.metrics,
+        performance: {
+          startTime,
+          endTime: performance.now(),
+          duration: 0,
+          operations: []
+        }
+      });
+      operations.push({ name: 'calculateSymmetry', duration: 0, success: true });
+
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      return {
+        glb: glbAnalysis,
+        spatial: {
+          ...spatialAnalysis,
+          symmetry,
+          performance: {
+            startTime,
+            endTime,
+            duration: endTime - startTime,
+            operations: []
+          }
+        },
+        featureAnalysis,
+        safetyConstraints,
+        orientation,
+        features: featureAnalysis.features,
+        performance: {
+          startTime,
+          endTime,
+          duration,
+          operations
+        }
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error('Scene analysis failed:', new Error(errorMessage));
-      throw new Error(errorMessage);
+      this.logger.error('Scene analysis failed:', error instanceof Error ? error : new Error('Unknown error'));
+      throw error;
     }
   }
 
-  async extractReferencePoints(scene: SceneAnalysis): Promise<SpatialAnalysis['referencePoints']> {
-    const { spatial } = scene;
-    const { bounds } = spatial;
-
+  async getSceneUnderstanding(analysis: SceneAnalysis) {
     return {
-      center: bounds.center.clone(),
-      highest: new Vector3(bounds.center.x, bounds.max.y, bounds.center.z),
-      lowest: new Vector3(bounds.center.x, bounds.min.y, bounds.center.z),
-      leftmost: new Vector3(bounds.min.x, bounds.center.y, bounds.center.z),
-      rightmost: new Vector3(bounds.max.x, bounds.center.y, bounds.center.z),
-      frontmost: new Vector3(bounds.center.x, bounds.center.y, bounds.max.z),
-      backmost: new Vector3(bounds.center.x, bounds.center.y, bounds.min.z),
+      complexity: analysis.spatial.complexity,
+      features: analysis.features.length,
+      landmarks: analysis.featureAnalysis.landmarks.length,
+      hasSymmetry: analysis.spatial.symmetry.hasSymmetry,
+      symmetry: analysis.spatial.symmetry,
+      dimensions: analysis.spatial.bounds.dimensions,
     };
   }
 
-  async calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SafetyConstraints> {
-    const { spatial } = scene;
-    const { bounds } = spatial;
-    const maxDimension = Math.max(
-      bounds.dimensions.x,
-      bounds.dimensions.y,
-      bounds.dimensions.z
-    );
-
-    return {
-      minDistance: maxDimension * 0.5,
-      maxDistance: maxDimension * 5.0,
-      minHeight: bounds.min.y,
-      maxHeight: bounds.max.y * 1.5,
-      restrictedZones: [],
-    };
-  }
-
-  async getSceneUnderstanding(scene: SceneAnalysis): Promise<{
-    complexity: SpatialAnalysis['complexity'];
-    symmetry: SpatialAnalysis['symmetry'];
-    features: FeatureAnalysis['features'];
-  }> {
-    const { spatial, featureAnalysis } = scene;
-
-    // Calculate complexity based on vertex and face count
-    const complexity = this.calculateComplexity(scene.glb.geometry);
-
-    // Calculate symmetry
-    const symmetry = await this.calculateSymmetry(scene);
-
-    return {
-      complexity,
-      symmetry,
-      features: featureAnalysis.features,
-    };
-  }
-
-  validateAnalysis(analysis: SceneAnalysis): ValidationResult {
+  validateAnalysis(analysis: SceneAnalysis) {
     const errors: string[] = [];
 
-    // Validate GLB analysis
-    if (!analysis.glb || !analysis.glb.geometry) {
+    if (!analysis.glb) {
       errors.push('Missing GLB analysis data');
     }
 
-    // Validate spatial analysis
-    if (!analysis.spatial || !analysis.spatial.bounds) {
+    if (!analysis.spatial) {
       errors.push('Missing spatial analysis data');
     }
 
-    // Validate safety constraints
     if (!analysis.safetyConstraints) {
       errors.push('Missing safety constraints');
     }
@@ -243,337 +558,11 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
   }
 
   getPerformanceMetrics(): PerformanceMetrics {
-    return { ...this.metrics };
-  }
-
-  // Private helper methods
-
-  private isValidFile(file: File): boolean {
-    if (!file) {
-      this.logger.error('No file provided');
-      return false;
-    }
-
-    // Check file size
-    if (file.size > this.config.maxFileSize) {
-      this.logger.error(`File size ${file.size} exceeds maximum allowed size ${this.config.maxFileSize}`);
-      throw new Error('File size exceeds maximum allowed size');
-    }
-
-    // Check file type
-    const fileType = file.type.toLowerCase();
-    if (!fileType.includes('gltf-binary')) {
-      this.logger.error(`Unsupported file type: ${fileType}`);
-      throw new Error('Unsupported file format');
-    }
-
-    return true;
-  }
-
-  private async loadGLB(file: File): Promise<GLTF> {
-    const startTime = performance.now();
-    try {
-      console.log('Starting GLB loading process...');
-      // Read file as ArrayBuffer
-      const bufferStartTime = performance.now();
-      const buffer = await file.arrayBuffer();
-      console.log('ArrayBuffer created in:', performance.now() - bufferStartTime, 'ms');
-      console.log('Buffer size:', buffer.byteLength, 'bytes');
-      this.logger.debug('Successfully read GLB file as ArrayBuffer');
-
-      // Use parseAsync with ArrayBuffer for direct binary loading
-      console.log('Starting GLB parsing...');
-      const parseStartTime = performance.now();
-      const gltf = await this.gltfLoader.parseAsync(buffer, '');
-      console.log('GLB parsing completed in:', performance.now() - parseStartTime, 'ms');
-      this.logger.debug('Successfully parsed GLB file');
-
-      // Extract only geometric data
-      console.log('Starting geometric data extraction...');
-      const extractStartTime = performance.now();
-      const scene = gltf.scene;
-      let meshCount = 0;
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          meshCount++;
-          // Store only geometric properties
-          const geometry = object.geometry;
-          if (geometry) {
-            // Calculate bounding box
-            geometry.computeBoundingBox();
-            const bbox = geometry.boundingBox;
-            
-            // Store key geometric data
-            this.geometricData.push({
-              position: object.position,
-              rotation: object.rotation,
-              scale: object.scale,
-              boundingBox: bbox,
-              vertices: geometry.attributes.position.count,
-              faces: geometry.index ? geometry.index.count / 3 : 0
-            });
-          }
-        }
-      });
-      console.log('Geometric data extraction completed in:', performance.now() - extractStartTime, 'ms');
-      console.log('Found', meshCount, 'meshes');
-
-      // Calculate overall scene bounds
-      console.log('Calculating scene bounds...');
-      const boundsStartTime = performance.now();
-      const sceneBounds = new THREE.Box3();
-      this.geometricData.forEach(data => {
-        if (data.boundingBox) {
-          const tempObject = new THREE.Object3D();
-          const tempGeometry = new THREE.BufferGeometry();
-          tempGeometry.setAttribute('position', new THREE.Float32BufferAttribute(data.boundingBox.getSize(new THREE.Vector3()).toArray(), 3));
-          tempObject.add(new THREE.Mesh(tempGeometry));
-          sceneBounds.expandByObject(tempObject);
-        }
-      });
-      console.log('Scene bounds calculation completed in:', performance.now() - boundsStartTime, 'ms');
-
-      // Store scene dimensions
-      this.sceneDimensions = {
-        width: sceneBounds.max.x - sceneBounds.min.x,
-        height: sceneBounds.max.y - sceneBounds.min.y,
-        depth: sceneBounds.max.z - sceneBounds.min.z,
-        center: sceneBounds.getCenter(new THREE.Vector3())
-      };
-
-      const duration = performance.now() - startTime;
-      console.log('Total GLB loading process completed in:', duration, 'ms');
-      this.logger.performance({
-        startTime,
-        endTime: performance.now(),
-        duration,
-        operations: [{
-          name: 'GLB loading',
-          duration,
-          success: true
-        }]
-      });
-
-      return gltf;
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error('GLB loading failed after:', duration, 'ms');
-      console.error('Error details:', error);
-      this.logger.error('Failed to load GLB file', error instanceof Error ? error : new Error('Unknown error'));
-      throw new Error('Failed to load GLB file');
-    }
-  }
-
-  private async analyzeGLB(gltf: GLTF): Promise<GLBAnalysis> {
-    const startTime = performance.now();
-    try {
-      console.log('Starting GLB analysis...');
-      const scene = gltf.scene;
-      let totalVertices = 0;
-      let totalFaces = 0;
-      const materials: Material[] = [];
-
-      // Calculate total geometry stats
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          const geometry = object.geometry;
-          if (geometry) {
-            totalVertices += geometry.attributes.position.count;
-            totalFaces += geometry.index ? geometry.index.count / 3 : 0;
-          }
-          if (object.material) {
-            materials.push(object.material);
-          }
-        }
-      });
-
-      // Calculate bounding box
-      const bbox = new THREE.Box3();
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.computeBoundingBox();
-          bbox.expandByObject(object);
-        }
-      });
-
-      const center = bbox.getCenter(new THREE.Vector3());
-      const dimensions = bbox.getSize(new THREE.Vector3());
-
-      const duration = performance.now() - startTime;
-      console.log('GLB analysis completed in:', duration, 'ms');
-
-      return {
-        fileInfo: {
-          name: gltf.parser.json.asset?.name || 'analyzed.glb',
-          size: gltf.parser.json.asset?.size || 0,
-          format: 'model/gltf-binary',
-          version: gltf.parser.json.version,
-        },
-        geometry: {
-          vertexCount: totalVertices,
-          faceCount: totalFaces,
-          boundingBox: bbox,
-          center,
-          dimensions,
-        },
-        materials,
-        metadata: gltf.parser.json,
-        performance: {
-          startTime,
-          endTime: performance.now(),
-          duration,
-          operations: [],
-        },
-      };
-    } catch (error) {
-      console.error('GLB analysis failed:', error);
-      throw error;
-    }
-  }
-
-  private async analyzeSpatial(scene: Object3D): Promise<SpatialAnalysis> {
-    // Create a bounding box from the scene's geometry
-    const bbox = new Box3();
-    scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.geometry.computeBoundingBox();
-        const objectBBox = object.geometry.boundingBox;
-        if (objectBBox) {
-          bbox.union(objectBBox);
-        }
-      }
-    });
-
-    const size = new Vector3();
-    bbox.getSize(size);
-    const center = new Vector3();
-    bbox.getCenter(center);
-
     return {
-      bounds: {
-        min: bbox.min.clone(),
-        max: bbox.max.clone(),
-        center: center.clone(),
-        dimensions: size.clone(),
-      },
-      referencePoints: await this.extractReferencePoints({
-        glb: {} as GLBAnalysis,
-        spatial: {
-          bounds: {
-            min: bbox.min.clone(),
-            max: bbox.max.clone(),
-            center: center.clone(),
-            dimensions: size.clone(),
-          },
-          referencePoints: {} as any,
-          symmetry: { hasSymmetry: false, symmetryPlanes: [] },
-          complexity: 'moderate',
-          performance: {} as PerformanceMetrics,
-        },
-        featureAnalysis: {} as FeatureAnalysis,
-        safetyConstraints: {} as SafetyConstraints,
-        orientation: {} as Orientation,
-        features: [],
-        performance: {} as PerformanceMetrics,
-      }),
-      symmetry: {
-        hasSymmetry: false,
-        symmetryPlanes: [],
-      },
-      complexity: 'moderate',
-      performance: {
-        startTime: Date.now(),
-        endTime: Date.now(),
-        duration: 0,
-        operations: [],
-      },
+      startTime: performance.now(),
+      endTime: performance.now(),
+      duration: 0,
+      operations: [],
     };
-  }
-
-  private async analyzeFeatures(scene: Object3D): Promise<FeatureAnalysis> {
-    // TODO: Implement feature detection
-    return {
-      features: [],
-      landmarks: [],
-      constraints: [],
-      performance: {
-        startTime: Date.now(),
-        endTime: Date.now(),
-        duration: 0,
-        operations: [],
-      },
-    };
-  }
-
-  private async calculateOrientation(scene: Object3D): Promise<Orientation> {
-    const bbox = new Box3().setFromObject(scene);
-    const center = new Vector3();
-    bbox.getCenter(center);
-
-    return {
-      front: new Vector3(0, 0, 1),
-      up: new Vector3(0, 1, 0),
-      right: new Vector3(1, 0, 0),
-      center: center.clone(),
-      scale: 1.0,
-    };
-  }
-
-  private calculateComplexity(geometry: GLBAnalysis['geometry']): SpatialAnalysis['complexity'] {
-    const { vertexCount, faceCount } = geometry;
-    const totalElements = vertexCount + faceCount;
-
-    if (totalElements < 1000) return 'simple';
-    if (totalElements < 10000) return 'moderate';
-    return 'complex';
-  }
-
-  private async calculateSymmetry(scene: SceneAnalysis): Promise<SpatialAnalysis['symmetry']> {
-    // TODO: Implement symmetry detection
-    return {
-      hasSymmetry: false,
-      symmetryPlanes: [],
-    };
-  }
-
-  private countVertices(scene: Object3D): number {
-    let count = 0;
-    scene.traverse((object) => {
-      if ('geometry' in object) {
-        const geometry = (object as any).geometry;
-        if (geometry.attributes?.position) {
-          count += geometry.attributes.position.count;
-        }
-      }
-    });
-    return count;
-  }
-
-  private countFaces(scene: Object3D): number {
-    let count = 0;
-    scene.traverse((object) => {
-      if ('geometry' in object) {
-        const geometry = (object as any).geometry;
-        if (geometry.index) {
-          count += geometry.index.count / 3;
-        } else if (geometry.attributes?.position) {
-          count += geometry.attributes.position.count / 3;
-        }
-      }
-    });
-    return count;
-  }
-
-  private extractMaterials(scene: Object3D): Material[] {
-    const materials: Material[] = [];
-    scene.traverse((object) => {
-      if ('material' in object) {
-        const material = (object as any).material;
-        if (material && !materials.includes(material)) {
-          materials.push(material);
-        }
-      }
-    });
-    return materials;
   }
 } 
