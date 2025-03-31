@@ -15,6 +15,18 @@ This document outlines the major components and responsibilities of the LLM-driv
 
 ---
 
+## 🌍 Environmental Analyzer Responsibilities
+
+| **Task**                | **What it does**                                                                  |
+|-------------------------|-----------------------------------------------------------------------------------|
+| Environment bounds      | Calculate and validate environment boundaries and constraints                    |
+| Object measurements     | Extract and validate object dimensions and positioning                           |
+| Distance calculations   | Compute distances from object to environment boundaries                          |
+| Camera constraints     | Define safe camera positioning and movement constraints                          |
+| Position validation    | Validate camera positions against environment and object constraints             |
+
+---
+
 ## 📊 Metadata Manager Responsibilities
 
 | **Task**                | **What it does**                                                                  |
