@@ -14,7 +14,16 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Basic scene understanding
 - **Interface**: See [Scene Analyzer Documentation](./scene-analyzer/README.md)
 
-### 2. Metadata Manager
+### 2. Environmental Analyzer
+- **Purpose**: Analyze environmental factors and constraints
+- **Key Features**:
+  - Lighting analysis and optimization
+  - Material property analysis
+  - Environmental constraint detection
+  - Performance optimization
+- **Interface**: See [Environmental Analyzer Documentation](./environmental-analyzer/README.md)
+
+### 3. Metadata Manager
 - **Purpose**: Handle user-specified metadata and model information
 - **Key Features**:
   - User metadata storage
@@ -23,7 +32,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Database integration
 - **Interface**: See [Metadata Manager Documentation](./metadata-manager/README.md)
 
-### 3. Prompt Compiler
+### 4. Prompt Compiler
 - **Purpose**: Transform user instructions into optimized LLM prompts
 - **Key Features**:
   - Natural language processing
@@ -32,7 +41,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Metadata tracking
 - **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
 
-### 4. LLM Engine
+### 5. LLM Engine
 - **Purpose**: Generate camera paths from compiled prompts
 - **Key Features**:
   - Intent parsing
@@ -41,7 +50,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Response validation
 - **Interface**: See [LLM Engine Documentation](./llm-engine/README.md)
 
-### 5. Scene Interpreter
+### 6. Scene Interpreter
 - **Purpose**: Convert LLM output into executable camera paths
 - **Key Features**:
   - Motion segment parsing
@@ -50,7 +59,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Path preview
 - **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md)
 
-### 6. Viewer Integration
+### 7. Viewer Integration
 - **Purpose**: Execute and visualize camera paths
 - **Key Features**:
   - Camera animation
@@ -59,7 +68,7 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
   - Export capabilities
 - **Interface**: See [Viewer Integration Documentation](./viewer-integration/README.md)
 
-### 7. Feedback System
+### 8. Feedback System
 - **Purpose**: Monitor and improve pipeline performance
 - **Key Features**:
   - Session logging
@@ -73,13 +82,14 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 ```mermaid
 graph TD
     A[User Input] --> B[Scene Analyzer]
-    B --> C[Metadata Manager]
-    C --> D[Prompt Compiler]
-    D --> E[LLM Engine]
-    E --> F[Scene Interpreter]
-    F --> G[Viewer Integration]
-    G --> H[Feedback System]
-    H --> D
+    B --> C[Environmental Analyzer]
+    C --> D[Metadata Manager]
+    D --> E[Prompt Compiler]
+    E --> F[LLM Engine]
+    F --> G[Scene Interpreter]
+    G --> H[Viewer Integration]
+    H --> I[Feedback System]
+    I --> E
 ```
 
 ## Data Flow
@@ -89,32 +99,38 @@ graph TD
    - Spatial relationships are extracted
    - Safety boundaries are calculated
 
-2. **Metadata Processing**
+2. **Environmental Analysis**
+   - Lighting conditions are analyzed
+   - Material properties are extracted
+   - Environmental constraints are identified
+   - Performance optimizations are applied
+
+3. **Metadata Processing**
    - User metadata is retrieved
    - Model information is processed
    - Feature points are identified
 
-3. **Input Processing**
+4. **Input Processing**
    - User provides natural language instruction
    - Scene context is gathered
    - Duration and constraints are specified
 
-4. **Prompt Generation**
+5. **Prompt Generation**
    - Prompt Compiler processes input
    - Optimizes for LLM consumption
    - Adds necessary context
 
-5. **Path Generation**
+6. **Path Generation**
    - LLM generates motion segments
    - Scene Interpreter validates and processes
    - Safety checks are applied
 
-6. **Execution**
+7. **Execution**
    - Viewer Integration executes path
    - Provides interactive controls
    - Enables export options
 
-7. **Feedback Loop**
+8. **Feedback Loop**
    - System collects performance data
    - User feedback is gathered
    - Improvements are identified
@@ -135,6 +151,7 @@ graph TD
 
 ### 1. Optimization Points
 - GLB parsing efficiency
+- Environmental analysis
 - Metadata management
 - Prompt token management
 - Path generation efficiency
@@ -165,13 +182,13 @@ graph TD
 
 ### 1. Planned Features
 - Advanced GLB analysis
-- Enhanced spatial understanding
+- Enhanced environmental understanding
 - Improved metadata management
 - Better performance monitoring
 
 ### 2. Research Areas
 - GLB processing optimization
-- Spatial reasoning improvement
+- Environmental analysis improvement
 - User experience enhancement
 - Performance optimization
 
