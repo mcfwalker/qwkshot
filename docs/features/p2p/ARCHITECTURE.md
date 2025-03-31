@@ -42,12 +42,14 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 - **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
 
 ### 5. LLM Engine
-- **Purpose**: Generate camera paths from compiled prompts
+- **Purpose**: Manage interaction with external LLM services to generate camera paths from compiled prompts.
 - **Key Features**:
-  - Intent parsing
-  - Motion segment composition
-  - Spatial reasoning
-  - Response validation
+  - LLM provider selection (OpenAI, Gemini, etc.)
+  - API request formatting and transmission
+  - Handling of provider-specific requirements
+  - API response reception and initial validation/parsing
+  - Error handling for API communication
+  - (Future) Retry and fallback logic
 - **Interface**: See [LLM Engine Documentation](./llm-engine/README.md)
 
 ### 6. Scene Interpreter
@@ -120,17 +122,23 @@ graph TD
    - Optimizes for LLM consumption
    - Adds necessary context
 
-6. **Path Generation**
-   - LLM generates motion segments
-   - Scene Interpreter validates and processes
-   - Safety checks are applied
+6. **LLM Interaction & Path Generation**
+   - LLM Engine selects provider
+   - Sends compiled prompt to external LLM service
+   - External LLM generates motion segments (keyframes)
+   - LLM Engine receives response, validates, and parses keyframes
 
-7. **Execution**
+7. **Path Interpretation & Validation**
+   - Scene Interpreter processes keyframes
+   - Interpolates motion, applies easing
+   - Performs detailed safety checks
+
+8. **Execution**
    - Viewer Integration executes path
    - Provides interactive controls
    - Enables export options
 
-8. **Feedback Loop**
+9. **Feedback Loop**
    - System collects performance data
    - User feedback is gathered
    - Improvements are identified

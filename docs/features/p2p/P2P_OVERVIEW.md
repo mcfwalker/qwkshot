@@ -53,13 +53,17 @@ This document outlines the major components and responsibilities of the LLM-driv
 
 ## 🧠 LLM Engine Responsibilities
 
-| **Task**                | **What it does**                                                                  |
-|-------------------------|-----------------------------------------------------------------------------------|
-| Parse intent            | Understand the user's language and convert to actionable motion instructions     |
-| Compose motion segments | Break down prompt into structured `cameraPath` JSON with segment types           |
-| Apply spatial reasoning | Use embedded scene context to reason about motion direction, proximity, etc.     |
-| Maintain camera framing | Ensure object stays in view, if asked                                             |
-| Respond in JSON         | Return structured, interpretable path format (typed segments, durations, etc.)   |
+| **Task**                       | **What it does**                                                                  |
+|--------------------------------|-----------------------------------------------------------------------------------|
+| Select LLM Provider            | Choose the active external LLM service (e.g., OpenAI, Gemini) based on config.   |
+| Apply Provider Formatting      | Add final, provider-specific instructions or formatting to the compiled prompt.    |
+| Send API Request               | Transmit the formatted prompt to the selected external LLM service API.            |
+| Receive API Response           | Capture the raw response (typically JSON text) from the external LLM.              |
+| Initial Response Validation    | Perform basic checks (e.g., is it valid JSON? Does it roughly match expected structure?). |
+| Handle API Errors              | Manage communication issues like timeouts, authentication errors, rate limits.      |
+| Parse Validated Response       | Convert the validated JSON string into usable keyframe data objects.               |
+| (Future) Manage Retries/Fallback| Implement strategies for handling temporary LLM failures or switching providers.    |
+| Pass Data to Interpreter       | Hand off the clean, parsed keyframe data to the Scene Interpreter component.       |
 
 ---
 
