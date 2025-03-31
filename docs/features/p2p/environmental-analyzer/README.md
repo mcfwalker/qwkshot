@@ -1,33 +1,27 @@
 # Environmental Analyzer
 
 ## Overview
-The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipeline that analyzes environmental factors and constraints within a 3D scene. It works in conjunction with the Scene Analyzer to provide comprehensive scene understanding for camera path generation.
+The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipeline that analyzes the spatial environment around a 3D object. It works in conjunction with the Scene Analyzer to provide precise measurements and constraints for camera path generation. The environment is modeled as a cubed volume with the object centered on its floor plane.
 
 ## Features
 
-### 1. Lighting Analysis
-- Light source detection and classification
-- Shadow mapping analysis
-- Ambient light assessment
-- Light intensity measurement
+### 1. Environment Analysis
+- Environment bounds calculation
+- Object positioning and dimensions
+- Distance measurements from object to boundaries
+- Camera positioning constraints
 
-### 2. Material Analysis
-- Material property extraction
-- Texture mapping analysis
-- Surface roughness assessment
-- Reflectivity analysis
+### 2. Spatial Measurements
+- Object bounding box analysis
+- Reference point calculations
+- Distance to boundary measurements
+- Height-based constraints
 
-### 3. Environmental Constraints
-- Occlusion detection
-- Visibility analysis
-- Viewport optimization
-- Environmental hazards identification
-
-### 4. Performance Optimization
-- LOD (Level of Detail) analysis
-- Memory usage optimization
-- Render performance assessment
-- Resource management
+### 3. Camera Constraints
+- Minimum and maximum camera heights
+- Safe distance calculations
+- Movement boundary validation
+- Position constraints
 
 ## Usage
 
@@ -38,47 +32,46 @@ import { EnvironmentalAnalyzerConfig } from '@/types/p2p';
 
 // Create analyzer instance
 const config: EnvironmentalAnalyzerConfig = {
-  maxLightSources: 100,
-  maxTextureSize: 2048,
+  environmentSize: {
+    width: 100,  // Environment width in units
+    height: 100, // Environment height in units
+    depth: 100   // Environment depth in units
+  },
   analysisOptions: {
-    analyzeLighting: true,
-    analyzeMaterials: true,
-    detectOcclusions: true,
-    optimizePerformance: true,
+    calculateDistances: true,
+    validateConstraints: true,
+    optimizeCameraSpace: true
   },
   debug: false,
   performanceMonitoring: true,
-  errorReporting: true,
+  errorReporting: true
 };
 
 const analyzer = new EnvironmentalAnalyzerImpl(config, logger);
 
-// Analyze scene environment
+// Analyze environment with scene analysis
 const analysis = await analyzer.analyzeEnvironment(sceneAnalysis);
 
-// Get lighting information
-const lighting = await analyzer.getLightingAnalysis(analysis);
+// Get environment measurements
+const measurements = await analyzer.getEnvironmentMeasurements(analysis);
 
-// Get material information
-const materials = await analyzer.getMaterialAnalysis(analysis);
-
-// Get environmental constraints
-const constraints = await analyzer.getEnvironmentalConstraints(analysis);
+// Get camera constraints
+const constraints = await analyzer.getCameraConstraints(analysis);
 ```
 
 ### Advanced Usage
 ```typescript
-// Analyze specific environmental aspects
-const lightingAnalysis = await analyzer.analyzeLighting(scene);
-const materialAnalysis = await analyzer.analyzeMaterials(scene);
-const constraintAnalysis = await analyzer.analyzeConstraints(scene);
+// Get detailed distance measurements
+const distances = await analyzer.getDistanceMeasurements(analysis);
 
-// Optimize scene for specific conditions
-const optimizedScene = await analyzer.optimizeForConditions(scene, {
-  preferredLighting: 'natural',
-  materialQuality: 'high',
-  performanceTarget: 'smooth',
+// Validate camera position
+const isValid = await analyzer.validateCameraPosition(analysis, {
+  position: new Vector3(10, 5, 10),
+  target: new Vector3(0, 0, 0)
 });
+
+// Get recommended camera ranges
+const ranges = await analyzer.getCameraRanges(analysis);
 ```
 
 ## Integration
@@ -89,7 +82,7 @@ const optimizedScene = await analyzer.optimizeForConditions(scene, {
 const sceneAnalysis = await sceneAnalyzer.analyzeScene(file);
 const environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
 
-// Get comprehensive scene understanding
+// Get comprehensive spatial understanding
 const understanding = {
   ...sceneAnalysis,
   environment: environmentalAnalysis,
@@ -98,63 +91,77 @@ const understanding = {
 
 ### Viewer Integration
 ```typescript
-// Apply environmental analysis to viewer
-viewer.applyEnvironmentalAnalysis(environmentalAnalysis);
+// Apply environmental constraints to viewer
+viewer.applyEnvironmentalConstraints(environmentalAnalysis);
 
 // Update viewer settings based on analysis
 viewer.updateSettings({
-  lighting: environmentalAnalysis.lighting,
-  materials: environmentalAnalysis.materials,
-  constraints: environmentalAnalysis.constraints,
+  cameraConstraints: environmentalAnalysis.cameraConstraints,
+  movementBounds: environmentalAnalysis.movementBounds,
+  heightLimits: environmentalAnalysis.heightLimits,
 });
 ```
 
+## Implementation Details
+
+### 1. Environment Structure
+- Cubed volume environment
+- Object centered on floor plane (z=0)
+- Clear boundary definitions
+- Reference point system
+
+### 2. Distance Calculations
+- Object to boundary distances
+- Safe camera distances
+- Height constraints
+- Movement boundaries
+
+### 3. Camera Constraints
+- Height-based limits
+- Distance-based limits
+- Movement restrictions
+- Position validation
+
 ## Performance Considerations
 
-### 1. Memory Usage
-- Efficient texture management
-- Optimized light source tracking
-- Smart material caching
-- Resource cleanup
+### 1. Calculation Efficiency
+- Optimized distance calculations
+- Efficient boundary checks
+- Cached measurements
+- Lazy evaluation
 
-### 2. Processing Time
-- Parallel analysis where possible
-- Incremental updates
-- Lazy loading of resources
-- Background processing
-
-### 3. Quality vs Performance
-- Adaptive quality settings
-- Dynamic LOD management
-- Resource prioritization
-- Performance monitoring
+### 2. Memory Usage
+- Minimal data structures
+- Efficient vector operations
+- Clean resource management
+- Optimized caching
 
 ## Error Handling
 
-### 1. Analysis Errors
-- Graceful degradation
-- Partial results handling
-- Error recovery
-- State preservation
+### 1. Validation Errors
+- Invalid camera positions
+- Out of bounds movements
+- Constraint violations
+- Measurement errors
 
 ### 2. Resource Errors
 - Memory management
-- Texture loading
-- Light source limits
-- Material constraints
+- Calculation failures
+- Validation failures
+- State preservation
 
 ## Future Enhancements
 
 ### 1. Planned Features
-- Advanced lighting simulation
-- Material PBR analysis
-- Dynamic environment adaptation
-- Real-time optimization
+- Dynamic environment scaling
+- Adaptive constraints
+- Performance optimization
+- Enhanced validation
 
 ### 2. Research Areas
-- AI-powered analysis
-- Predictive optimization
-- Adaptive quality control
+- Optimal camera positioning
+- Path optimization
+- Constraint relaxation
 - Performance profiling
 
 ## Related Documentation
