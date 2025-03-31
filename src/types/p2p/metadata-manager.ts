@@ -30,43 +30,91 @@ export interface MetadataManagerConfig extends P2PConfig {
 }
 
 /**
- * Model metadata
+ * Base metadata interface for all metadata types
+ */
+export interface BaseMetadata {
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  version: number;
+}
+
+/**
+ * Model metadata interface
  */
 export interface ModelMetadata extends BaseMetadata {
   modelId: string;
   userId: string;
-  file: File;
+  file: string;
   orientation: Orientation;
-  featurePoints: Feature[];
+  featurePoints: ModelFeaturePoint[];
   preferences: UserPreferences;
 }
 
 /**
- * User preferences for model viewing
+ * Model feature point interface
+ */
+export interface ModelFeaturePoint extends BaseMetadata {
+  modelId: string;
+  userId: string;
+  type: 'landmark' | 'region' | 'measurement';
+  position: Vector3;
+  description?: string;
+  measurements?: {
+    distance?: number;
+    angle?: number;
+    area?: number;
+  };
+}
+
+/**
+ * User preferences interface
  */
 export interface UserPreferences {
   defaultCameraDistance: number;
-  preferredViewingAngles: ViewingAngle[];
-  safetyConstraints: SafetyConstraints;
+  defaultCameraHeight: number;
+  preferredViewAngles: number[];
+  uiPreferences: {
+    showGrid: boolean;
+    showAxes: boolean;
+    showMeasurements: boolean;
+  };
 }
 
 /**
- * Viewing angle definition
+ * Orientation interface
  */
-export interface ViewingAngle {
+export interface Orientation {
   position: Vector3;
-  target: Vector3;
-  description: string;
+  rotation: Vector3;
+  scale: Vector3;
 }
 
 /**
- * Feature point with additional metadata
+ * Validation result interface
  */
-export interface ModelFeaturePoint extends Feature {
-  modelId: string;
-  userId: string;
-  type: 'landmark' | 'reference' | 'constraint';
-  metadata?: Record<string, unknown>;
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+/**
+ * Performance metrics interface
+ */
+export interface PerformanceMetrics {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  operations: Array<{
+    name: string;
+    duration: number;
+    success: boolean;
+    error?: string;
+  }>;
+  cacheHits: number;
+  cacheMisses: number;
+  databaseQueries: number;
+  averageResponseTime: number;
 }
 
 /**
@@ -132,34 +180,51 @@ export interface MetadataManagerFactory {
 }
 
 /**
- * Metadata Manager error types
+ * Base error class for metadata manager
  */
-export class MetadataManagerError extends P2PError {
-  constructor(message: string, code: string) {
-    super(message, code, 'MetadataManager');
+export class MetadataManagerError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'MetadataManagerError';
   }
 }
 
+/**
+ * Database error class
+ */
 export class DatabaseError extends MetadataManagerError {
   constructor(message: string) {
     super(message, 'DATABASE_ERROR');
+    this.name = 'DatabaseError';
   }
 }
 
+/**
+ * Validation error class
+ */
 export class ValidationError extends MetadataManagerError {
   constructor(message: string) {
     super(message, 'VALIDATION_ERROR');
+    this.name = 'ValidationError';
   }
 }
 
+/**
+ * Not found error class
+ */
 export class NotFoundError extends MetadataManagerError {
   constructor(message: string) {
-    super(message, 'NOT_FOUND_ERROR');
+    super(message, 'NOT_FOUND');
+    this.name = 'NotFoundError';
   }
 }
 
+/**
+ * Duplicate error class
+ */
 export class DuplicateError extends MetadataManagerError {
   constructor(message: string) {
-    super(message, 'DUPLICATE_ERROR');
+    super(message, 'DUPLICATE');
+    this.name = 'DuplicateError';
   }
 } 

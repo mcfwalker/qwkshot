@@ -26,6 +26,10 @@ interface PerformanceMetrics {
   endTime: number;
   duration: number;
   operations: PerformanceOperation[];
+  cacheHits: number;
+  cacheMisses: number;
+  databaseQueries: number;
+  averageResponseTime: number;
 }
 
 interface GLBAnalysis {
@@ -228,6 +232,10 @@ export class SceneAnalyzerImpl {
         endTime,
         duration: endTime - startTime,
         operations: [],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: 0
       },
     };
   }
@@ -271,6 +279,10 @@ export class SceneAnalyzerImpl {
         endTime,
         duration: endTime - startTime,
         operations: [],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: 0
       },
     };
   }
@@ -315,6 +327,10 @@ export class SceneAnalyzerImpl {
         endTime,
         duration: endTime - startTime,
         operations: [],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: 0
       },
     };
   }
@@ -488,7 +504,11 @@ export class SceneAnalyzerImpl {
           startTime,
           endTime: performance.now(),
           duration: 0,
-          operations: []
+          operations: [],
+          cacheHits: 0,
+          cacheMisses: 0,
+          databaseQueries: 0,
+          averageResponseTime: 0
         }
       });
       operations.push({ name: 'calculateSymmetry', duration: 0, success: true });
@@ -505,7 +525,11 @@ export class SceneAnalyzerImpl {
             startTime,
             endTime,
             duration: endTime - startTime,
-            operations: []
+            operations: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            databaseQueries: 0,
+            averageResponseTime: 0
           }
         },
         featureAnalysis,
@@ -516,7 +540,11 @@ export class SceneAnalyzerImpl {
           startTime,
           endTime,
           duration,
-          operations
+          operations,
+          cacheHits: 0,
+          cacheMisses: 0,
+          databaseQueries: 0,
+          averageResponseTime: 0
         }
       };
     } catch (error) {
@@ -563,6 +591,10 @@ export class SceneAnalyzerImpl {
       endTime: performance.now(),
       duration: 0,
       operations: [],
+      cacheHits: 0,
+      cacheMisses: 0,
+      databaseQueries: 0,
+      averageResponseTime: 0
     };
   }
 } 
