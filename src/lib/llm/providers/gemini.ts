@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { BaseLLMProvider } from '../base-provider';
-import { PathGenerationParams, ProviderCapabilities, GeminiProviderConfig, GenerationError, ProviderType } from '../types';
+import { ProviderCapabilities, GeminiProviderConfig, GenerationError, ProviderType } from '../types';
+import { CompiledPrompt } from '@/types/p2p';
 import { CameraKeyframe } from '@/types/camera';
 import { Vector3 } from 'three';
 
@@ -12,7 +13,7 @@ export default class GeminiProvider extends BaseLLMProvider {
     super(config);
     this.client = new GoogleGenerativeAI(config.apiKey);
     this.model = this.client.getGenerativeModel({ 
-      model: "gemini-2.0-flash",  // Hardcode the model name for now
+      model: config.model || "gemini-2.0-flash",
       generationConfig: {
         temperature: config.temperature || 0.7,
         maxOutputTokens: config.maxTokens || 2000,
@@ -20,9 +21,9 @@ export default class GeminiProvider extends BaseLLMProvider {
     });
   }
 
-  async generateCameraPath(params: PathGenerationParams): Promise<{ keyframes: CameraKeyframe[] }> {
+  async generateCameraPath(promptData: CompiledPrompt, duration: number): Promise<{ keyframes: CameraKeyframe[] }> {
     try {
-      // Enhanced prompt structure for Gemini
+      // Construct prompt using CompiledPrompt data
       const prompt = [
         'IMPORTANT: You are a camera path generator. Your response must be ONLY valid JSON in this exact format:',
         '```json',
@@ -30,15 +31,15 @@ export default class GeminiProvider extends BaseLLMProvider {
         '```',
         '',
         'Rules:',
-        '1. Sum of all keyframe durations MUST equal exactly ' + params.duration + ' seconds',
+        `1. Sum of all keyframe durations MUST equal exactly ${duration} seconds`,
         '2. All numbers must be finite and reasonable (no Infinity, NaN, or extreme values)',
         '3. No additional text or explanation - ONLY the JSON response',
         '4. Every keyframe MUST have a duration greater than 0 (minimum 0.1)',
         '5. First keyframe should have a reasonable duration (at least 0.5 seconds)',
         '',
-        this.generateSystemPrompt(params.sceneGeometry),
+        promptData.systemMessage,
         '',
-        this.generateUserPrompt(params)
+        promptData.userMessage
       ].join('\n');
 
       const result = await this.model.generateContent(prompt);
@@ -49,13 +50,9 @@ export default class GeminiProvider extends BaseLLMProvider {
         this.throwError('No response from Gemini', 'GENERATION_ERROR');
       }
 
-      // Log the raw response for debugging
       console.log('Raw Gemini response:', text);
 
-      // Extract JSON, handling markdown code blocks more robustly
       let jsonStr = text;
-      
-      // Check for JSON wrapped in code blocks
       const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (codeBlockMatch && codeBlockMatch[1]) {
         jsonStr = codeBlockMatch[1].trim();
@@ -65,27 +62,20 @@ export default class GeminiProvider extends BaseLLMProvider {
       try {
         const parsed = JSON.parse(jsonStr);
         
-        // Validate keyframes array exists and has correct format
         if (!parsed.keyframes || !Array.isArray(parsed.keyframes) || parsed.keyframes.length === 0) {
           console.error('Missing or invalid keyframes array:', parsed);
           this.throwError('Missing or invalid keyframes array', 'GENERATION_ERROR', parsed);
         }
 
-        // Validate keyframe format and convert to Vector3
         const keyframes: CameraKeyframe[] = parsed.keyframes.map((kf: any, index: number) => {
-          // Fix any zero durations BEFORE validation
           if (kf.duration === 0) {
             console.log(`Fixing zero duration at keyframe ${index}`);
-            kf.duration = 0.5; // Use a reasonable minimum duration
+            kf.duration = 0.5;
           }
-          
-          // Validate after fixing duration
           if (!this.validateKeyframe(kf)) {
-            // Log more details about the invalid keyframe
             console.error(`Invalid keyframe at index ${index}:`, JSON.stringify(kf));
             this.throwError(`Invalid keyframe at index ${index}`, 'GENERATION_ERROR', kf);
           }
-          
           return {
             position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
             target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
@@ -93,81 +83,55 @@ export default class GeminiProvider extends BaseLLMProvider {
           };
         });
 
-        // Validate total duration
         const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-        if (Math.abs(totalDuration - params.duration) > 0.001) {
-          // Adjust durations proportionally to match the requested duration
-          const scaleFactor = params.duration / totalDuration;
-          keyframes.forEach(kf => {
-            kf.duration *= scaleFactor;
-          });
-          console.log(`Adjusted keyframe durations to match requested duration (${params.duration}s)`);
+        const tolerance = 0.01;
+        if (Math.abs(totalDuration - duration) > tolerance) {
+          console.warn(`Total duration (${totalDuration.toFixed(2)}s) differs from requested (${duration}s). Adjusting...`);
+          const scaleFactor = totalDuration > tolerance ? duration / totalDuration : 1;
+          if (scaleFactor !== 1) { 
+            keyframes.forEach(kf => { kf.duration *= scaleFactor; });
+            console.log(`Adjusted keyframe durations by factor ${scaleFactor.toFixed(3)}.`);
+          }
         }
 
         return { keyframes };
       } catch (parseError) {
         console.error('JSON parse error:', parseError);
         console.error('Failed to parse JSON string:', jsonStr);
-        
-        // Try to clean up the JSON string further and attempt parsing again
         try {
-          // Sometimes there might be issues with escaped characters or whitespace
           const cleanedJson = jsonStr.replace(/\\n/g, '').replace(/\\"/g, '"').trim();
           console.log('Attempting to parse cleaned JSON:', cleanedJson);
           const parsed = JSON.parse(cleanedJson);
-          
           if (parsed.keyframes && Array.isArray(parsed.keyframes) && parsed.keyframes.length > 0) {
             console.log('Successfully parsed cleaned JSON');
-            // Process keyframes as in the main code path
             const keyframes: CameraKeyframe[] = parsed.keyframes.map((kf: any, index: number) => {
-              if (kf.duration === 0) {
-                console.log(`Fixing zero duration at keyframe ${index}`);
-                kf.duration = 0.5;
-              }
-              
+              if (kf.duration === 0) kf.duration = 0.5;
               if (!this.validateKeyframe(kf)) {
-                console.error(`Invalid keyframe in cleaned JSON at index ${index}:`, JSON.stringify(kf));
-                this.throwError(`Invalid keyframe at index ${index}`, 'GENERATION_ERROR', kf);
+                this.throwError(`Invalid keyframe in cleaned JSON at index ${index}`, 'GENERATION_ERROR', kf);
               }
-              
-              return {
-                position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
-                target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
-                duration: kf.duration
-              };
+              return { position: new Vector3(kf.position.x, kf.position.y, kf.position.z), target: new Vector3(kf.target.x, kf.target.y, kf.target.z), duration: kf.duration };
             });
-            
-            // Validate total duration as in the main code path
             const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-            if (Math.abs(totalDuration - params.duration) > 0.001) {
-              const scaleFactor = params.duration / totalDuration;
-              keyframes.forEach(kf => {
-                kf.duration *= scaleFactor;
-              });
-              console.log(`Adjusted keyframe durations to match requested duration (${params.duration}s)`);
+            const tolerance = 0.01;
+            if (Math.abs(totalDuration - duration) > tolerance) {
+              const scaleFactor = totalDuration > tolerance ? duration / totalDuration : 1;
+              if (scaleFactor !== 1) {
+                keyframes.forEach(kf => { kf.duration *= scaleFactor; });
+                console.log(`Adjusted keyframe durations by factor ${scaleFactor.toFixed(3)}.`);
+              }
             }
-            
             return { keyframes };
           }
         } catch (secondError) {
           console.error('Failed second attempt to parse JSON:', secondError);
         }
-        
-        this.throwError(
-          'Failed to parse JSON response',
-          'GENERATION_ERROR',
-          { response: text, error: parseError }
-        );
+        this.throwError('Failed to parse JSON response', 'GENERATION_ERROR', { response: text, error: parseError });
       }
     } catch (error) {
       if (error instanceof GenerationError) {
         throw error;
       }
-      this.throwError(
-        error instanceof Error ? error.message : 'Failed to generate camera path',
-        'GENERATION_ERROR',
-        error
-      );
+      this.throwError(error instanceof Error ? error.message : 'Failed to generate camera path', 'GENERATION_ERROR', error);
     }
   }
 

@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-03-31-1253 - P2P Pipeline Refactoring (Prompt Compiler & LLM Engine)
 - M3DV-SR-2025-03-31-0817 - Metadata Manager Implementation and P2P Pipeline Integration
 - M3DV-SR-2025-03-30-1144 - Scene Analyzer Implementation Progress
 - M3DV-SR-2025-03-29-1853 - Health Panel Improvements and Model Operations Fix

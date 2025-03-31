@@ -7,16 +7,20 @@ import type {
   Logger,
 } from './shared';
 import type { SceneAnalysis } from './scene-analyzer';
+import type { EnvironmentalAnalysis } from './environmental-analyzer';
 import type { ModelMetadata } from './metadata-manager';
 
 export type CameraStyle = 'cinematic' | 'documentary' | 'technical' | 'artistic';
 
 export interface CameraConstraints {
-  maxSpeed: number;
+  maxSpeed?: number;
   minDistance: number;
   maxDistance: number;
-  maxAngleChange: number;
-  minFramingMargin: number;
+  maxAngleChange?: number;
+  minFramingMargin?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  restrictedZones?: any[];
 }
 
 export interface SceneContext {
@@ -82,11 +86,20 @@ export interface PromptCompiler {
 
   /**
    * Compile a user prompt into an optimized format
+   *
+   * @param userInput Raw user instruction string.
+   * @param sceneAnalysis Analysis result from the Scene Analyzer.
+   * @param envAnalysis Analysis result from the Environmental Analyzer.
+   * @param modelMetadata Metadata associated with the current model.
+   * @param currentCameraState Current position and target of the camera.
+   * @returns A promise resolving to the compiled prompt object.
    */
   compilePrompt(
-    text: string,
-    analysis: SceneAnalysis,
-    metadata: ModelMetadata
+    userInput: string,
+    sceneAnalysis: SceneAnalysis,
+    envAnalysis: EnvironmentalAnalysis,
+    modelMetadata: ModelMetadata,
+    currentCameraState: { position: Vector3; target: Vector3 }
   ): Promise<CompiledPrompt>;
 
   /**
@@ -98,4 +111,9 @@ export interface PromptCompiler {
    * Get performance metrics
    */
   getPerformanceMetrics(): PerformanceMetrics;
+
+  /**
+   * Optimize a compiled prompt (e.g., reduce token count)
+   */
+  optimizePrompt(prompt: CompiledPrompt): Promise<CompiledPrompt>;
 } 

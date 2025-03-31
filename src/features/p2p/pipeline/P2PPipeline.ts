@@ -21,18 +21,20 @@ import type { MetadataManager, ModelMetadata } from '../../../types/p2p';
 import type { PromptCompiler, CompiledPrompt } from '../../../types/p2p';
 import type { LLMEngine, CameraPath, CameraKeyframe } from '../../../types/p2p';
 import type { SceneInterpreter, CameraCommand } from '../../../types/p2p';
+import { P2PConfig } from '../../../types/p2p/shared';
+import type { EnvironmentalAnalyzer, EnvironmentalAnalysis } from '../../../types/p2p/environmental-analyzer';
+import { P2PPipeline as IP2PPipeline, P2PPipelineConfig, PathGenerationError, AnimationError } from '../../../types/p2p/pipeline';
 
 /**
  * Implementation of the P2P Pipeline
  */
-export class P2PPipelineImpl implements P2PPipeline {
-  private config: P2PPipelineConfig;
-  private logger: Logger;
-  private sceneAnalyzer: SceneAnalyzer;
-  private metadataManager: MetadataManager;
-  private promptCompiler: PromptCompiler;
-  private llmEngine: LLMEngine;
-  private sceneInterpreter: SceneInterpreter;
+export class P2PPipelineImpl implements IP2PPipeline {
+  public readonly config: P2PConfig;
+  public readonly logger: Logger;
+  public readonly sceneAnalyzer: SceneAnalyzer;
+  public readonly envAnalyzer: EnvironmentalAnalyzer;
+  public readonly metadataManager: MetadataManager;
+  public readonly promptCompiler: PromptCompiler;
   private metrics: PerformanceMetrics = {
     startTime: 0,
     endTime: 0,
@@ -41,24 +43,24 @@ export class P2PPipelineImpl implements P2PPipeline {
   };
 
   constructor(
-    config: P2PPipelineConfig,
+    config: P2PConfig,
     logger: Logger,
     sceneAnalyzer: SceneAnalyzer,
+    envAnalyzer: EnvironmentalAnalyzer,
     metadataManager: MetadataManager,
-    promptCompiler: PromptCompiler,
-    llmEngine: LLMEngine,
-    sceneInterpreter: SceneInterpreter
+    promptCompiler: PromptCompiler
   ) {
     this.config = config;
     this.logger = logger;
     this.sceneAnalyzer = sceneAnalyzer;
+    this.envAnalyzer = envAnalyzer;
     this.metadataManager = metadataManager;
     this.promptCompiler = promptCompiler;
-    this.llmEngine = llmEngine;
-    this.sceneInterpreter = sceneInterpreter;
+
+    this.logger.info('P2P Pipeline initialized');
   }
 
-  async initialize(config: P2PPipelineConfig): Promise<void> {
+  async initialize(config: P2PConfig): Promise<void> {
     try {
       this.logger.info('Initializing P2P Pipeline');
       this.config = config;
@@ -68,8 +70,7 @@ export class P2PPipelineImpl implements P2PPipeline {
         this.sceneAnalyzer.initialize(config.sceneAnalyzer),
         this.metadataManager.initialize(config.metadataManager),
         this.promptCompiler.initialize(config.promptCompiler),
-        this.llmEngine.initialize(config.llmEngine),
-        this.sceneInterpreter.initialize(config.sceneInterpreter),
+        this.envAnalyzer.initialize(config.envAnalyzer),
       ]);
 
       this.logger.info('P2P Pipeline initialized successfully');
@@ -289,4 +290,51 @@ export class P2PPipelineImpl implements P2PPipeline {
     // TODO: Implement camera retrieval from Three.js scene
     throw new Error('Camera retrieval not implemented');
   }
-} 
+
+  async compileForLLM(
+    userInput: string,
+    modelId: string,
+    currentCameraState: { position: Vector3; target: Vector3 } // Assuming Vector3 is available
+  ): Promise<CompiledPrompt | null> {
+    this.logger.info(`Compiling prompt for model: ${modelId}`);
+    try {
+      // 1. Analyze Scene (or get cached analysis)
+      // TODO: Handle file loading/retrieval based on modelId
+      const sceneAnalysis = await this.sceneAnalyzer.analyzeScene('path/to/model.glb');
+      if (!sceneAnalysis) {
+        this.logger.error('Scene analysis failed');
+        return null;
+      }
+
+      // 2. Get Model Metadata
+      const modelMetadata = await this.metadataManager.getModelMetadata(modelId);
+      if (!modelMetadata) {
+        this.logger.error(`Metadata not found for model: ${modelId}`);
+        return null;
+      }
+
+      // 3. Analyze Environment (using scene analysis result)
+      const envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
+      if (!envAnalysis) {
+        this.logger.error('Environmental analysis failed');
+        return null;
+      }
+      // We might need envAnalysis data in the prompt compiler too?
+
+      // 4. Compile Prompt
+      const compiledPrompt = await this.promptCompiler.compilePrompt(
+        userInput,
+        sceneAnalysis,
+        modelMetadata,
+        currentCameraState
+      );
+
+      this.logger.info(`Prompt compiled successfully for request: ${compiledPrompt.metadata.requestId}`);
+      return compiledPrompt;
+
+    } catch (error) {
+      this.logger.error('Error during prompt compilation pipeline:', error);
+      return null;
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { BaseLLMProvider } from '../base-provider';
 import { PathGenerationParams, ProviderCapabilities, OpenAIProviderConfig, GenerationError } from '../types';
+import { CompiledPrompt } from '@/types/p2p';
 import { CameraKeyframe } from '@/types/camera';
 import { Vector3 } from 'three';
 
@@ -15,18 +16,18 @@ export default class OpenAIProvider extends BaseLLMProvider {
     });
   }
 
-  async generateCameraPath(params: PathGenerationParams): Promise<{ keyframes: CameraKeyframe[] }> {
+  async generateCameraPath(promptData: CompiledPrompt, duration: number): Promise<{ keyframes: CameraKeyframe[] }> {
     try {
       const completion = await this.client.chat.completions.create({
         model: this.config.model || "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: this.generateSystemPrompt(params.sceneGeometry)
+            content: promptData.systemMessage
           },
           {
             role: "user",
-            content: this.generateUserPrompt(params)
+            content: promptData.userMessage
           }
         ],
         temperature: this.config.temperature || 0.7,
@@ -44,30 +45,34 @@ export default class OpenAIProvider extends BaseLLMProvider {
         this.throwError('Invalid keyframes format in response', 'GENERATION_ERROR', parsed);
       }
 
-      // Convert plain objects to Vector3 instances
-      const keyframes: CameraKeyframe[] = parsed.keyframes.map((kf: any) => ({
-        position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
-        target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
-        duration: kf.duration
-      }));
+      const keyframes: CameraKeyframe[] = parsed.keyframes.map((kf: any) => {
+        if (kf.duration === 0) {
+            console.warn('OpenAI returned keyframe with zero duration, setting to 0.5s');
+            kf.duration = 0.5;
+        }
+        return {
+            position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
+            target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
+            duration: kf.duration
+        };
+      });
+
+      const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
+      const tolerance = 0.01;
+      if (Math.abs(totalDuration - duration) > tolerance) {
+        console.warn(`OpenAI total duration (${totalDuration.toFixed(2)}s) differs from requested (${duration}s). Adjusting...`);
+        const scaleFactor = totalDuration > tolerance ? duration / totalDuration : 1;
+        if (scaleFactor !== 1) {
+          keyframes.forEach(kf => { kf.duration *= scaleFactor; });
+          console.log(`Adjusted keyframe durations by factor ${scaleFactor.toFixed(3)}.`);
+        }
+      }
 
       return { keyframes };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        this.throwError(
-          `OpenAI API error: ${error.message}`,
-          'GENERATION_ERROR',
-          {
-            status: error.status,
-            code: error.code,
-            type: error.type
-          }
-        );
-      }
-      this.throwError(
-        error instanceof Error ? error.message : 'Failed to generate camera path',
-        'GENERATION_ERROR'
-      );
+      // Simplify error handling further: just re-throw the original error
+      console.error('Error during OpenAI path generation:', error); // Add logging
+      throw error; 
     }
   }
 

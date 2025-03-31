@@ -8,7 +8,6 @@ import {
   SafetyConstraints,
   Feature,
   Logger,
-  Orientation,
 } from './shared';
 
 /**
@@ -167,4 +166,17 @@ export class ValidationError extends SceneAnalyzerError {
   constructor(message: string) {
     super(message, 'VALIDATION_ERROR');
   }
+}
+
+/**
+ * Represents the calculated orientation and scale of the model.
+ */
+export interface Orientation {
+  front: Vector3;
+  up: Vector3;
+  right: Vector3;
+  center: Vector3;
+  scale: number;
+  position?: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
 } 

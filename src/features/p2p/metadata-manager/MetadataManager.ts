@@ -1,22 +1,38 @@
 import { DatabaseAdapter } from './adapters/DatabaseAdapter';
 import { CacheAdapter } from './cache/CacheAdapter';
-import { ModelMetadata, ModelFeaturePoint, UserPreferences, DatabaseError, NotFoundError } from '../../../types/p2p/metadata-manager';
+import {
+  ModelMetadata,
+  ModelFeaturePoint,
+  UserPreferences,
+  DatabaseError,
+  NotFoundError,
+  MetadataManagerConfig,
+  MetadataManager as IMetadataManager
+} from '../../../types/p2p/metadata-manager';
 import { Orientation } from '../../../types/p2p/shared';
 import { Logger } from '../../../types/p2p/shared';
 
-export interface MetadataManagerConfig {
-  cacheTTL?: number;  // Time-to-live for cache entries in milliseconds
-  cacheEnabled?: boolean;  // Whether to enable caching
-  retryAttempts?: number;  // Number of retry attempts for database operations
-}
-
 const DEFAULT_CONFIG: Required<MetadataManagerConfig> = {
-  cacheTTL: 5 * 60 * 1000, // 5 minutes
-  cacheEnabled: true,
-  retryAttempts: 3
+  database: {
+    table: 'model_metadata',
+    schema: 'public',
+  },
+  caching: {
+    enabled: true,
+    ttl: 5 * 60 * 1000,
+  },
+  validation: {
+    strict: false,
+    maxFeaturePoints: 100,
+  },
+  debug: false,
+  performance: {
+    enabled: true,
+    logInterval: 5000,
+  },
 };
 
-export class MetadataManager {
+export class MetadataManagerImpl implements IMetadataManager {
   private config: Required<MetadataManagerConfig>;
   private db: DatabaseAdapter;
   private cache: CacheAdapter;
@@ -26,12 +42,18 @@ export class MetadataManager {
     dbAdapter: DatabaseAdapter,
     cacheAdapter: CacheAdapter,
     logger: Logger,
-    config: MetadataManagerConfig = {}
+    config: MetadataManagerConfig = DEFAULT_CONFIG
   ) {
     this.db = dbAdapter;
     this.cache = cacheAdapter;
     this.logger = logger;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = {
+      database: { ...DEFAULT_CONFIG.database, ...config.database },
+      caching: { ...DEFAULT_CONFIG.caching, ...config.caching },
+      validation: { ...DEFAULT_CONFIG.validation, ...config.validation },
+      debug: config.debug ?? DEFAULT_CONFIG.debug,
+      performance: { ...DEFAULT_CONFIG.performance, ...config.performance },
+    };
   }
 
   /**
@@ -62,7 +84,7 @@ export class MetadataManager {
   ): Promise<void> {
     try {
       await this.db.storeModelMetadata(modelId, metadata);
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         await this.cache.removeModelMetadata(modelId); // Invalidate cache
       }
       this.logger.info(`Stored metadata for model: ${modelId}`);
@@ -81,7 +103,7 @@ export class MetadataManager {
   async getModelMetadata(modelId: string): Promise<ModelMetadata> {
     try {
       // Try cache first if enabled
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         const cached = await this.cache.getModelMetadata(modelId);
         if (cached) {
           this.logger.debug(`Cache hit for model metadata: ${modelId}`);
@@ -93,8 +115,8 @@ export class MetadataManager {
       const metadata = await this.db.getModelMetadata(modelId);
       
       // Store in cache if enabled
-      if (this.config.cacheEnabled) {
-        await this.cache.setModelMetadata(modelId, metadata, this.config.cacheTTL);
+      if (this.config.caching.enabled) {
+        await this.cache.setModelMetadata(modelId, metadata, this.config.caching.ttl);
       }
 
       return metadata;
@@ -113,7 +135,7 @@ export class MetadataManager {
   async updateModelOrientation(modelId: string, orientation: Orientation): Promise<void> {
     try {
       await this.db.updateModelOrientation(modelId, orientation);
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         await this.cache.removeModelMetadata(modelId); // Invalidate cache
       }
       this.logger.info(`Updated orientation for model: ${modelId}`);
@@ -135,7 +157,7 @@ export class MetadataManager {
   ): Promise<void> {
     try {
       await this.db.addFeaturePoint(modelId, point);
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         await this.cache.removeFeaturePoints(modelId); // Invalidate cache
       }
       this.logger.info(`Added feature point for model: ${modelId}`);
@@ -154,7 +176,7 @@ export class MetadataManager {
   async removeFeaturePoint(modelId: string, pointId: string): Promise<void> {
     try {
       await this.db.removeFeaturePoint(modelId, pointId);
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         await this.cache.removeFeaturePoints(modelId); // Invalidate cache
       }
       this.logger.info(`Removed feature point ${pointId} for model: ${modelId}`);
@@ -173,7 +195,7 @@ export class MetadataManager {
   async getFeaturePoints(modelId: string): Promise<ModelFeaturePoint[]> {
     try {
       // Try cache first if enabled
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         const cached = await this.cache.getFeaturePoints(modelId);
         if (cached) {
           this.logger.debug(`Cache hit for feature points: ${modelId}`);
@@ -185,8 +207,8 @@ export class MetadataManager {
       const points = await this.db.getFeaturePoints(modelId);
       
       // Store in cache if enabled
-      if (this.config.cacheEnabled) {
-        await this.cache.setFeaturePoints(modelId, points, this.config.cacheTTL);
+      if (this.config.caching.enabled) {
+        await this.cache.setFeaturePoints(modelId, points, this.config.caching.ttl);
       }
 
       return points;
@@ -205,7 +227,7 @@ export class MetadataManager {
   async updateUserPreferences(modelId: string, preferences: UserPreferences): Promise<void> {
     try {
       await this.db.updateUserPreferences(modelId, preferences);
-      if (this.config.cacheEnabled) {
+      if (this.config.caching.enabled) {
         await this.cache.removeModelMetadata(modelId); // Invalidate cache
       }
       this.logger.info(`Updated preferences for model: ${modelId}`);
@@ -222,7 +244,7 @@ export class MetadataManager {
    * Get cache statistics
    */
   getCacheStats(): Record<string, unknown> {
-    if (!this.config.cacheEnabled) {
+    if (!this.config.caching.enabled) {
       return { enabled: false };
     }
     return this.cache.getStats();
@@ -232,9 +254,31 @@ export class MetadataManager {
    * Clear all cached data
    */
   async clearCache(): Promise<void> {
-    if (this.config.cacheEnabled) {
+    if (this.config.caching.enabled) {
       await this.cache.clear();
       this.logger.info('Cache cleared');
     }
+  }
+
+  validateMetadata(metadata: ModelMetadata): { isValid: boolean; errors: string[] } {
+    this.logger.debug('validateMetadata called (stub)', metadata);
+    // TODO: Implement actual validation logic based on config.validation rules
+    const errors: string[] = [];
+    if (metadata.featurePoints && metadata.featurePoints.length > this.config.validation.maxFeaturePoints) {
+      errors.push(`Exceeded maximum feature points (${this.config.validation.maxFeaturePoints})`);
+    }
+    // Add more checks...
+    return { isValid: errors.length === 0, errors };
+  }
+
+  getPerformanceMetrics(): any { // Return type might need refinement
+    this.logger.debug('getPerformanceMetrics called (stub)');
+    // TODO: Implement actual performance metrics aggregation
+    // Access db/cache adapters for their metrics if they expose them
+    return { 
+        cacheStats: this.getCacheStats(), 
+        dbQueries: 0, // Placeholder 
+        // Potentially add average response times, etc.
+    };
   }
 } 

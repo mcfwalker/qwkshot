@@ -1,12 +1,13 @@
 import { CameraKeyframe } from '@/types/camera';
+import { CompiledPrompt } from '@/types/p2p';
 
 /**
  * Parameters required for generating a camera path
  */
 export interface PathGenerationParams {
-  instruction: string;
-  sceneGeometry: SceneGeometry;
+  prompt: string;
   duration: number;
+  sceneGeometry: SceneGeometry;
 }
 
 export interface SceneGeometry {
@@ -93,9 +94,10 @@ export type ProviderType = 'openai' | 'gemini';
  * Core interface that all LLM providers must implement
  */
 export interface LLMProvider {
-  generateCameraPath(params: PathGenerationParams): Promise<{ keyframes: CameraKeyframe[] }>;
+  generateCameraPath(promptData: CompiledPrompt, duration: number): Promise<{ keyframes: CameraKeyframe[] }>;
   validateConfiguration(): Promise<boolean>;
   getCapabilities(): ProviderCapabilities;
+  getProviderType(): ProviderType;
 }
 
 /**
