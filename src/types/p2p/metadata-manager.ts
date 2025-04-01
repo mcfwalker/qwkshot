@@ -2,7 +2,9 @@ import { Vector3 } from 'three';
 import {
   P2PConfig,
   BaseMetadata,
-  Logger
+  Logger,
+  SerializedVector3,
+  SerializedOrientation
 } from './shared';
 
 /**
@@ -31,9 +33,44 @@ export interface ModelMetadata extends BaseMetadata {
   modelId: string;
   userId: string;
   file: string;
-  orientation: Orientation;
+  orientation: SerializedOrientation;
   featurePoints: ModelFeaturePoint[];
   preferences: UserPreferences;
+  analysis?: {
+    geometry?: {
+      vertexCount: number;
+      faceCount: number;
+      boundingBox: {
+        min: SerializedVector3;
+        max: SerializedVector3;
+      };
+      center: SerializedVector3;
+      dimensions: SerializedVector3;
+    };
+    environment?: {
+      bounds: {
+        min: SerializedVector3;
+        max: SerializedVector3;
+        center: SerializedVector3;
+        dimensions: {
+          width: number;
+          height: number;
+          depth: number;
+        };
+      };
+      distances: Record<string, number>;
+      constraints: {
+        minDistance: number;
+        maxDistance: number;
+        minHeight: number;
+        maxHeight: number;
+      };
+    };
+    performance?: {
+      sceneAnalysis: PerformanceMetrics;
+      environmentalAnalysis: PerformanceMetrics;
+    };
+  };
 }
 
 /**

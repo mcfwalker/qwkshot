@@ -87,32 +87,63 @@ export class P2PPipelineImpl implements IP2PPipeline {
     this.logger.info('P2P Pipeline initialized');
   }
 
-  private serializeVector3(v: Vector3): SerializedVector3 {
-    return { x: v.x, y: v.y, z: v.z };
+  private serializeVector3(v: Vector3 | undefined | null): SerializedVector3 {
+    if (!v) {
+      return { x: 0, y: 0, z: 0 };
+    }
+    return { x: v.x || 0, y: v.y || 0, z: v.z || 0 };
   }
 
   private serializeGeometry(geometry: any) {
+    if (!geometry) {
+      return {
+        vertexCount: 0,
+        faceCount: 0,
+        boundingBox: {
+          min: { x: 0, y: 0, z: 0 },
+          max: { x: 0, y: 0, z: 0 }
+        },
+        center: { x: 0, y: 0, z: 0 },
+        dimensions: { x: 0, y: 0, z: 0 }
+      };
+    }
+
+    const defaultVector = new Vector3(0, 0, 0);
     return {
-      vertexCount: geometry.vertexCount,
-      faceCount: geometry.faceCount,
+      vertexCount: geometry.vertexCount || 0,
+      faceCount: geometry.faceCount || 0,
       boundingBox: {
-        min: this.serializeVector3(geometry.boundingBox.min),
-        max: this.serializeVector3(geometry.boundingBox.max)
+        min: this.serializeVector3(geometry.boundingBox?.min || defaultVector),
+        max: this.serializeVector3(geometry.boundingBox?.max || defaultVector)
       },
-      center: this.serializeVector3(geometry.center),
-      dimensions: this.serializeVector3(geometry.dimensions)
+      center: this.serializeVector3(geometry.center || defaultVector),
+      dimensions: this.serializeVector3(geometry.dimensions || defaultVector)
     };
   }
 
   private serializeEnvironmentBounds(bounds: any) {
+    if (!bounds) {
+      return {
+        min: { x: 0, y: 0, z: 0 },
+        max: { x: 0, y: 0, z: 0 },
+        center: { x: 0, y: 0, z: 0 },
+        dimensions: {
+          width: 0,
+          height: 0,
+          depth: 0
+        }
+      };
+    }
+
+    const defaultVector = new Vector3(0, 0, 0);
     return {
-      min: this.serializeVector3(bounds.min),
-      max: this.serializeVector3(bounds.max),
-      center: this.serializeVector3(bounds.center),
+      min: this.serializeVector3(bounds.min || defaultVector),
+      max: this.serializeVector3(bounds.max || defaultVector),
+      center: this.serializeVector3(bounds.center || defaultVector),
       dimensions: {
-        width: bounds.dimensions.width,
-        height: bounds.dimensions.height,
-        depth: bounds.dimensions.depth
+        width: bounds.dimensions?.width || 0,
+        height: bounds.dimensions?.height || 0,
+        depth: bounds.dimensions?.depth || 0
       }
     };
   }
@@ -233,26 +264,20 @@ export class P2PPipelineImpl implements IP2PPipeline {
         // Generate new model ID
         modelId = crypto.randomUUID();
         
-        // Store combined metadata with serialized vectors
-        const metadataToStore = {
+        // Create metadata object
+        metadata = {
+          id: modelId,
           modelId,
           userId: input.userId,
           file: input.file.name,
-          geometry: this.serializeGeometry(sceneAnalysis.glb.geometry),
-          environment: {
-            bounds: this.serializeEnvironmentBounds(envAnalysis.environment),
-            dimensions: envAnalysis.environment.dimensions,
-            distances: envAnalysis.distances.fromObjectToBoundary,
-            constraints: envAnalysis.cameraConstraints
-          },
-          orientation: {
+          orientation: this.serializeOrientation({
             position: new Vector3(0, 0, 0),
             rotation: new Vector3(0, 0, 0),
             scale: new Vector3(1, 1, 1)
-          },
+          }),
           preferences: {
             defaultCameraDistance: 5,
-            defaultCameraHeight: envAnalysis.cameraConstraints.minHeight,
+            defaultCameraHeight: envAnalysis?.cameraConstraints?.minHeight || 0,
             preferredViewAngles: [],
             uiPreferences: {
               showGrid: true,
@@ -260,15 +285,33 @@ export class P2PPipelineImpl implements IP2PPipeline {
               showMeasurements: true
             }
           },
-          featurePoints: [], // Required by ModelMetadata
-          performance_metrics: {
-            sceneAnalysis: sceneAnalysis.performance,
-            environmentalAnalysis: envAnalysis.performance
-          }
+          featurePoints: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          version: 1
         };
-        
-        await this.metadataManager.storeModelMetadata(modelId, metadataToStore);
-        metadata = await this.metadataManager.getModelMetadata(modelId);
+
+        // Store metadata with analysis data
+        await this.metadataManager.storeModelMetadata(modelId, {
+          ...metadata,
+          analysis: {
+            geometry: this.serializeGeometry(sceneAnalysis.glb.geometry),
+            environment: {
+              bounds: this.serializeEnvironmentBounds(envAnalysis.environment),
+              distances: envAnalysis.distances?.fromObjectToBoundary || {},
+              constraints: envAnalysis.cameraConstraints || {
+                minDistance: 0,
+                maxDistance: 10,
+                minHeight: 0,
+                maxHeight: 10
+              }
+            },
+            performance: {
+              sceneAnalysis: sceneAnalysis.performance,
+              environmentalAnalysis: envAnalysis.performance
+            }
+          }
+        });
       } else if (input.modelId) {
         // Use existing model
         modelId = input.modelId;
@@ -286,8 +329,7 @@ export class P2PPipelineImpl implements IP2PPipeline {
       this.metrics.operations.push({
         name: 'processModel',
         duration,
-        success: true,
-        error: undefined // Optional error field for OperationMetrics
+        success: true
       });
 
       return { modelId, analysis: sceneAnalysis, metadata };

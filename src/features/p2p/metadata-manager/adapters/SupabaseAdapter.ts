@@ -1,7 +1,7 @@
 import { SupabaseClient, PostgrestError } from '@supabase/supabase-js';
 import { DatabaseAdapter } from './DatabaseAdapter';
 import { ModelMetadata, ModelFeaturePoint, UserPreferences, DatabaseError, NotFoundError } from '../../../../types/p2p/metadata-manager';
-import { Orientation } from '../../../../types/p2p/shared';
+import { Orientation, BaseMetadata } from '../../../../types/p2p/shared';
 import { Logger } from '../../../../types/p2p/shared';
 import { getSupabaseClient } from '../../../../lib/supabase';
 
@@ -45,10 +45,10 @@ export class SupabaseAdapter implements DatabaseAdapter {
    */
   async storeModelMetadata(
     modelId: string,
-    metadata: Pick<ModelMetadata, 'orientation' | 'preferences'>
+    metadata: Omit<ModelMetadata, keyof BaseMetadata>
   ): Promise<void> {
     try {
-      this.logger.info(`Storing metadata for model: ${modelId}`);
+      this.logger.info(`Storing metadata for model: ${modelId}`, { metadata });
       
       // Get existing metadata
       const { data: existingData, error: fetchError } = await this.client
@@ -63,14 +63,26 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
       // Merge with existing metadata
       const existingMetadata = existingData?.metadata || {};
+      const now = new Date();
       const updatedMetadata = {
         ...existingMetadata,
         p2p: {
           ...existingMetadata.p2p,
+          id: modelId,
+          modelId,
+          userId: metadata.userId,
+          file: metadata.file,
           orientation: metadata.orientation,
-          preferences: metadata.preferences
+          preferences: metadata.preferences,
+          featurePoints: metadata.featurePoints,
+          analysis: metadata.analysis,
+          createdAt: existingMetadata.p2p?.createdAt || now.toISOString(),
+          updatedAt: now.toISOString(),
+          version: (existingMetadata.p2p?.version || 0) + 1
         }
       };
+
+      this.logger.info(`Updating metadata for model: ${modelId}`, { updatedMetadata });
 
       // Update the model
       const { error } = await this.client
@@ -78,7 +90,10 @@ export class SupabaseAdapter implements DatabaseAdapter {
         .update({ metadata: updatedMetadata })
         .eq('id', modelId);
 
-      if (error) throw new DatabaseError(error.message);
+      if (error) {
+        this.logger.error(`Database error while storing metadata: ${error.message}`, { error });
+        throw new DatabaseError(error.message);
+      }
 
       this.logger.info(`Successfully stored metadata for model: ${modelId}`);
     } catch (error) {

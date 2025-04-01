@@ -1,6 +1,24 @@
 import { Vector3, Box3 } from 'three';
 
 /**
+ * Serialized Vector3 interface for storage
+ */
+export interface SerializedVector3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * Serialized Orientation interface for storage
+ */
+export interface SerializedOrientation {
+  position: SerializedVector3;
+  rotation: SerializedVector3;
+  scale: SerializedVector3;
+}
+
+/**
  * Base configuration interface for P2P pipeline components
  */
 export interface P2PConfig {

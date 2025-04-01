@@ -21,7 +21,25 @@ let clientInstance: ReturnType<typeof createClientComponentClient<Database>> | n
 // Get or create the singleton instance
 export function getSupabaseClient() {
   if (!clientInstance) {
-    clientInstance = createClientComponentClient<Database>();
+    const options: SupabaseClientOptions<'public'> = {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      },
+      global: {
+        headers: {
+          'x-client-info': 'modern-3d-viewer',
+          'Accept': 'application/json'
+        }
+      }
+    };
+
+    clientInstance = createClientComponentClient<Database>({
+      supabaseUrl,
+      supabaseKey,
+      options
+    });
   }
   return clientInstance;
 }
@@ -51,8 +69,95 @@ export type Model = {
   metadata: {
     format: string
     size: number
-    vertices?: number
-    faces?: number
+    geometry?: {
+      vertexCount: number
+      faceCount: number
+      boundingBox: {
+        min: { x: number; y: number; z: number }
+        max: { x: number; y: number; z: number }
+      }
+      center: { x: number; y: number; z: number }
+      dimensions: { x: number; y: number; z: number }
+    }
+    spatial?: {
+      bounds: {
+        min: { x: number; y: number; z: number }
+        max: { x: number; y: number; z: number }
+        center: { x: number; y: number; z: number }
+        dimensions: { x: number; y: number; z: number }
+      }
+      complexity: 'simple' | 'moderate' | 'high'
+      symmetry: {
+        hasSymmetry: boolean
+        symmetryPlanes: Array<{
+          normal: { x: number; y: number; z: number }
+          constant: number
+        }>
+      }
+    }
+    environment?: Record<string, any>
+    orientation?: {
+      position: { x: number; y: number; z: number }
+      rotation: { x: number; y: number; z: number }
+      scale: { x: number; y: number; z: number }
+    }
+    preferences?: {
+      defaultCameraDistance: number
+      defaultCameraHeight: number
+      preferredViewAngles: number[]
+      uiPreferences: {
+        showGrid: boolean
+        showAxes: boolean
+        showMeasurements: boolean
+      }
+    }
+    performance_metrics?: {
+      sceneAnalysis: {
+        startTime: number
+        endTime: number
+        duration: number
+        operations: Array<{
+          name: string
+          duration: number
+          success: boolean
+          error?: string
+        }>
+        cacheHits: number
+        cacheMisses: number
+        databaseQueries: number
+        averageResponseTime: number
+      }
+      spatialAnalysis: {
+        startTime: number
+        endTime: number
+        duration: number
+        operations: Array<{
+          name: string
+          duration: number
+          success: boolean
+          error?: string
+        }>
+        cacheHits: number
+        cacheMisses: number
+        databaseQueries: number
+        averageResponseTime: number
+      }
+      featureAnalysis: {
+        startTime: number
+        endTime: number
+        duration: number
+        operations: Array<{
+          name: string
+          duration: number
+          success: boolean
+          error?: string
+        }>
+        cacheHits: number
+        cacheMisses: number
+        databaseQueries: number
+        averageResponseTime: number
+      }
+    }
   }
   tags?: string[]
   user_id?: string

@@ -143,29 +143,13 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     const url = URL.createObjectURL(file);
     onModelLoad(url);
 
-    // Generate a model ID
-    const modelId = crypto.randomUUID();
-
     // Process the model through the pipeline
-    const { modelId: processedModelId, analysis, metadata } = await pipelineRef.current.processModel({
+    const { modelId } = await pipelineRef.current.processModel({
       file,
-      modelId,
       userId: 'current-user-id' // TODO: Get actual user ID
     });
 
-    // Store the model in the library
-    await uploadModel(file, {
-      name: file.name.replace(/\.[^/.]+$/, ''),
-      description: '',
-      tags: [],
-      metadata: {
-        ...metadata,
-        size: file.size,
-        format: file.name.split('.').pop() || 'unknown'
-      }
-    });
-
-    return url;
+    return modelId;
   };
 
   const handleFile = async (file: File) => {
@@ -212,16 +196,92 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   };
 
   const handleSaveModel = async (name: string) => {
-    if (!currentFile) return;
+    if (!currentFile || !pipelineRef.current) return;
     
     try {
+      // Process the model first to get metadata
+      const { modelId, analysis, metadata } = await pipelineRef.current.processModel({
+        file: currentFile,
+        userId: 'current-user-id' // TODO: Get actual user ID
+      });
+
+      // Save the model with the processed metadata
       await uploadModel(currentFile, {
         name,
         description: '',
         tags: [],
         metadata: {
           size: currentFile.size,
-          format: currentFile.name.split('.').pop() || 'unknown'
+          format: currentFile.name.split('.').pop() || 'unknown',
+          geometry: {
+            vertexCount: analysis.glb.geometry.vertexCount,
+            faceCount: analysis.glb.geometry.faceCount,
+            boundingBox: {
+              min: {
+                x: analysis.glb.geometry.boundingBox.min.x,
+                y: analysis.glb.geometry.boundingBox.min.y,
+                z: analysis.glb.geometry.boundingBox.min.z
+              },
+              max: {
+                x: analysis.glb.geometry.boundingBox.max.x,
+                y: analysis.glb.geometry.boundingBox.max.y,
+                z: analysis.glb.geometry.boundingBox.max.z
+              }
+            },
+            center: {
+              x: analysis.glb.geometry.center.x,
+              y: analysis.glb.geometry.center.y,
+              z: analysis.glb.geometry.center.z
+            },
+            dimensions: {
+              x: analysis.glb.geometry.dimensions.x,
+              y: analysis.glb.geometry.dimensions.y,
+              z: analysis.glb.geometry.dimensions.z
+            }
+          },
+          spatial: {
+            bounds: {
+              min: {
+                x: analysis.spatial.bounds.min.x,
+                y: analysis.spatial.bounds.min.y,
+                z: analysis.spatial.bounds.min.z
+              },
+              max: {
+                x: analysis.spatial.bounds.max.x,
+                y: analysis.spatial.bounds.max.y,
+                z: analysis.spatial.bounds.max.z
+              },
+              center: {
+                x: analysis.spatial.bounds.center.x,
+                y: analysis.spatial.bounds.center.y,
+                z: analysis.spatial.bounds.center.z
+              },
+              dimensions: {
+                x: analysis.spatial.bounds.dimensions.x,
+                y: analysis.spatial.bounds.dimensions.y,
+                z: analysis.spatial.bounds.dimensions.z
+              }
+            },
+            complexity: analysis.spatial.complexity,
+            symmetry: {
+              hasSymmetry: analysis.spatial.symmetry.hasSymmetry,
+              symmetryPlanes: analysis.spatial.symmetry.symmetryPlanes.map(plane => ({
+                normal: {
+                  x: plane.normal.x,
+                  y: plane.normal.y,
+                  z: plane.normal.z
+                },
+                constant: plane.constant
+              }))
+            }
+          },
+          orientation: metadata.orientation,
+          preferences: metadata.preferences,
+          performance_metrics: {
+            sceneAnalysis: analysis.performance,
+            spatialAnalysis: analysis.spatial.performance,
+            featureAnalysis: analysis.featureAnalysis.performance
+          }
         }
       });
       toast.success('Model saved to library');

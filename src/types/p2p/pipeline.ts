@@ -61,7 +61,7 @@ export interface P2PPipelineConfig extends P2PConfig {
  */
 export interface ModelInput {
   file?: File;  // For new uploads
-  modelId: string;  // Required if file is not provided
+  modelId?: string;  // Optional - will be generated if not provided
   userId: string;
 }
 
