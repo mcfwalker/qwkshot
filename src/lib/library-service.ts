@@ -34,7 +34,12 @@ export async function uploadModel(file: File, metadata: Partial<Model>) {
       name: metadata.name,
       description: metadata.description,
       file_url: modelData.path,
-      metadata: metadata.metadata || {},
+      metadata: {
+        ...metadata.metadata,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1
+      },
       tags: metadata.tags || [],
       user_id: user.id
     }

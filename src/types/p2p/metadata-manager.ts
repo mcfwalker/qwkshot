@@ -58,6 +58,7 @@ export interface ModelMetadata extends BaseMetadata {
           depth: number;
         };
       };
+      floorOffset: number;
       distances: Record<string, number>;
       constraints: {
         minDistance: number;
@@ -182,6 +183,11 @@ export interface MetadataManager {
    * Update user preferences
    */
   updateUserPreferences(modelId: string, preferences: UserPreferences): Promise<void>;
+
+  /**
+   * Update floor offset
+   */
+  updateFloorOffset(modelId: string, floorOffset: number): Promise<void>;
 
   /**
    * Validate metadata

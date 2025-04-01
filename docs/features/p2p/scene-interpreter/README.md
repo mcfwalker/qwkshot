@@ -3,6 +3,12 @@
 ## Overview
 The Scene Interpreter is responsible for converting LLM-generated camera paths into executable movements within the Three.js scene. It handles motion segment parsing, advanced interpolation, and safety validation.
 
+## Status
+🚧 **Current Status**: Planned
+- Interface defined
+- Implementation planned
+- Integration requirements documented
+
 ## Interface
 
 ### Core Functions
@@ -90,65 +96,76 @@ interface PreviewData {
 - Performance issues
 - Interpolation errors
 
+## Integration
+
+### LLM Engine Integration
+```typescript
+// Interpret path from LLM
+const executablePath = await interpreter.interpretPath(llmPath);
+
+// Validate safety
+const safety = await interpreter.validateSafety(executablePath);
+
+// Generate preview if safe
+if (safety.isSafe) {
+  const preview = await interpreter.generatePreview(executablePath);
+}
+```
+
 ## Usage Examples
 
 ### Basic Usage
 ```typescript
 const interpreter = new SceneInterpreter();
+
+// Interpret path
 const executablePath = await interpreter.interpretPath(path);
+
+// Validate safety
+const safety = await interpreter.validateSafety(executablePath);
+
+// Generate preview
+const preview = await interpreter.generatePreview(executablePath);
 ```
 
-### Advanced Usage
-```typescript
-const executablePath = await interpreter.interpretPath(path, {
-  interpolation: 'spline',
-  safety: {
-    collisionAvoidance: true,
-    maxSpeed: 2,
-    minDistance: 1
-  }
-});
-```
+## Planned Implementation
+1. **Core Features**
+   - Path interpretation
+   - Motion parsing
+   - Safety validation
+   - Preview generation
 
-## Performance Considerations
-
-### 1. Frame Generation
-- Keyframe optimization
-- Interpolation efficiency
-- Memory management
-
-### 2. Safety Checks
-- Collision detection
-- Speed validation
-- Visibility verification
-
-## Testing
-
-### 1. Unit Tests
-- Path interpretation
-- Keyframe generation
-- Safety validation
-
-### 2. Integration Tests
-- Scene integration
-- Performance testing
-- Safety verification
+2. **Integration**
+   - LLM Engine integration
+   - Viewer Integration
+   - Metadata Manager integration
+   - Error handling
 
 ## Future Improvements
+1. **Path Interpretation**
+   - Enhanced motion types
+   - Better interpolation
+   - Improved safety checks
+   - Performance optimization
 
-### 1. Planned Features
-- Advanced interpolation
-- Better safety checks
-- Enhanced preview
-- Improved performance
+2. **Integration**
+   - Better component coordination
+   - Enhanced error handling
+   - Improved logging
+   - Performance monitoring
 
-### 2. Research Areas
-- Path optimization
-- Safety algorithms
-- Performance tuning
+## Testing
+The interpreter will include tests covering:
+- Path interpretation
+- Motion parsing
+- Safety validation
 - Preview generation
+- Error handling
+- Integration testing
 
 ## Related Components
-- [LLM Engine](../llm-engine/README.md)
-- [Viewer Integration](../viewer-integration/README.md)
-- [Feedback System](../feedback/README.md) 
+- LLM Engine
+- Viewer Integration
+- Metadata Manager
+- Environmental Analyzer
+- Camera Controller 

@@ -185,16 +185,16 @@ export class P2PPipelineImpl implements IP2PPipeline {
         }),
         this.envAnalyzer.initialize({
           environmentSize: {
-            width: 100,
-            height: 100,
-            depth: 100
+            width: 20,
+            height: 20,
+            depth: 20
           },
           analysisOptions: {
             calculateDistances: true,
             validateConstraints: true,
             optimizeCameraSpace: true
           },
-          debug: finalConfig.debug,
+          debug: finalConfig.debug || false,
           performanceMonitoring: true,
           errorReporting: true,
           maxRetries: 3,
@@ -256,14 +256,33 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
       if (input.file) {
         // Process new file upload
+        this.logger.info('Starting scene analysis...');
         sceneAnalysis = await this.sceneAnalyzer.analyzeScene(input.file);
+        this.logger.info('Scene analysis completed with data:', {
+          hasGLB: !!sceneAnalysis.glb,
+          hasSpatial: !!sceneAnalysis.spatial,
+          spatialBounds: sceneAnalysis.spatial.bounds,
+          safetyConstraints: sceneAnalysis.safetyConstraints
+        });
         
         // Run environmental analysis based on scene analysis
+        this.logger.info('Starting environmental analysis...');
         envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
-        
+        this.logger.info('Raw environmental analysis result:', {
+          hasEnvironment: !!envAnalysis?.environment,
+          hasObject: !!envAnalysis?.object,
+          hasDistances: !!envAnalysis?.distances,
+          hasConstraints: !!envAnalysis?.cameraConstraints,
+          environmentData: envAnalysis?.environment,
+          objectData: envAnalysis?.object,
+          distancesData: envAnalysis?.distances,
+          constraintsData: envAnalysis?.cameraConstraints
+        });
+
         // Generate new model ID
         modelId = crypto.randomUUID();
         
+        this.logger.info('Creating metadata object...');
         // Create metadata object
         metadata = {
           id: modelId,
@@ -288,30 +307,78 @@ export class P2PPipelineImpl implements IP2PPipeline {
           featurePoints: [],
           createdAt: new Date(),
           updatedAt: new Date(),
-          version: 1
-        };
-
-        // Store metadata with analysis data
-        await this.metadataManager.storeModelMetadata(modelId, {
-          ...metadata,
+          version: 1,
           analysis: {
-            geometry: this.serializeGeometry(sceneAnalysis.glb.geometry),
+            geometry: {
+              vertexCount: sceneAnalysis.glb.geometry.vertexCount,
+              faceCount: sceneAnalysis.glb.geometry.faceCount,
+              boundingBox: {
+                min: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.min),
+                max: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.max)
+              },
+              center: this.serializeVector3(sceneAnalysis.glb.geometry.center),
+              dimensions: this.serializeVector3(sceneAnalysis.glb.geometry.dimensions)
+            },
             environment: {
-              bounds: this.serializeEnvironmentBounds(envAnalysis.environment),
-              distances: envAnalysis.distances?.fromObjectToBoundary || {},
-              constraints: envAnalysis.cameraConstraints || {
+              bounds: envAnalysis?.environment ? {
+                min: this.serializeVector3(envAnalysis.environment.bounds.min),
+                max: this.serializeVector3(envAnalysis.environment.bounds.max),
+                center: this.serializeVector3(envAnalysis.environment.bounds.center),
+                dimensions: {
+                  width: envAnalysis.environment.dimensions.width,
+                  height: envAnalysis.environment.dimensions.height,
+                  depth: envAnalysis.environment.dimensions.depth
+                }
+              } : {
+                min: { x: 0, y: 0, z: 0 },
+                max: { x: 0, y: 0, z: 0 },
+                center: { x: 0, y: 0, z: 0 },
+                dimensions: { width: 0, height: 0, depth: 0 }
+              },
+              floorOffset: envAnalysis?.object?.floorOffset || 0,
+              distances: envAnalysis?.distances?.fromObjectToBoundary || {},
+              constraints: envAnalysis?.cameraConstraints ? {
+                minDistance: envAnalysis.cameraConstraints.minDistance,
+                maxDistance: envAnalysis.cameraConstraints.maxDistance,
+                minHeight: envAnalysis.cameraConstraints.minHeight,
+                maxHeight: envAnalysis.cameraConstraints.maxHeight
+              } : {
                 minDistance: 0,
-                maxDistance: 10,
+                maxDistance: 0,
                 minHeight: 0,
-                maxHeight: 10
+                maxHeight: 0
               }
             },
             performance: {
               sceneAnalysis: sceneAnalysis.performance,
-              environmentalAnalysis: envAnalysis.performance
+              environmentalAnalysis: envAnalysis?.performance || {
+                startTime: 0,
+                endTime: 0,
+                duration: 0,
+                operations: [],
+                cacheHits: 0,
+                cacheMisses: 0,
+                databaseQueries: 0,
+                averageResponseTime: 0
+              }
             }
           }
+        };
+
+        this.logger.info('Created metadata object with analysis:', {
+          hasGeometry: !!metadata.analysis?.geometry,
+          hasEnvironment: !!metadata.analysis?.environment,
+          environmentBounds: metadata.analysis?.environment?.bounds,
+          environmentConstraints: metadata.analysis?.environment?.constraints
         });
+
+        // Add log before storing
+        this.logger.info('Metadata before sending to MetadataManager:', { metadata });
+
+        // Store metadata
+        this.logger.info('Storing metadata in database...');
+        await this.metadataManager.storeModelMetadata(modelId, metadata);
+        this.logger.info('Stored metadata in database');
       } else if (input.modelId) {
         // Use existing model
         modelId = input.modelId;
@@ -351,13 +418,22 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
       // Get model metadata and analysis
       const metadata = await this.metadataManager.getModelMetadata(modelId);
-      const analysis = await this.sceneAnalyzer.analyzeScene(metadata.file);
+      // Load the actual file content before passing to scene analyzer
+      const modelFile = await this.loadModelFile(metadata.file); 
+      const analysis = await this.sceneAnalyzer.analyzeScene(modelFile);
 
-      // Compile prompt
+      // Compile prompt - Assuming currentCameraState is needed and available?
+      // Placeholder for currentCameraState - this needs proper implementation
+      const currentCameraState = { 
+          position: new Vector3(), 
+          target: new Vector3() 
+      }; 
       const compiledPrompt = await this.promptCompiler.compilePrompt(
         instruction.text,
         analysis,
-        metadata
+        metadata,
+        currentCameraState,
+        {}
       );
 
       // Generate path
@@ -366,7 +442,8 @@ export class P2PPipelineImpl implements IP2PPipeline {
       // Validate path
       const validation = this.llmEngine.validatePath(path);
       if (!validation.isValid) {
-        throw new PathGenerationError(validation.error || 'Invalid path');
+        // Use validation.errors as per potential type definition
+        throw new PathGenerationError(validation.errors?.join(', ') || 'Invalid path');
       }
 
       // Convert to animation output
@@ -464,7 +541,8 @@ export class P2PPipelineImpl implements IP2PPipeline {
       // Validate commands
       const validation = this.sceneInterpreter.validateCommands(commands);
       if (!validation.isValid) {
-        throw new AnimationError(validation.error || 'Invalid commands');
+        // Use validation.errors as per potential type definition
+        throw new AnimationError(validation.errors?.join(', ') || 'Invalid commands');
       }
 
       // Execute all commands
@@ -504,19 +582,20 @@ export class P2PPipelineImpl implements IP2PPipeline {
     this.logger.info(`Compiling prompt for model: ${modelId}`);
     try {
       // 1. Analyze Scene (or get cached analysis)
-      // TODO: Handle file loading/retrieval based on modelId
-      const sceneAnalysis = await this.sceneAnalyzer.analyzeScene('path/to/model.glb');
+      const modelMetadataForFile = await this.metadataManager.getModelMetadata(modelId);
+      if (!modelMetadataForFile) {
+           this.logger.error(`Metadata not found for model: ${modelId}`);
+           return null;
+      }
+      const modelFileForAnalysis = await this.loadModelFile(modelMetadataForFile.file);
+      const sceneAnalysis = await this.sceneAnalyzer.analyzeScene(modelFileForAnalysis);
       if (!sceneAnalysis) {
         this.logger.error('Scene analysis failed');
         return null;
       }
 
-      // 2. Get Model Metadata
-      const modelMetadata = await this.metadataManager.getModelMetadata(modelId);
-      if (!modelMetadata) {
-        this.logger.error(`Metadata not found for model: ${modelId}`);
-        return null;
-      }
+      // 2. Get Model Metadata (already fetched above)
+      const modelMetadata = modelMetadataForFile; 
 
       // 3. Analyze Environment (using scene analysis result)
       const envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
@@ -531,7 +610,8 @@ export class P2PPipelineImpl implements IP2PPipeline {
         userInput,
         sceneAnalysis,
         modelMetadata,
-        currentCameraState
+        currentCameraState,
+        {}
       );
 
       this.logger.info(`Prompt compiled successfully for request: ${compiledPrompt.metadata.requestId}`);

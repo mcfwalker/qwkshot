@@ -13,6 +13,7 @@ import Floor, { FloorType } from './Floor';
 import { SceneControls } from './SceneControls';
 import { PlaybackPanel } from './PlaybackPanel';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -49,6 +50,29 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const startPositionRef = useRef<Vector3 | null>(null);
   const startTargetRef = useRef<Vector3 | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
+
+  // Handle model height changes with validation and feedback
+  const handleModelHeightChange = (newHeight: number) => {
+    try {
+      // Validate height
+      if (typeof newHeight !== 'number' || isNaN(newHeight)) {
+        throw new Error('Invalid height value');
+      }
+
+      // Update height
+      setModelHeight(newHeight);
+
+      // Show success toast
+      toast.success('Floor offset updated', {
+        description: `Model height set to ${newHeight.toFixed(2)} units`
+      });
+    } catch (error) {
+      console.error('Error updating model height:', error);
+      toast.error('Failed to update floor offset', {
+        description: error instanceof Error ? error.message : 'Invalid height value'
+      });
+    }
+  };
 
   const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
     if (cameraRef.current && controlsRef.current) {
@@ -105,7 +129,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   }, []);
 
   return (
-    <div className={`w-full h-full relative ${className}`}>
+    <div className={cn('relative w-full h-full', className)}>
       <Canvas
         ref={canvasRef}
         camera={{ position: [5, 5, 5], fov }}
@@ -181,7 +205,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
       <div className="absolute left-4 top-[calc(4rem+20rem+1rem)] w-80 z-10">
         <SceneControls
           modelHeight={modelHeight}
-          onModelHeightChange={setModelHeight}
+          onModelHeightChange={handleModelHeightChange}
           fov={fov}
           onFovChange={setFov}
           floorType={floorType}

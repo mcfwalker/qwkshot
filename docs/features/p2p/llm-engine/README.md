@@ -3,6 +3,12 @@
 ## Overview
 The LLM Engine is responsible for generating camera paths from compiled prompts. It handles intent parsing, motion segment composition, and spatial reasoning to create natural and cinematic camera movements.
 
+## Status
+🚧 **Current Status**: In Development
+- Core interface defined
+- Basic implementation started
+- Integration with other components planned
+
 ## Interface
 
 ### Core Functions
@@ -91,65 +97,76 @@ interface ValidationResult {
 - Performance issues
 - Quality violations
 
+## Integration
+
+### Prompt Compiler Integration
+```typescript
+// Generate path from compiled prompt
+const path = await llmEngine.generatePath(compiledPrompt);
+
+// Validate generated path
+const validation = await llmEngine.validatePath(path);
+
+// Optimize if needed
+if (validation.isValid) {
+  const optimized = await llmEngine.optimizePath(path);
+}
+```
+
 ## Usage Examples
 
 ### Basic Usage
 ```typescript
 const engine = new LLMEngine();
+
+// Generate path
 const path = await engine.generatePath(prompt);
+
+// Validate path
+const validation = await engine.validatePath(path);
+
+// Optimize path
+const optimized = await engine.optimizePath(path);
 ```
 
-### Advanced Usage
-```typescript
-const path = await engine.generatePath(prompt, {
-  quality: 'cinematic',
-  constraints: {
-    maxSpeed: 2,
-    minDistance: 1,
-    maxDistance: 10
-  }
-});
-```
+## Current Development Focus
+1. **Core Implementation**
+   - Path generation logic
+   - Motion segment parsing
+   - Path validation
+   - Path optimization
 
-## Performance Considerations
-
-### 1. Response Time
-- Parallel processing
-- Caching strategies
-- Batch processing
-
-### 2. Quality vs Speed
-- Quality thresholds
-- Performance metrics
-- Optimization levels
-
-## Testing
-
-### 1. Unit Tests
-- Path generation
-- Segment parsing
-- Validation logic
-
-### 2. Integration Tests
-- Prompt handling
-- Scene integration
-- Performance testing
+2. **Integration**
+   - Prompt Compiler integration
+   - Scene Interpreter integration
+   - Metadata Manager integration
+   - Error handling
 
 ## Future Improvements
+1. **Path Generation**
+   - Enhanced motion types
+   - Better transitions
+   - Improved quality
+   - Performance optimization
 
-### 1. Planned Features
-- Advanced motion types
-- Better quality control
-- Enhanced optimization
-- Improved safety checks
+2. **Integration**
+   - Better component coordination
+   - Enhanced error handling
+   - Improved logging
+   - Performance monitoring
 
-### 2. Research Areas
-- Motion quality
+## Testing
+The engine includes tests covering:
+- Basic path generation
+- Motion segment parsing
+- Path validation
 - Path optimization
-- Safety algorithms
-- Performance tuning
+- Error handling
+- Integration testing
 
 ## Related Components
-- [Prompt Compiler](../prompt-compiler/README.md)
-- [Scene Interpreter](../scene-interpreter/README.md)
-- [Feedback System](../feedback/README.md) 
+- Prompt Compiler
+- Scene Interpreter
+- Metadata Manager
+- Viewer Integration
+- Camera Controller 

@@ -7,13 +7,11 @@ import {
   ObjectMeasurements,
   DistanceMeasurements,
   CameraConstraints,
-  ValidationResult,
-  PerformanceMetrics,
   AnalysisError,
   ValidationError,
   MeasurementError,
 } from '../../../types/p2p/environmental-analyzer';
-import { Logger } from '../../../types/p2p/shared';
+import { Logger, ValidationResult, PerformanceMetrics } from '../../../types/p2p/shared';
 import { SceneAnalysis } from '../../../types/p2p/scene-analyzer';
 
 export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
@@ -24,6 +22,10 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
     endTime: 0,
     duration: 0,
     operations: [],
+    cacheHits: 0,
+    cacheMisses: 0,
+    databaseQueries: 0,
+    averageResponseTime: 0
   };
 
   constructor(config: EnvironmentalAnalyzerConfig, private logger: Logger) {
@@ -31,31 +33,37 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
   }
 
   async initialize(config: EnvironmentalAnalyzerConfig): Promise<void> {
+    this.logger.info('Initializing Environmental Analyzer with config:', config);
     this.config = config;
     this.initialized = true;
-    this.logger.info('Environmental Analyzer initialized with config:', config);
+    this.logger.info('Environmental Analyzer initialized successfully');
   }
 
   async analyzeEnvironment(sceneAnalysis: SceneAnalysis): Promise<EnvironmentalAnalysis> {
     if (!this.initialized) {
+      this.logger.error('Environmental Analyzer not initialized');
       throw new AnalysisError('Environmental Analyzer not initialized');
     }
 
     const startTime = performance.now();
-    this.logger.info('Starting environment analysis');
+    this.logger.info('Starting environment analysis with scene:', sceneAnalysis);
 
     try {
       // Calculate environment bounds
       const environment = this.calculateEnvironmentBounds();
+      this.logger.info('Environment bounds calculated:', environment);
 
       // Extract object measurements from scene analysis
       const object = this.extractObjectMeasurements(sceneAnalysis);
+      this.logger.info('Object measurements extracted:', object);
 
       // Calculate distances from object to boundaries
       const distances = this.calculateDistances(environment, object);
+      this.logger.info('Distances calculated:', distances);
 
       // Calculate camera constraints
       const cameraConstraints = this.calculateCameraConstraints(object);
+      this.logger.info('Camera constraints calculated:', cameraConstraints);
 
       const endTime = performance.now();
       this.performanceMetrics = {
@@ -69,15 +77,22 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
             success: true,
           },
         ],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: endTime - startTime
       };
 
-      return {
+      const analysis = {
         environment,
         object,
         distances,
         cameraConstraints,
         performance: this.performanceMetrics,
       };
+
+      this.logger.info('Environment analysis completed:', analysis);
+      return analysis;
     } catch (error) {
       this.logger.error('Environment analysis failed:', error);
       throw new AnalysisError('Failed to analyze environment');
@@ -188,6 +203,7 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
         height: dimensions.y,
         depth: dimensions.z,
       },
+      floorOffset: boundingBox.min.y,  // Use the bottom of the bounding box as the floor offset
     };
   }
 
@@ -210,14 +226,92 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
     };
   }
 
+  /**
+   * Recalculate constraints based on floor offset changes
+   */
+  async recalculateConstraints(
+    analysis: EnvironmentalAnalysis,
+    floorOffset: number
+  ): Promise<EnvironmentalAnalysis> {
+    if (!this.initialized) {
+      throw new AnalysisError('Environmental Analyzer not initialized');
+    }
+
+    const startTime = performance.now();
+    this.logger.info('Recalculating constraints with new floor offset:', floorOffset);
+
+    try {
+      // Update object measurements with new floor offset
+      const updatedObject = {
+        ...analysis.object,
+        bounds: {
+          ...analysis.object.bounds,
+          min: new Vector3(
+            analysis.object.bounds.min.x,
+            floorOffset,
+            analysis.object.bounds.min.z
+          ),
+          max: new Vector3(
+            analysis.object.bounds.max.x,
+            floorOffset + analysis.object.dimensions.height,
+            analysis.object.bounds.max.z
+          ),
+          center: new Vector3(
+            analysis.object.bounds.center.x,
+            floorOffset + analysis.object.dimensions.height / 2,
+            analysis.object.bounds.center.z
+          ),
+        },
+      };
+
+      // Recalculate distances with updated object position
+      const distances = this.calculateDistances(analysis.environment, updatedObject);
+
+      // Recalculate camera constraints with updated object position
+      const cameraConstraints = this.calculateCameraConstraints(updatedObject);
+
+      const endTime = performance.now();
+      this.performanceMetrics = {
+        ...this.performanceMetrics,
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        operations: [
+          ...this.performanceMetrics.operations,
+          {
+            name: 'recalculate_constraints',
+            duration: endTime - startTime,
+            success: true,
+          },
+        ],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: endTime - startTime
+      };
+
+      return {
+        ...analysis,
+        object: updatedObject,
+        distances,
+        cameraConstraints,
+        performance: this.performanceMetrics,
+      };
+    } catch (error) {
+      this.logger.error('Failed to recalculate constraints:', error);
+      throw new AnalysisError('Failed to recalculate constraints');
+    }
+  }
+
   private calculateCameraConstraints(object: ObjectMeasurements): CameraConstraints {
     const { height } = object.dimensions;
+    const { floorOffset } = object;
 
-    // Base camera constraints on object height
-    const minHeight = height * 0.5;  // Minimum height is half the object height
-    const maxHeight = height * 3;    // Maximum height is 3x the object height
-    const minDistance = height * 0.8; // Minimum distance is 0.8x the object height
-    const maxDistance = height * 5;   // Maximum distance is 5x the object height
+    // Base camera constraints on object height and floor offset
+    const minHeight = floorOffset + height * 0.5;  // Minimum height is half the object height above floor
+    const maxHeight = floorOffset + height * 3;    // Maximum height is 3x the object height above floor
+    const minDistance = height * 0.8;              // Minimum distance is 0.8x the object height
+    const maxDistance = height * 5;                // Maximum distance is 5x the object height
 
     return {
       minHeight,
@@ -225,5 +319,73 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
       minDistance,
       maxDistance,
     };
+  }
+
+  /**
+   * Update camera constraints based on floor offset changes
+   */
+  async updateCameraConstraints(
+    analysis: EnvironmentalAnalysis,
+    floorOffset: number
+  ): Promise<CameraConstraints> {
+    if (!this.initialized) {
+      throw new AnalysisError('Environmental Analyzer not initialized');
+    }
+
+    const startTime = performance.now();
+    this.logger.info('Updating camera constraints with new floor offset:', floorOffset);
+
+    try {
+      // Create updated object measurements with new floor offset
+      const updatedObject = {
+        ...analysis.object,
+        bounds: {
+          ...analysis.object.bounds,
+          min: new Vector3(
+            analysis.object.bounds.min.x,
+            floorOffset,
+            analysis.object.bounds.min.z
+          ),
+          max: new Vector3(
+            analysis.object.bounds.max.x,
+            floorOffset + analysis.object.dimensions.height,
+            analysis.object.bounds.max.z
+          ),
+          center: new Vector3(
+            analysis.object.bounds.center.x,
+            floorOffset + analysis.object.dimensions.height / 2,
+            analysis.object.bounds.center.z
+          ),
+        },
+      };
+
+      // Calculate new camera constraints
+      const cameraConstraints = this.calculateCameraConstraints(updatedObject);
+
+      const endTime = performance.now();
+      this.performanceMetrics = {
+        ...this.performanceMetrics,
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        operations: [
+          ...this.performanceMetrics.operations,
+          {
+            name: 'update_camera_constraints',
+            duration: endTime - startTime,
+            success: true,
+          },
+        ],
+        cacheHits: 0,
+        cacheMisses: 0,
+        databaseQueries: 0,
+        averageResponseTime: endTime - startTime
+      };
+
+      return cameraConstraints;
+    } catch (error) {
+      this.logger.error('Failed to update camera constraints:', error);
+      throw new AnalysisError('Failed to update camera constraints');
+    }
   }
 } 

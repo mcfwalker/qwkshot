@@ -58,6 +58,7 @@ export interface ObjectMeasurements {
     height: number;
     depth: number;
   };
+  floorOffset: number;  // Distance from the object's bottom to the floor
 }
 
 /**
@@ -126,6 +127,11 @@ export interface EnvironmentalAnalyzer {
    * Get camera positioning constraints
    */
   getCameraConstraints(analysis: EnvironmentalAnalysis): Promise<CameraConstraints>;
+
+  /**
+   * Update camera constraints based on floor offset changes
+   */
+  updateCameraConstraints(analysis: EnvironmentalAnalysis, floorOffset: number): Promise<CameraConstraints>;
 
   /**
    * Validate a camera position

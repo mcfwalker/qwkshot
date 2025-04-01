@@ -15,7 +15,7 @@ export interface DatabaseAdapter {
    */
   storeModelMetadata(
     modelId: string,
-    metadata: Pick<ModelMetadata, 'orientation' | 'preferences'>
+    metadata: ModelMetadata
   ): Promise<void>;
 
   /**

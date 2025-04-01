@@ -2,26 +2,39 @@
 
 This document outlines the development phases and future requirements for the Prompt-to-Path (p2p) pipeline feature.
 
-## Current Phase: Metadata Manager Implementation and Integration
+## Current Phase: Environmental Analysis Data Storage Resolution
 
 ### Goals
-- Implement Metadata Manager component
-- Integrate with existing pipeline components
-- Enhance metadata handling
-- Optimize performance
+- Resolve environmental analysis data persistence issues
+- Optimize metadata storage and retrieval
+- Ensure reliable data flow through pipeline
+- Maintain data integrity across components
 
 ### Key Deliverables
-1. Metadata Manager
-   - User metadata storage
-   - Feature point management
-   - User preferences handling
-   - Performance optimization
+1. Metadata Storage
+   - Reliable environmental data persistence
+   - Optimized JSONB handling
+   - Consistent data structure
+   - Robust error handling
 
-2. Integration
-   - Pipeline component connection
-   - Data flow implementation
-   - Combined analysis pipeline
-   - Performance monitoring
+2. Integration Stability
+   - Reliable data flow verification
+   - Enhanced logging and monitoring
+   - Performance impact assessment
+   - Data integrity validation
+
+### Known Issues
+1. Environmental Data Storage
+   - Environment data not persisting in database
+   - 406 errors during metadata fetching
+   - Potential serialization issues
+   - Complex nested structure challenges
+
+2. Integration Points
+   - Scene/Environmental analysis data coordination
+   - Metadata structure standardization
+   - Database adapter optimization needed
+   - Performance monitoring refinement
 
 ## Completed Phases
 
@@ -39,6 +52,7 @@ This document outlines the development phases and future requirements for the Pr
   - Material analysis
   - Environmental constraints
   - Performance optimization
+  - ⚠️ Data persistence issues identified
 
 ### Phase 3: Metadata Manager Implementation
 - [x] Core Metadata Manager
@@ -46,25 +60,45 @@ This document outlines the development phases and future requirements for the Pr
   - Feature point management
   - User preferences handling
   - Performance optimization
+  - ⚠️ Complex data structure handling needs refinement
 
 ## Current Pipeline Status
 1. **Completed Components**
-   - Scene Analyzer
-   - Environmental Analyzer
-   - Metadata Manager
-   - Prompt Compiler
+   - Scene Analyzer (✅ Fully functional)
+   - Environmental Analyzer (⚠️ Storage issues)
+   - Metadata Manager (⚠️ Integration refinement needed)
+   - Prompt Compiler (✅ Fully functional)
 
 2. **Integration Status**
-   - Successfully integrated all components
-   - End-to-end testing complete
+   - Components integrated but with known issues
+   - End-to-end testing reveals data persistence gaps
    - Performance metrics established
-   - Error handling implemented
+   - Error handling implemented but needs enhancement
 
 3. **Next Components**
    - LLM Engine
    - Scene Interpreter
    - Viewer Integration
    - Feedback System
+
+## Immediate Action Items
+1. **Database Integration**
+   - Review Supabase configuration
+   - Optimize JSONB column handling
+   - Implement robust error handling
+   - Add comprehensive logging
+
+2. **Data Structure**
+   - Simplify metadata nesting
+   - Standardize data formats
+   - Implement validation
+   - Document structure requirements
+
+3. **Performance**
+   - Monitor storage operations
+   - Optimize data flow
+   - Reduce unnecessary operations
+   - Implement caching where appropriate
 
 ## Future Phases
 
@@ -100,17 +134,19 @@ This document outlines the development phases and future requirements for the Pr
 - [x] Documentation complete
 - [x] Integration working
 
-### Phase 2 (Completed)
+### Phase 2 (Partially Complete)
 - [x] Environmental Analyzer functional
 - [x] Basic analysis working
 - [x] Spatial understanding improved
-- [x] Path generation more accurate
+- [ ] Reliable data persistence
+- [ ] Complete integration verification
 
-### Phase 3 (Completed)
+### Phase 3 (In Progress)
 - [x] Metadata Manager functional
 - [x] User metadata working
 - [x] Feature points implemented
-- [x] Performance optimization in place
+- [ ] Storage issues resolved
+- [ ] Performance optimization verified
 
 ### Future Phases
 - [ ] LLM Engine implementation
@@ -119,8 +155,9 @@ This document outlines the development phases and future requirements for the Pr
 - [ ] Feedback System implementation
 
 ## Notes
-- Prioritize user experience and simplicity
-- Focus on core functionality first
-- Maintain modular architecture
-- Keep performance in mind
-- Document as we go 
+- Prioritize resolving data persistence issues
+- Maintain modular architecture while fixing integration
+- Document all attempted solutions and outcomes
+- Consider schema changes if needed
+- Keep performance impact in mind during fixes
+- Ensure fixes don't compromise existing functionality 

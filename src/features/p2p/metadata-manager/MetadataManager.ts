@@ -6,6 +6,7 @@ import {
   UserPreferences,
   DatabaseError,
   NotFoundError,
+  ValidationError,
   MetadataManagerConfig,
   MetadataManager as IMetadataManager
 } from '../../../types/p2p/metadata-manager';
@@ -14,8 +15,9 @@ import { Logger } from '../../../types/p2p/shared';
 
 const DEFAULT_CONFIG: Required<MetadataManagerConfig> = {
   database: {
-    table: 'model_metadata',
-    schema: 'public',
+    type: 'supabase',
+    url: '',
+    key: ''
   },
   caching: {
     enabled: true,
@@ -80,7 +82,7 @@ export class MetadataManagerImpl implements IMetadataManager {
    */
   async storeModelMetadata(
     modelId: string,
-    metadata: Pick<ModelMetadata, 'orientation' | 'preferences'>
+    metadata: ModelMetadata
   ): Promise<void> {
     try {
       await this.db.storeModelMetadata(modelId, metadata);
@@ -280,5 +282,69 @@ export class MetadataManagerImpl implements IMetadataManager {
         dbQueries: 0, // Placeholder 
         // Potentially add average response times, etc.
     };
+  }
+
+  /**
+   * Update floor offset
+   */
+  async updateFloorOffset(modelId: string, floorOffset: number): Promise<void> {
+    try {
+      // Validate floor offset
+      if (typeof floorOffset !== 'number' || isNaN(floorOffset)) {
+        throw new ValidationError('Floor offset must be a valid number');
+      }
+
+      // Get current metadata
+      const metadata = await this.getModelMetadata(modelId);
+
+      // Get object height from geometry analysis if available
+      const objectHeight = metadata.analysis?.geometry?.dimensions?.y || 0;
+
+      // Validate against object height
+      if (floorOffset < -objectHeight) {
+        throw new ValidationError(`Floor offset cannot be less than -${objectHeight} (object height)`);
+      }
+
+      // Update floor offset in environment analysis
+      if (!metadata.analysis) {
+        metadata.analysis = {};
+      }
+      if (!metadata.analysis.environment) {
+        metadata.analysis.environment = {
+          bounds: {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 },
+            center: { x: 0, y: 0, z: 0 },
+            dimensions: { width: 0, height: 0, depth: 0 }
+          },
+          floorOffset,
+          distances: {},
+          constraints: {
+            minDistance: 0,
+            maxDistance: 0,
+            minHeight: 0,
+            maxHeight: 0
+          }
+        };
+      } else {
+        metadata.analysis.environment.floorOffset = floorOffset;
+      }
+
+      // Store updated metadata
+      await this.storeModelMetadata(modelId, metadata);
+
+      // Invalidate cache
+      if (this.config.caching.enabled) {
+        await this.cache.removeModelMetadata(modelId);
+      }
+
+      this.logger.info(`Updated floor offset for model: ${modelId} to ${floorOffset}`);
+    } catch (error) {
+      this.logger.error(`Failed to update floor offset for model: ${modelId}`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to update floor offset for model: ${modelId}`);
+    }
   }
 } 

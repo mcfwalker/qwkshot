@@ -3,6 +3,12 @@
 ## Overview
 The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipeline that analyzes the spatial environment around a 3D object. It works in conjunction with the Scene Analyzer to provide precise measurements and constraints for camera path generation. The environment is modeled as a cubed volume with the object centered on its floor plane.
 
+## Status
+⚠️ **Current Status**: Functional but with storage issues
+- Data persistence challenges with metadata storage
+- Complex nested structure handling needs optimization
+- Integration with metadata storage requires refinement
+
 ## Features
 
 ### 1. Environment Analysis
@@ -22,6 +28,17 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
 - Safe distance calculations
 - Movement boundary validation
 - Position constraints
+
+## Known Issues
+1. **Data Persistence**
+   - Environment data not consistently stored in database
+   - Complex nested structure causing storage issues
+   - Integration with metadata storage needs optimization
+
+2. **Integration Challenges**
+   - Complex data structure handling
+   - Database operation efficiency
+   - Error handling enhancement needed
 
 ## Usage
 
@@ -98,9 +115,48 @@ viewer.applyEnvironmentalConstraints(environmentalAnalysis);
 viewer.updateSettings({
   cameraConstraints: environmentalAnalysis.cameraConstraints,
   movementBounds: environmentalAnalysis.movementBounds,
-  heightLimits: environmentalAnalysis.heightLimits,
 });
 ```
+
+## Current Focus Areas
+1. **Data Persistence**
+   - Resolve storage issues with metadata
+   - Optimize data structure for storage
+   - Enhance error handling
+   - Improve logging
+
+2. **Integration**
+   - Refine metadata storage integration
+   - Optimize data flow
+   - Enhance error handling
+   - Improve performance
+
+## Future Improvements
+1. **Storage Optimization**
+   - Simplify data structure
+   - Enhance error handling
+   - Improve logging
+   - Optimize performance
+
+2. **Integration Enhancement**
+   - Better metadata coordination
+   - Improved error handling
+   - Enhanced logging
+   - Performance optimization
+
+## Testing
+The analyzer includes comprehensive tests covering:
+- Basic environment analysis
+- Complex spatial measurements
+- Camera constraint validation
+- Error handling
+- Performance monitoring
+
+## Related Components
+- Scene Analyzer
+- Metadata Manager
+- Viewer Integration
+- Camera Controller
 
 ## Implementation Details
 

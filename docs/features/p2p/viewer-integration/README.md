@@ -3,6 +3,12 @@
 ## Overview
 The Viewer Integration component is responsible for executing and visualizing camera paths within the Three.js scene. It handles camera animation, path preview, interactive controls, and export capabilities.
 
+## Status
+🚧 **Current Status**: Planned
+- Interface defined
+- Implementation planned
+- Integration requirements documented
+
 ## Interface
 
 ### Core Functions
@@ -90,68 +96,86 @@ interface ExecutionMetadata {
 - Resource failures
 - Control conflicts
 
+## Integration
+
+### Scene Interpreter Integration
+```typescript
+// Execute path from interpreter
+const result = await viewer.executePath(executablePath);
+
+// Preview path before execution
+const preview = await viewer.previewPath(executablePath);
+
+// Handle playback controls
+await viewer.handleControls({
+  play: true,
+  pause: false,
+  stop: false,
+  speed: 1,
+  position: 0
+});
+```
+
 ## Usage Examples
 
 ### Basic Usage
 ```typescript
 const viewer = new ViewerIntegration();
-await viewer.executePath(path);
-```
 
-### Advanced Usage
-```typescript
-const result = await viewer.executePath(path, {
-  preview: true,
-  controls: {
-    speed: 1.5,
-    loop: true
-  },
-  export: {
-    format: 'json',
-    includeMetadata: true
-  }
+// Execute path
+const result = await viewer.executePath(path);
+
+// Preview path
+const preview = await viewer.previewPath(path);
+
+// Handle controls
+await viewer.handleControls({
+  play: true,
+  pause: false,
+  stop: false,
+  speed: 1,
+  position: 0
 });
 ```
 
-## Performance Considerations
+## Planned Implementation
+1. **Core Features**
+   - Path execution
+   - Path preview
+   - Interactive controls
+   - Path export
 
-### 1. Animation Performance
-- Frame rate optimization
-- Memory management
-- Resource cleanup
-
-### 2. Preview Performance
-- Mesh optimization
-- Update frequency
-- Memory usage
-
-## Testing
-
-### 1. Unit Tests
-- Path execution
-- Control handling
-- Export functionality
-
-### 2. Integration Tests
-- Scene integration
-- Performance testing
-- Resource management
+2. **Integration**
+   - Scene Interpreter integration
+   - Metadata Manager integration
+   - Camera Controller integration
+   - Error handling
 
 ## Future Improvements
+1. **Viewer Features**
+   - Enhanced preview
+   - Better controls
+   - More export formats
+   - Performance optimization
 
-### 1. Planned Features
-- Advanced preview
-- Better controls
-- Enhanced export
-- Improved performance
+2. **Integration**
+   - Better component coordination
+   - Enhanced error handling
+   - Improved logging
+   - Performance monitoring
 
-### 2. Research Areas
-- Animation quality
-- Performance optimization
-- Resource management
-- Export formats
+## Testing
+The viewer will include tests covering:
+- Path execution
+- Path preview
+- Control handling
+- Export functionality
+- Error handling
+- Integration testing
 
 ## Related Components
-- [Scene Interpreter](../scene-interpreter/README.md)
-- [Feedback System](../feedback/README.md)
-- [Three.js Viewer](../viewer/README.md) 
+- Scene Interpreter
+- Metadata Manager
+- Camera Controller
+- Environmental Analyzer
+- Scene Analyzer 
