@@ -1,35 +1,16 @@
 import { Box3, Object3D, Plane, Vector3, Mesh, Matrix4, Matrix3, Quaternion, Euler, Layers } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Logger, SceneAnalyzerConfig } from '../../../types/p2p';
+import { Logger, SceneAnalyzerConfig, SceneAnalyzer, Feature, PerformanceMetrics } from '../../../types/p2p';
 import * as THREE from 'three';
 
 interface AnalysisError extends Error {
   name: 'AnalysisError';
 }
 
-interface Feature {
-  id: string;
-  type: string;
-  position: Vector3;
-  description: string;
-  metadata?: Record<string, any>;
-}
-
 interface PerformanceOperation {
   name: string;
   duration: number;
   success: boolean;
-}
-
-interface PerformanceMetrics {
-  startTime: number;
-  endTime: number;
-  duration: number;
-  operations: PerformanceOperation[];
-  cacheHits: number;
-  cacheMisses: number;
-  databaseQueries: number;
-  averageResponseTime: number;
 }
 
 interface GLBAnalysis {
@@ -131,7 +112,7 @@ interface GLTF {
   };
 }
 
-export class SceneAnalyzerImpl {
+export class SceneAnalyzerImpl implements SceneAnalyzer {
   private config: SceneAnalyzerConfig;
   private gltfLoader: GLTFLoader;
   private initialized: boolean = false;
@@ -336,24 +317,8 @@ export class SceneAnalyzerImpl {
   }
 
   // Scene-level safety boundary calculation
-  protected async calculateSafetyBoundaries(scene: Object3D): Promise<SafetyConstraints> {
-    const boundingBox = new Box3().setFromObject(scene);
-    const dimensions = new Vector3();
-    boundingBox.getSize(dimensions);
-
-    // Ensure positive values for safety constraints
-    const minDistance = Math.max(Math.min(dimensions.x, dimensions.z) * 0.1, 0.1);
-    const maxDistance = Math.max(dimensions.x, dimensions.z) * 2;
-    const minHeight = Math.min(boundingBox.min.y, 0);
-    const maxHeight = Math.max(boundingBox.max.y, 1);
-
-    return {
-      minHeight,
-      maxHeight,
-      minDistance,
-      maxDistance,
-      restrictedZones: [],
-    };
+  public async calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SafetyConstraints> {
+    return scene.safetyConstraints;
   }
 
   // Analysis-level safety boundary retrieval
@@ -398,12 +363,17 @@ export class SceneAnalyzerImpl {
     }
 
     const endTime = performance.now();
-    this.logger.performance({
+    const metrics: PerformanceMetrics = {
       startTime,
       endTime,
       duration: endTime - startTime,
       operations: [{ name: 'calculateSymmetry', duration: endTime - startTime, success: true }],
-    });
+      cacheHits: 0,
+      cacheMisses: 0,
+      databaseQueries: 0,
+      averageResponseTime: 0
+    };
+    this.logger.performance('Symmetry calculation completed', metrics);
 
     return {
       hasSymmetry,
@@ -487,7 +457,36 @@ export class SceneAnalyzerImpl {
       const featureAnalysis = await this.analyzeFeatures(gltf.scene);
       operations.push({ name: 'analyzeFeatures', duration: 0, success: true });
 
-      const safetyConstraints = await this.calculateSafetyBoundaries(gltf.scene);
+      const safetyConstraints = await this.calculateSafetyBoundaries({
+        glb: glbAnalysis,
+        spatial: spatialAnalysis,
+        featureAnalysis,
+        safetyConstraints: {
+          minHeight: 0,
+          maxHeight: 1,
+          minDistance: 0.1,
+          maxDistance: 2,
+          restrictedZones: [],
+        },
+        orientation: {
+          front: new Vector3(0, 0, -1),
+          up: new Vector3(0, 1, 0),
+          right: new Vector3(1, 0, 0),
+          center: new Vector3(),
+          scale: 1,
+        },
+        features: featureAnalysis.features,
+        performance: {
+          startTime,
+          endTime: performance.now(),
+          duration: 0,
+          operations: [],
+          cacheHits: 0,
+          cacheMisses: 0,
+          databaseQueries: 0,
+          averageResponseTime: 0
+        }
+      });
       operations.push({ name: 'calculateSafetyBoundaries', duration: 0, success: true });
 
       const orientation = await this.calculateOrientation(gltf.scene);
@@ -553,14 +552,11 @@ export class SceneAnalyzerImpl {
     }
   }
 
-  async getSceneUnderstanding(analysis: SceneAnalysis) {
+  async getSceneUnderstanding(scene: SceneAnalysis) {
     return {
-      complexity: analysis.spatial.complexity,
-      features: analysis.features.length,
-      landmarks: analysis.featureAnalysis.landmarks.length,
-      hasSymmetry: analysis.spatial.symmetry.hasSymmetry,
-      symmetry: analysis.spatial.symmetry,
-      dimensions: analysis.spatial.bounds.dimensions,
+      complexity: scene.spatial.complexity,
+      symmetry: scene.spatial.symmetry,
+      features: scene.features
     };
   }
 

@@ -116,4 +116,11 @@ export interface PromptCompiler {
    * Optimize a compiled prompt (e.g., reduce token count)
    */
   optimizePrompt(prompt: CompiledPrompt): Promise<CompiledPrompt>;
+}
+
+/**
+ * Prompt Compiler factory interface
+ */
+export interface PromptCompilerFactory {
+  create(config: PromptCompilerConfig): PromptCompiler;
 } 

@@ -12,6 +12,19 @@ export interface SupabaseAdapterConfig {
   key: string;
 }
 
+// Singleton Supabase client
+let supabaseClientInstance: SupabaseClient | null = null;
+
+/**
+ * Get a singleton instance of the Supabase client
+ */
+function getSupabaseClient(url: string, key: string): SupabaseClient {
+  if (!supabaseClientInstance) {
+    supabaseClientInstance = createClient(url, key);
+  }
+  return supabaseClientInstance;
+}
+
 /**
  * Supabase implementation of the DatabaseAdapter
  */
@@ -20,7 +33,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
   private logger: Logger;
 
   constructor(config: SupabaseAdapterConfig, logger: Logger) {
-    this.client = createClient(config.url, config.key);
+    this.client = getSupabaseClient(config.url, config.key);
     this.logger = logger;
   }
 

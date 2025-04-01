@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { P2PError } from '../../../types/p2p/shared';
+import { P2PError, Logger } from '../../../types/p2p/shared';
 import type { PromptCompiler, PromptCompilerConfig, CompiledPrompt, ValidationResult, PerformanceMetrics } from '../../../types/p2p';
 import type { SceneAnalysis } from '../../../types/p2p';
 import type { ModelMetadata } from '../../../types/p2p';
@@ -32,7 +32,7 @@ export class PromptCompilerImpl implements PromptCompiler {
     averageResponseTime: 0,
   };
 
-  constructor(config: PromptCompilerConfig) {
+  constructor(config: PromptCompilerConfig, private logger: Logger) {
     this.config = config;
   }
 

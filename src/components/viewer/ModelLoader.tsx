@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, RefreshCw, FolderOpen } from 'lucide-react';
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
@@ -11,6 +11,14 @@ import { toast } from 'sonner';
 import { SaveModelPortal } from './SaveModelPortal';
 import { LibraryModelPortal } from './LibraryModelPortal';
 import { loadModel } from '@/lib/library-service';
+import { P2PPipelineFactoryImpl } from '@/features/p2p/pipeline/P2PPipelineFactory';
+import { P2PPipelineConfig, P2PPipeline } from '@/types/p2p/pipeline';
+import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
+import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/MetadataManagerFactory';
+import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler';
+import { LLMEngineFactory } from '@/features/p2p/llm-engine/LLMEngineFactory';
+import { SceneInterpreterFactory } from '@/features/p2p/scene-interpreter/SceneInterpreterFactory';
+import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -18,8 +26,114 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Create refs for the pipeline
+  const pipelineRef = useRef<P2PPipeline | null>(null);
+  const loggerRef = useRef({
+    info: console.info,
+    error: console.error,
+    debug: console.debug,
+    warn: console.warn,
+    trace: console.trace,
+    performance: console.log
+  });
+
+  // Initialize the pipeline once on component mount
+  useEffect(() => {
+    const initPipeline = async () => {
+      try {
+        setIsInitializing(true);
+        
+        // Initialize pipeline factory
+        const pipelineFactory = new P2PPipelineFactoryImpl(
+          new SceneAnalyzerFactory(loggerRef.current),
+          new MetadataManagerFactory(loggerRef.current),
+          new PromptCompilerFactory(loggerRef.current),
+          new LLMEngineFactory(loggerRef.current),
+          new SceneInterpreterFactory(loggerRef.current),
+          new EnvironmentalAnalyzerFactory(loggerRef.current)
+        );
+
+        // Create pipeline instance
+        const pipelineConfig: P2PPipelineConfig = {
+          sceneAnalyzer: {
+            maxFileSize: 100 * 1024 * 1024, // 100MB
+            supportedFormats: ['model/gltf-binary', 'model/gltf+json']
+          },
+          metadataManager: {
+            database: {
+              type: 'supabase',
+              url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+              key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+              table: 'model_metadata',
+              schema: 'public'
+            },
+            caching: {
+              enabled: true,
+              ttl: 5 * 60 * 1000 // 5 minutes
+            },
+            validation: {
+              strict: true,
+              maxFeaturePoints: 100
+            }
+          },
+          promptCompiler: {
+            maxTokens: 1000,
+            temperature: 0.7
+          },
+          llmEngine: {
+            model: 'gpt-4',
+            maxTokens: 1000,
+            temperature: 0.7
+          },
+          sceneInterpreter: {
+            smoothingFactor: 0.5,
+            maxKeyframes: 100
+          },
+          environmentalAnalyzer: {
+            environmentSize: {
+              width: 100,
+              height: 100,
+              depth: 100
+            },
+            analysisOptions: {
+              calculateDistances: true,
+              validateConstraints: true,
+              optimizeCameraSpace: true
+            }
+          }
+        };
+
+        const pipeline = pipelineFactory.create(pipelineConfig, loggerRef.current);
+        
+        // Important: Initialize the pipeline and wait for it to complete
+        await pipeline.initialize();
+        
+        // Only set the ref after successful initialization
+        pipelineRef.current = pipeline;
+        console.log('Pipeline initialized successfully');
+        setIsInitializing(false);
+      } catch (err) {
+        console.error('Failed to initialize pipeline:', err);
+        setError('Failed to initialize processing pipeline');
+        setIsInitializing(false);
+      }
+    };
+
+    initPipeline();
+    
+    // Cleanup function
+    return () => {
+      pipelineRef.current = null;
+    };
+  }, []);
 
   const processFile = async (file: File) => {
+    if (!pipelineRef.current) {
+      throw new Error('Pipeline not initialized');
+    }
+
     // Validate file type
     if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
       throw new Error('Please upload a .glb or .gltf file');
@@ -28,10 +142,38 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     // Create object URL for the file
     const url = URL.createObjectURL(file);
     onModelLoad(url);
+
+    // Generate a model ID
+    const modelId = crypto.randomUUID();
+
+    // Process the model through the pipeline
+    const { modelId: processedModelId, analysis, metadata } = await pipelineRef.current.processModel({
+      file,
+      modelId,
+      userId: 'current-user-id' // TODO: Get actual user ID
+    });
+
+    // Store the model in the library
+    await uploadModel(file, {
+      name: file.name.replace(/\.[^/.]+$/, ''),
+      description: '',
+      tags: [],
+      metadata: {
+        ...metadata,
+        size: file.size,
+        format: file.name.split('.').pop() || 'unknown'
+      }
+    });
+
     return url;
   };
 
   const handleFile = async (file: File) => {
+    if (isInitializing) {
+      toast.error('System is still initializing. Please wait a moment and try again.');
+      return;
+    }
+    
     setCurrentFile(file);
     setLoading(true);
     setError(null);
@@ -62,7 +204,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     const file = acceptedFiles[0];
     if (!file) return;
     await handleFile(file);
-  }, []);
+  }, [isInitializing]); // Include isInitializing in dependencies
 
   const handleRetry = async () => {
     if (!currentFile) return;
@@ -109,7 +251,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       'model/gltf-binary': ['.glb'],
       'model/gltf+json': ['.gltf']
     },
-    multiple: false
+    multiple: false,
+    disabled: isInitializing // Disable dropzone during initialization
   });
 
   return (
@@ -122,70 +265,86 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
               viewer-drop-zone p-8
               ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
               ${error ? 'border-destructive' : ''}
+              ${isInitializing ? 'opacity-60 cursor-not-allowed' : ''}
             `}
           >
             <input {...getInputProps()} />
             
-            <Upload className="h-6 w-6 mb-4 text-muted-foreground" />
-            
-            <div className="text-center space-y-2">
-              <p className="text-sm font-medium">
-                {isDragActive ? 'Drop your model here' : 'Drop your model here'}
-              </p>
-              <p className="text-xs text-muted-foreground italic font-light">
-                Supports .glb and .gltf
-              </p>
-              {error && (
-                <div className="space-y-2">
-                  <p className="text-xs text-destructive font-medium">
-                    {error}
+            {isInitializing ? (
+              <div className="text-center">
+                <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
+                <p className="text-sm font-medium">Initializing system...</p>
+                <p className="text-xs text-muted-foreground italic font-light">
+                  Please wait a moment
+                </p>
+              </div>
+            ) : (
+              <>
+                <Upload className="h-6 w-6 mb-4 text-muted-foreground" />
+                
+                <div className="text-center space-y-2">
+                  <p className="text-sm font-medium">
+                    {isDragActive ? 'Drop your model here' : 'Drop your model here'}
                   </p>
-                  {currentFile && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRetry();
-                      }}
-                      className="w-full"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry
-                    </Button>
+                  <p className="text-xs text-muted-foreground italic font-light">
+                    Supports .glb and .gltf
+                  </p>
+                  {error && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-destructive font-medium">
+                        {error}
+                      </p>
+                      {currentFile && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRetry();
+                          }}
+                          className="w-full"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Retry
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
-          {loading && (
-            <LoadingOverlay message="Loading model..." />
-          )}
+          {loading && <LoadingOverlay message="Processing model..." />}
         </div>
 
         <Button
-          onClick={() => setShowLibraryModal(true)}
           variant="secondary"
+          className="w-full border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
           size="default"
-          className="flex-1 border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
+          onClick={() => setShowLibraryModal(true)}
+          disabled={isInitializing}
         >
           <FolderOpen className="h-4 w-4 mr-2" />
           Library
         </Button>
       </div>
 
-      <SaveModelPortal
-        isOpen={showSaveDialog}
-        onClose={() => setShowSaveDialog(false)}
-        onSave={handleSaveModel}
-      />
+      {showSaveDialog && currentFile && (
+        <SaveModelPortal
+          isOpen={showSaveDialog}
+          onSave={handleSaveModel}
+          onClose={() => setShowSaveDialog(false)}
+        />
+      )}
 
-      <LibraryModelPortal
-        isOpen={showLibraryModal}
-        onClose={() => setShowLibraryModal(false)}
-        onSelect={handleLibrarySelect}
-      />
+      {showLibraryModal && (
+        <LibraryModelPortal
+          isOpen={showLibraryModal}
+          onSelect={handleLibrarySelect}
+          onClose={() => setShowLibraryModal(false)}
+        />
+      )}
     </>
   );
 }; 

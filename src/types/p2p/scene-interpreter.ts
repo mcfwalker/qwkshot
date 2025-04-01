@@ -73,7 +73,7 @@ export interface SceneInterpreter {
  * Scene Interpreter factory interface
  */
 export interface SceneInterpreterFactory {
-  create(config: SceneInterpreterConfig, logger: Logger): SceneInterpreter;
+  create(config: SceneInterpreterConfig): SceneInterpreter;
 }
 
 /**

@@ -70,7 +70,7 @@ export interface LLMEngine {
  * LLM Engine factory interface
  */
 export interface LLMEngineFactory {
-  create(config: LLMEngineConfig, logger: Logger): LLMEngine;
+  create(config: LLMEngineConfig): LLMEngine;
 }
 
 /**

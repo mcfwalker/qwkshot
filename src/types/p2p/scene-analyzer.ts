@@ -138,7 +138,7 @@ export interface SceneAnalyzer {
  * Scene Analyzer factory interface
  */
 export interface SceneAnalyzerFactory {
-  create(config: SceneAnalyzerConfig, logger: Logger): SceneAnalyzer;
+  create(config: SceneAnalyzerConfig): SceneAnalyzer;
 }
 
 /**

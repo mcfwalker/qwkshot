@@ -14,12 +14,19 @@ export interface P2PPipelineConfig extends P2PConfig {
   };
   metadataManager: {
     database: {
+      type: string;
+      url: string;
+      key: string;
       table: string;
       schema: string;
     };
     caching: {
       enabled: boolean;
       ttl: number;
+    };
+    validation?: {
+      strict: boolean;
+      maxFeaturePoints: number;
     };
   };
   promptCompiler: {
@@ -34,6 +41,18 @@ export interface P2PPipelineConfig extends P2PConfig {
   sceneInterpreter: {
     smoothingFactor: number;
     maxKeyframes: number;
+  };
+  environmentalAnalyzer: {
+    environmentSize: {
+      width: number;
+      height: number;
+      depth: number;
+    };
+    analysisOptions: {
+      calculateDistances: boolean;
+      validateConstraints: boolean;
+      optimizeCameraSpace: boolean;
+    };
   };
 }
 
@@ -82,7 +101,7 @@ export interface P2PPipeline {
   /**
    * Initialize the pipeline with configuration
    */
-  initialize(config: P2PPipelineConfig): Promise<void>;
+  initialize(config?: P2PPipelineConfig): Promise<void>;
 
   /**
    * Process a model (new upload or existing)

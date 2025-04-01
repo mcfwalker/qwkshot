@@ -1,14 +1,8 @@
 import { Vector3 } from 'three';
 import {
-  P2PError,
-  ValidationResult,
-  PerformanceMetrics,
   P2PConfig,
   BaseMetadata,
-  Orientation,
-  SafetyConstraints,
-  Feature,
-  Logger,
+  Logger
 } from './shared';
 
 /**
@@ -16,8 +10,9 @@ import {
  */
 export interface MetadataManagerConfig extends P2PConfig {
   database: {
-    table: string;
-    schema: string;
+    type: 'supabase';
+    url: string;
+    key: string;
   };
   caching: {
     enabled: boolean;
@@ -27,16 +22,6 @@ export interface MetadataManagerConfig extends P2PConfig {
     strict: boolean;
     maxFeaturePoints: number;
   };
-}
-
-/**
- * Base metadata interface for all metadata types
- */
-export interface BaseMetadata {
-  id: string;
-  createdAt: Date;
-  updatedAt: Date;
-  version: number;
 }
 
 /**
@@ -122,9 +107,9 @@ export interface PerformanceMetrics {
  */
 export interface MetadataManager {
   /**
-   * Initialize the manager with configuration
+   * Initialize the manager
    */
-  initialize(config: MetadataManagerConfig): Promise<void>;
+  initialize(): Promise<void>;
 
   /**
    * Store metadata for a model
@@ -170,13 +155,18 @@ export interface MetadataManager {
    * Get performance metrics
    */
   getPerformanceMetrics(): PerformanceMetrics;
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): Record<string, unknown>;
 }
 
 /**
  * Metadata Manager factory interface
  */
 export interface MetadataManagerFactory {
-  create(config: MetadataManagerConfig, logger: Logger): MetadataManager;
+  create(config: MetadataManagerConfig): MetadataManager;
 }
 
 /**

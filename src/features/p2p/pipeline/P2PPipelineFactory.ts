@@ -9,6 +9,7 @@ import { MetadataManager, MetadataManagerFactory } from '../../../types/p2p/meta
 import { PromptCompiler, PromptCompilerFactory } from '../../../types/p2p/prompt-compiler';
 import { LLMEngine, LLMEngineFactory } from '../../../types/p2p/llm-engine';
 import { SceneInterpreter, SceneInterpreterFactory } from '../../../types/p2p/scene-interpreter';
+import { EnvironmentalAnalyzer, EnvironmentalAnalyzerFactory } from '../../../types/p2p/environmental-analyzer';
 import { P2PPipelineImpl } from './P2PPipeline';
 
 /**
@@ -20,30 +21,29 @@ export class P2PPipelineFactoryImpl implements P2PPipelineFactory {
     private metadataManagerFactory: MetadataManagerFactory,
     private promptCompilerFactory: PromptCompilerFactory,
     private llmEngineFactory: LLMEngineFactory,
-    private sceneInterpreterFactory: SceneInterpreterFactory
+    private sceneInterpreterFactory: SceneInterpreterFactory,
+    private environmentalAnalyzerFactory: EnvironmentalAnalyzerFactory
   ) {}
 
   create(config: P2PPipelineConfig, logger: Logger): P2PPipeline {
     // Create all component instances
     const sceneAnalyzer = this.sceneAnalyzerFactory.create(
-      config.sceneAnalyzer,
-      logger
+      config.sceneAnalyzer
     );
     const metadataManager = this.metadataManagerFactory.create(
-      config.metadataManager,
-      logger
+      config.metadataManager
     );
     const promptCompiler = this.promptCompilerFactory.create(
-      config.promptCompiler,
-      logger
+      config.promptCompiler
     );
     const llmEngine = this.llmEngineFactory.create(
-      config.llmEngine,
-      logger
+      config.llmEngine
     );
     const sceneInterpreter = this.sceneInterpreterFactory.create(
-      config.sceneInterpreter,
-      logger
+      config.sceneInterpreter
+    );
+    const envAnalyzer = this.environmentalAnalyzerFactory.create(
+      config.environmentalAnalyzer
     );
 
     // Create and return pipeline instance
@@ -51,6 +51,7 @@ export class P2PPipelineFactoryImpl implements P2PPipelineFactory {
       config,
       logger,
       sceneAnalyzer,
+      envAnalyzer,
       metadataManager,
       promptCompiler,
       llmEngine,

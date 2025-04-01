@@ -72,17 +72,30 @@ const mockLogger = {
     performance: vi.fn(),
 } as unknown as Logger;
 
-// Config (using 'as any')
+// Config (using proper types)
 const testConfig: MetadataManagerConfig = {
-  database: { table: 'test_models', schema: 'public' } as any,
-  caching: { enabled: true, ttl: 5000 } as any,
-  validation: { strict: true, maxFeaturePoints: 50 } as any,
+  database: {
+    type: 'supabase',
+    url: 'test-url',
+    key: 'test-key'
+  },
+  caching: {
+    enabled: true,
+    ttl: 5000
+  },
+  validation: {
+    strict: true,
+    maxFeaturePoints: 50
+  },
   debug: false,
-  performance: { enabled: false, logInterval: 0 } as any
-} as any;
+  performance: {
+    enabled: false,
+    logInterval: 0
+  }
+};
 
 // Skip this entire suite due to unresolved import path errors
-describe.skip('MetadataManager', () => {
+describe('MetadataManager', () => {
   let manager: MetadataManagerImpl;
 
   beforeEach(() => {

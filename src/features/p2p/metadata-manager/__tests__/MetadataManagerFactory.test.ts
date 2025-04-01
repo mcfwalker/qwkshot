@@ -1,12 +1,12 @@
-/// <reference types="jest" />
+/// <reference types="vitest" />
 
 import { describe, it, expect, vi } from 'vitest';
-import { MetadataManager, MetadataManagerConfig } from '../../../../types/p2p/metadata-manager';
+import { MetadataManager, MetadataManagerConfig } from '@/types/p2p/metadata-manager';
 import { MetadataManagerFactory } from '../MetadataManagerFactory';
 import { MetadataManagerImpl } from '../MetadataManager';
 import { SupabaseAdapter } from '../adapters/SupabaseAdapter';
 import { InMemoryCache } from '../cache/InMemoryCache';
-import { Logger } from '../../../../types/p2p/shared';
+import { Logger } from '@/types/p2p/shared';
 
 // Mocks
 vi.mock('../adapters/SupabaseAdapter');
@@ -14,17 +14,19 @@ vi.mock('../cache/InMemoryCache');
 vi.mock('../MetadataManager');
 
 const mockLogger: Logger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-  trace: jest.fn()
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+  trace: vi.fn(),
+  performance: vi.fn()
 } as any;
 
 const defaultConfig: MetadataManagerConfig = {
   database: {
-    table: 'models',
-    schema: 'public'
+    type: 'supabase',
+    url: 'test-url',
+    key: 'test-key'
   },
   caching: {
     enabled: true,
@@ -36,11 +38,29 @@ const defaultConfig: MetadataManagerConfig = {
   }
 };
 
-// Skip this entire suite due to unresolved import path errors
-describe.skip('MetadataManagerFactory', () => {
+describe('MetadataManagerFactory', () => {
   let factory: MetadataManagerFactory;
+  let mockDatabase: SupabaseAdapter;
+  let mockCache: InMemoryCache;
+  let mockManager: MetadataManagerImpl;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Create mock instances
+    mockDatabase = new SupabaseAdapter(defaultConfig.database, mockLogger);
+    mockCache = new InMemoryCache({
+      defaultTTL: defaultConfig.caching.ttl,
+      maxSize: 1000,
+      cleanupInterval: 60000
+    }, mockLogger);
+    mockManager = new MetadataManagerImpl(mockDatabase, mockCache, mockLogger, defaultConfig);
+
+    // Mock the constructors
+    (SupabaseAdapter as any).mockImplementation(() => mockDatabase);
+    (InMemoryCache as any).mockImplementation(() => mockCache);
+    (MetadataManagerImpl as any).mockImplementation(() => mockManager);
+
     factory = new MetadataManagerFactory();
   });
 
@@ -49,54 +69,37 @@ describe.skip('MetadataManagerFactory', () => {
 
     // Verify the manager was created
     expect(manager).toBeDefined();
-    expect(manager.initialize).toBeDefined();
-    expect(manager.storeModelMetadata).toBeDefined();
-    expect(manager.getModelMetadata).toBeDefined();
-    expect(manager.updateModelOrientation).toBeDefined();
-    expect(manager.addFeaturePoint).toBeDefined();
-    expect(manager.removeFeaturePoint).toBeDefined();
-    expect(manager.getFeaturePoints).toBeDefined();
-    expect(manager.updateUserPreferences).toBeDefined();
-    expect(manager.validateMetadata).toBeDefined();
-    expect(manager.getPerformanceMetrics).toBeDefined();
+    expect(manager).toBeInstanceOf(MetadataManagerImpl);
+    expect(SupabaseAdapter).toHaveBeenCalledWith(defaultConfig.database, mockLogger);
+    expect(InMemoryCache).toHaveBeenCalledWith({
+      defaultTTL: defaultConfig.caching.ttl,
+      maxSize: 1000,
+      cleanupInterval: 60000
+    }, mockLogger);
   });
 
-  it('should create a SupabaseAdapter for database operations', () => {
+  it('should create a manager that can interact with database', async () => {
     const manager = factory.create(defaultConfig, mockLogger);
     
-    // Access private database property through type assertion
-    const database = (manager as any).database;
-    
-    expect(database).toBeInstanceOf(SupabaseAdapter);
-    expect(database.initialize).toBeDefined();
-    expect(database.storeModelMetadata).toBeDefined();
-    expect(database.getModelMetadata).toBeDefined();
-    expect(database.updateModelOrientation).toBeDefined();
-    expect(database.addFeaturePoint).toBeDefined();
-    expect(database.removeFeaturePoint).toBeDefined();
-    expect(database.getFeaturePoints).toBeDefined();
-    expect(database.updateUserPreferences).toBeDefined();
+    // Test database interaction through public methods
+    await manager.initialize();
+    expect(mockLogger.info).toHaveBeenCalledWith('MetadataManager initialized successfully');
   });
 
-  it('should create an InMemoryCache for caching operations', () => {
+  it('should create a manager that can interact with cache', async () => {
     const manager = factory.create(defaultConfig, mockLogger);
     
-    // Access private cache property through type assertion
-    const cache = (manager as any).cache;
-    
-    expect(cache).toBeInstanceOf(InMemoryCache);
-    expect(cache.initialize).toBeDefined();
-    expect(cache.setModelMetadata).toBeDefined();
-    expect(cache.getModelMetadata).toBeDefined();
-    expect(cache.setFeaturePoints).toBeDefined();
-    expect(cache.getFeaturePoints).toBeDefined();
-    expect(cache.removeModelMetadata).toBeDefined();
-    expect(cache.removeFeaturePoints).toBeDefined();
-    expect(cache.clear).toBeDefined();
-    expect(cache.getStats).toBeDefined();
+    // Test cache interaction through public methods
+    const stats = manager.getCacheStats();
+    expect(stats).toBeDefined();
+    expect(stats).toEqual({
+      hits: 0,
+      misses: 0,
+      size: 0
+    });
   });
 
-  it('should use the provided configuration for cache TTL', () => {
+  it('should use the provided configuration for cache TTL', async () => {
     const customConfig = {
       ...defaultConfig,
       caching: {
@@ -106,24 +109,19 @@ describe.skip('MetadataManagerFactory', () => {
     };
 
     const manager = factory.create(customConfig, mockLogger);
-    const cache = (manager as any).cache;
     
-    expect(cache).toBeInstanceOf(InMemoryCache);
-    // Note: We can't directly test the TTL value as it's private
-    // but we can verify the cache is working with the correct configuration
+    // Test cache configuration through behavior
+    const stats = manager.getCacheStats();
+    expect(stats).toBeDefined();
+    expect(stats).toEqual({
+      hits: 0,
+      misses: 0,
+      size: 0
+    });
   });
 
   it('should create a MetadataManager instance with SupabaseAdapter and InMemoryCache', () => {
-    const config: MetadataManagerConfig = {
-        database: { type: 'supabase', url: 'test-url', key: 'test-key' },
-        caching: { type: 'memory', enabled: true, ttl: 60000 }
-    } as any; // Cast config for simplicity in test
-
-    const manager = factory.create(config, mockLogger);
-
-    expect(manager).toBeInstanceOf(MetadataManagerImpl); 
-    // Check if constructors of mocked adapters were called (implicitly by factory)
-    expect(SupabaseAdapter).toHaveBeenCalled();
-    expect(InMemoryCache).toHaveBeenCalled();
+    const manager = factory.create(defaultConfig, mockLogger);
+    expect(manager).toBeInstanceOf(MetadataManagerImpl);
   });
 }); 
