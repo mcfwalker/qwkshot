@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MetadataManager, MetadataManagerConfig } from '@/types/p2p/metadata-manager';
 import { MetadataManagerFactory } from '../MetadataManagerFactory';
 import { MetadataManagerImpl } from '../MetadataManager';
@@ -61,11 +61,12 @@ describe('MetadataManagerFactory', () => {
     (InMemoryCache as any).mockImplementation(() => mockCache);
     (MetadataManagerImpl as any).mockImplementation(() => mockManager);
 
-    factory = new MetadataManagerFactory();
+    // Create factory with logger in constructor
+    factory = new MetadataManagerFactory(mockLogger);
   });
 
   it('should create a MetadataManager instance with correct dependencies', () => {
-    const manager = factory.create(defaultConfig, mockLogger);
+    const manager = factory.create(defaultConfig);
 
     // Verify the manager was created
     expect(manager).toBeDefined();
@@ -79,7 +80,7 @@ describe('MetadataManagerFactory', () => {
   });
 
   it('should create a manager that can interact with database', async () => {
-    const manager = factory.create(defaultConfig, mockLogger);
+    const manager = factory.create(defaultConfig);
     
     // Test database interaction through public methods
     await manager.initialize();
@@ -87,7 +88,7 @@ describe('MetadataManagerFactory', () => {
   });
 
   it('should create a manager that can interact with cache', async () => {
-    const manager = factory.create(defaultConfig, mockLogger);
+    const manager = factory.create(defaultConfig);
     
     // Test cache interaction through public methods
     const stats = manager.getCacheStats();
@@ -108,7 +109,7 @@ describe('MetadataManagerFactory', () => {
       }
     };
 
-    const manager = factory.create(customConfig, mockLogger);
+    const manager = factory.create(customConfig);
     
     // Test cache configuration through behavior
     const stats = manager.getCacheStats();
@@ -121,7 +122,7 @@ describe('MetadataManagerFactory', () => {
   });
 
   it('should create a MetadataManager instance with SupabaseAdapter and InMemoryCache', () => {
-    const manager = factory.create(defaultConfig, mockLogger);
+    const manager = factory.create(defaultConfig);
     expect(manager).toBeInstanceOf(MetadataManagerImpl);
   });
 }); 

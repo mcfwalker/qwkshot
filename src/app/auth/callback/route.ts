@@ -1,6 +1,6 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getSupabaseClient } from '@/lib/supabase-route'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -8,17 +8,8 @@ export async function GET(request: Request) {
   const redirectTo = requestUrl.searchParams.get('redirectTo') || '/library'
 
   if (code) {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ 
-      cookies: () => {
-        return {
-          get: cookieStore.get.bind(cookieStore),
-          getAll: cookieStore.getAll.bind(cookieStore)
-        } as any
-      } 
-    })
-    
     try {
+      const supabase = await getSupabaseClient()
       await supabase.auth.exchangeCodeForSession(code)
     } catch (error) {
       console.error('Auth callback error:', error)

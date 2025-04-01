@@ -1,7 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Get environment variables without quotes
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/"/g, '') || ''
@@ -20,20 +19,25 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
+let serverClientInstance: ReturnType<typeof createServerComponentClient<Database>> | null = null;
+
 // Create a server component client that uses cookies for auth
-export async function createServerClient() {
-  // Next.js cookies() returns a Promise as of Next.js 14
-  const cookieStore = await cookies()
-  
-  // Create the client using the awaited cookie store
-  return createServerComponentClient<Database>({
-    cookies: () => {
-      // Return an object that matches the expected Promise<ReadonlyRequestCookies> type
-      // but actually uses our already-awaited cookie store
-      return {
-        get: cookieStore.get.bind(cookieStore),
-        getAll: cookieStore.getAll.bind(cookieStore)
-      } as any
-    }
-  })
+export async function getServerClient() {
+  if (!serverClientInstance) {
+    // Next.js cookies() returns a Promise as of Next.js 14
+    const cookieStore = await cookies()
+    
+    // Create the client using the awaited cookie store
+    serverClientInstance = createServerComponentClient<Database>({
+      cookies: () => {
+        // Return an object that matches the expected Promise<ReadonlyRequestCookies> type
+        // but actually uses our already-awaited cookie store
+        return {
+          get: cookieStore.get.bind(cookieStore),
+          getAll: cookieStore.getAll.bind(cookieStore)
+        } as any
+      }
+    })
+  }
+  return serverClientInstance
 } 

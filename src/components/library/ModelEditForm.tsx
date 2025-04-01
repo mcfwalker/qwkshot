@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Model } from '@/lib/supabase'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/types/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +18,7 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
   const router = useRouter()
   const [name, setName] = useState(model.name)
   const [isLoading, setIsLoading] = useState(false)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseClient()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

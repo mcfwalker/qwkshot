@@ -1,6 +1,6 @@
 import { LLMProviderRegistry } from './registry';
 import { getConfiguredProviders } from './config';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from '../supabase';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ProviderType } from './types';
 
@@ -68,7 +68,7 @@ export async function initializeLLMSystem() {
     : configuredProviders[0];
     
   // Create Supabase client
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   
   // Ensure the llm_state table is initialized
   await ensureLLMStateTableInitialized(supabase, defaultProvider);

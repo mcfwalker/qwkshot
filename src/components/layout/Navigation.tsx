@@ -5,12 +5,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ViewIcon, FolderOpen, LogOut, Home, Settings } from 'lucide-react'
 import { toast } from 'sonner'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export function Navigation() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseClient()
 
   const handleSignOut = async () => {
     try {

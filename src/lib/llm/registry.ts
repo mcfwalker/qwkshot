@@ -3,7 +3,7 @@ import { BaseLLMProvider } from './base-provider';
 import OpenAIProvider from './providers/openai';
 import GeminiProvider from './providers/gemini';
 import { getProviderConfig } from './config';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from '../supabase';
 
 /**
  * Registry for managing LLM providers
@@ -13,7 +13,7 @@ export class LLMProviderRegistry implements ProviderRegistry {
   private static instance: LLMProviderRegistry;
   private providers: Map<ProviderType, BaseLLMProvider> = new Map();
   private activeProvider: ProviderType | null = null;
-  private supabase = createClientComponentClient();
+  private supabase = getSupabaseClient();
 
   private constructor() {}
 

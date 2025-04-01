@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import type { HealthCheckResponse, SystemInfoResponse } from '@/lib/system/types'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 
 interface DevInfoState {
   health: HealthCheckResponse | null;
@@ -72,7 +72,7 @@ export function DevInfo() {
   
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseClient()
   
   // Function to fetch health status
   const fetchHealth = async () => {

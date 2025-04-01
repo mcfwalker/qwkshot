@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createRouteSupabaseClient } from '@/lib/supabase-route'
+import { getSupabaseClient } from '@/lib/supabase-route'
 import { getConfiguredProviders } from '@/lib/llm/config'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
 import { getGitInfo } from '@/lib/git'
@@ -21,7 +21,7 @@ export async function GET(): Promise<NextResponse<SystemInfoResponse | SystemErr
     )
 
     // Initialize Supabase client and get session
-    const supabase = await createRouteSupabaseClient()
+    const supabase = await getSupabaseClient()
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
     // Check DB connection regardless of auth status

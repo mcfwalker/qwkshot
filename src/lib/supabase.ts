@@ -1,9 +1,10 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
+import { SupabaseClientOptions } from '@supabase/supabase-js'
 
 // Log environment variables to debug
 console.log('Client - ENV check - NEXT_PUBLIC_SUPABASE_URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-console.log('Client - ENV check - NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) 
+console.log('Client - ENV check - NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 console.log('Client - ENV check - Key length:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length || 0)
 
 // Get environment variables without quotes
@@ -15,17 +16,26 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase credentials. Check your environment variables.')
 }
 
-// Create a singleton instance with default configuration
-export const supabase = createClientComponentClient<Database>()
+let clientInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null;
+
+// Get or create the singleton instance
+export function getSupabaseClient() {
+  if (!clientInstance) {
+    clientInstance = createClientComponentClient<Database>();
+  }
+  return clientInstance;
+}
+
+// Export the singleton instance for direct use
+export const supabase = getSupabaseClient();
 
 // Direct client for specific use cases (like SSR)
 export const supabaseAdmin = createClientComponentClient<Database>({
   supabaseUrl,
   supabaseKey,
   options: {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+    global: {
+      headers: { 'x-client-info': 'modern-3d-viewer-admin' }
     }
   }
 })

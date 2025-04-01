@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PerformanceMonitor } from '@/lib/system/performance'
 import { apiPerformance, API_THRESHOLDS } from '@/lib/monitoring/api-performance'
-import { createRouteSupabaseClient } from '@/lib/supabase-route'
+import { getSupabaseClient } from '@/lib/supabase-route'
 import { LLMProviderRegistry } from '@/lib/llm/registry'
 import { cookies, headers } from 'next/headers'
 
@@ -40,7 +40,7 @@ export async function GET() {
   
   try {
     // Initialize Supabase client
-    const supabase = await createRouteSupabaseClient()
+    const supabase = await getSupabaseClient()
     
     // Get session without throwing errors
     let session = null

@@ -1,8 +1,9 @@
-import { createClient, SupabaseClient, PostgrestError } from '@supabase/supabase-js';
+import { SupabaseClient, PostgrestError } from '@supabase/supabase-js';
 import { DatabaseAdapter } from './DatabaseAdapter';
 import { ModelMetadata, ModelFeaturePoint, UserPreferences, DatabaseError, NotFoundError } from '../../../../types/p2p/metadata-manager';
 import { Orientation } from '../../../../types/p2p/shared';
 import { Logger } from '../../../../types/p2p/shared';
+import { getSupabaseClient } from '../../../../lib/supabase';
 
 /**
  * Configuration for the Supabase adapter
@@ -10,19 +11,6 @@ import { Logger } from '../../../../types/p2p/shared';
 export interface SupabaseAdapterConfig {
   url: string;
   key: string;
-}
-
-// Singleton Supabase client
-let supabaseClientInstance: SupabaseClient | null = null;
-
-/**
- * Get a singleton instance of the Supabase client
- */
-function getSupabaseClient(url: string, key: string): SupabaseClient {
-  if (!supabaseClientInstance) {
-    supabaseClientInstance = createClient(url, key);
-  }
-  return supabaseClientInstance;
 }
 
 /**
@@ -33,7 +21,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
   private logger: Logger;
 
   constructor(config: SupabaseAdapterConfig, logger: Logger) {
-    this.client = getSupabaseClient(config.url, config.key);
+    this.client = getSupabaseClient();
     this.logger = logger;
   }
 
