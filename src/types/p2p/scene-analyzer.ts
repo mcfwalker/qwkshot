@@ -1,11 +1,11 @@
-import { Vector3, Box3, Plane, Material } from 'three';
+import { Box3, Vector3, Plane, Object3D, Material } from 'three';
 import {
   P2PError,
-  ValidationResult,
-  PerformanceMetrics,
+  ValidationResult as ImportedValidationResult,
+  PerformanceMetrics as ImportedPerformanceMetrics,
   P2PConfig,
   SpatialBounds,
-  SafetyConstraints,
+  SafetyConstraints as ImportedSafetyConstraints,
   Feature,
   Logger,
 } from './shared';
@@ -84,10 +84,35 @@ export interface SceneAnalysis {
   glb: GLBAnalysis;
   spatial: SpatialAnalysis;
   featureAnalysis: FeatureAnalysis;
-  safetyConstraints: SafetyConstraints;
-  orientation: Orientation;
+  safetyConstraints: SceneSafetyConstraints;
+  orientation: ModelOrientation;
   features: Feature[];
   performance: PerformanceMetrics;
+}
+
+/**
+ * Represents the calculated orientation and scale of the model.
+ */
+export interface ModelOrientation {
+  front: Vector3;      // Primary viewing direction
+  back: Vector3;       // Opposite of front
+  left: Vector3;       // Left side direction
+  right: Vector3;      // Right side direction
+  top: Vector3;        // Top direction
+  bottom: Vector3;     // Bottom direction
+  center: Vector3;     // Model center
+  scale: number;       // Model scale
+  confidence: number;  // Confidence in orientation detection (0-1)
+  position?: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
+}
+
+export interface SceneSafetyConstraints {
+  minHeight: number;
+  maxHeight: number;
+  minDistance: number;
+  maxDistance: number;
+  restrictedZones: Box3[];
 }
 
 /**
@@ -105,22 +130,38 @@ export interface SceneAnalyzer {
   analyzeScene(file: File): Promise<SceneAnalysis>;
 
   /**
-   * Extract spatial reference points
+   * Calculate orientation of the model
    */
-  extractReferencePoints(scene: SceneAnalysis): Promise<SpatialAnalysis['referencePoints']>;
+  calculateOrientation(scene: Object3D): Promise<ModelOrientation>;
 
   /**
    * Calculate safety boundaries
    */
-  calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SafetyConstraints>;
+  calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SceneSafetyConstraints>;
+
+  /**
+   * Extract spatial reference points
+   */
+  extractReferencePoints(scene: SceneAnalysis): Promise<{
+    center: Vector3;
+    highest: Vector3;
+    lowest: Vector3;
+    leftmost: Vector3;
+    rightmost: Vector3;
+    frontmost: Vector3;
+    backmost: Vector3;
+  }>;
 
   /**
    * Get basic scene understanding
    */
   getSceneUnderstanding(scene: SceneAnalysis): Promise<{
-    complexity: SpatialAnalysis['complexity'];
-    symmetry: SpatialAnalysis['symmetry'];
-    features: FeatureAnalysis['features'];
+    complexity: 'simple' | 'moderate' | 'high';
+    symmetry: {
+      hasSymmetry: boolean;
+      symmetryPlanes: Plane[];
+    };
+    features: Feature[];
   }>;
 
   /**
@@ -168,15 +209,22 @@ export class ValidationError extends SceneAnalyzerError {
   }
 }
 
-/**
- * Represents the calculated orientation and scale of the model.
- */
-export interface Orientation {
-  front: Vector3;
-  up: Vector3;
-  right: Vector3;
-  center: Vector3;
-  scale: number;
-  position?: { x: number; y: number; z: number };
-  rotation?: { x: number; y: number; z: number };
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+export interface PerformanceMetrics {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  operations: Array<{
+    name: string;
+    duration: number;
+    success: boolean;
+  }>;
+  cacheHits: number;
+  cacheMisses: number;
+  databaseQueries: number;
+  averageResponseTime: number;
 } 

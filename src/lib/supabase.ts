@@ -97,9 +97,17 @@ export type Model = {
     }
     environment?: Record<string, any>
     orientation?: {
-      position: { x: number; y: number; z: number }
-      rotation: { x: number; y: number; z: number }
-      scale: { x: number; y: number; z: number }
+      front: { x: number; y: number; z: number }
+      back: { x: number; y: number; z: number }
+      left: { x: number; y: number; z: number }
+      right: { x: number; y: number; z: number }
+      top: { x: number; y: number; z: number }
+      bottom: { x: number; y: number; z: number }
+      center: { x: number; y: number; z: number }
+      scale: number
+      confidence: number
+      position?: { x: number; y: number; z: number }
+      rotation?: { x: number; y: number; z: number }
     }
     preferences?: {
       defaultCameraDistance: number

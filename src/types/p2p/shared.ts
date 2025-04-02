@@ -13,9 +13,17 @@ export interface SerializedVector3 {
  * Serialized Orientation interface for storage
  */
 export interface SerializedOrientation {
+  front: SerializedVector3;
+  back: SerializedVector3;
+  left: SerializedVector3;
+  right: SerializedVector3;
+  top: SerializedVector3;
+  bottom: SerializedVector3;
+  center: SerializedVector3;
+  scale: number;
+  confidence: number;
   position: SerializedVector3;
   rotation: SerializedVector3;
-  scale: SerializedVector3;
 }
 
 /**
@@ -43,9 +51,17 @@ export interface BaseMetadata {
  * Orientation interface for 3D objects
  */
 export interface Orientation {
+  front: Vector3;
+  back: Vector3;
+  left: Vector3;
+  right: Vector3;
+  top: Vector3;
+  bottom: Vector3;
+  center: Vector3;
+  scale: number;
+  confidence: number;
   position: Vector3;
   rotation: Vector3;
-  scale: Vector3;
 }
 
 /**

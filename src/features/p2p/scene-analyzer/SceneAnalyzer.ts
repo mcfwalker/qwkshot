@@ -2,6 +2,7 @@ import { Box3, Object3D, Plane, Vector3, Mesh, Matrix4, Matrix3, Quaternion, Eul
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Logger, SceneAnalyzerConfig, SceneAnalyzer, Feature, PerformanceMetrics } from '../../../types/p2p';
 import * as THREE from 'three';
+import { OrientationDetector } from './OrientationDetector';
 
 interface AnalysisError extends Error {
   name: 'AnalysisError';
@@ -115,11 +116,13 @@ interface GLTF {
 export class SceneAnalyzerImpl implements SceneAnalyzer {
   private config: SceneAnalyzerConfig;
   private gltfLoader: GLTFLoader;
+  private orientationDetector: OrientationDetector;
   private initialized: boolean = false;
 
   constructor(config: SceneAnalyzerConfig, private logger: Logger) {
     this.config = config;
     this.gltfLoader = new GLTFLoader();
+    this.orientationDetector = new OrientationDetector(logger);
   }
 
   async initialize(config: SceneAnalyzerConfig): Promise<void> {
@@ -327,19 +330,7 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
   }
 
   protected async calculateOrientation(scene: Object3D): Promise<Orientation> {
-    const boundingBox = new Box3().setFromObject(scene);
-    const center = new Vector3();
-    boundingBox.getCenter(center);
-    const dimensions = new Vector3();
-    boundingBox.getSize(dimensions);
-
-    return {
-      front: new Vector3(0, 0, -1),
-      up: new Vector3(0, 1, 0),
-      right: new Vector3(1, 0, 0),
-      center,
-      scale: Math.max(dimensions.x, dimensions.y, dimensions.z),
-    };
+    return this.orientationDetector.detectOrientation(scene);
   }
 
   protected async calculateSymmetry(analysis: SceneAnalysis): Promise<SpatialAnalysis['symmetry']> {

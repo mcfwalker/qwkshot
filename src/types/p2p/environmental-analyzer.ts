@@ -83,6 +83,9 @@ export interface CameraConstraints {
   maxHeight: number;    // Maximum camera height
   minDistance: number;  // Minimum distance from object
   maxDistance: number;  // Maximum distance from object
+  maxSpeed: number;     // Maximum camera movement speed
+  maxAngleChange: number; // Maximum angle change between keyframes
+  minFramingMargin: number; // Minimum margin from model bounds
 }
 
 /**

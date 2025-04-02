@@ -37,9 +37,27 @@ interface SerializedVector3 {
 }
 
 interface SerializedOrientation {
+  front: SerializedVector3;
+  back: SerializedVector3;
+  left: SerializedVector3;
+  right: SerializedVector3;
+  top: SerializedVector3;
+  bottom: SerializedVector3;
+  center: SerializedVector3;
+  scale: number;
+  confidence: number;
   position: SerializedVector3;
   rotation: SerializedVector3;
-  scale: SerializedVector3;
+}
+
+interface SerializedConstraints {
+  minDistance: number;
+  maxDistance: number;
+  minHeight: number;
+  maxHeight: number;
+  maxSpeed: number;
+  maxAngleChange: number;
+  minFramingMargin: number;
 }
 
 /**
@@ -150,9 +168,17 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
   private serializeOrientation(orientation: any): SerializedOrientation {
     return {
+      front: this.serializeVector3(orientation.front || new Vector3(0, 0, 1)),
+      back: this.serializeVector3(orientation.back || new Vector3(0, 0, -1)),
+      left: this.serializeVector3(orientation.left || new Vector3(-1, 0, 0)),
+      right: this.serializeVector3(orientation.right || new Vector3(1, 0, 0)),
+      top: this.serializeVector3(orientation.top || new Vector3(0, 1, 0)),
+      bottom: this.serializeVector3(orientation.bottom || new Vector3(0, -1, 0)),
+      center: this.serializeVector3(orientation.center || new Vector3(0, 0, 0)),
+      scale: orientation.scale || 1,
+      confidence: orientation.confidence || 0,
       position: this.serializeVector3(orientation.position || new Vector3(0, 0, 0)),
-      rotation: this.serializeVector3(orientation.rotation || new Vector3(0, 0, 0)),
-      scale: this.serializeVector3(orientation.scale || new Vector3(1, 1, 1))
+      rotation: this.serializeVector3(orientation.rotation || new Vector3(0, 0, 0))
     };
   }
 
@@ -304,19 +330,20 @@ export class P2PPipelineImpl implements IP2PPipeline {
             dimensions: this.serializeVector3(sceneAnalysis.glb.geometry.dimensions)
           },
           environment: {
-            bounds: {
-              min: { x: 0, y: 0, z: 0 },
-              max: { x: 0, y: 0, z: 0 },
-              center: { x: 0, y: 0, z: 0 },
-              dimensions: { width: 0, height: 0, depth: 0 }
-            },
-            floorOffset: 0,
-            distances: {},
             constraints: {
-              minDistance: 0,
-              maxDistance: 0,
               minHeight: 0,
-              maxHeight: 0
+              maxHeight: 1,
+              minDistance: 0.1,
+              maxDistance: 2,
+              maxSpeed: 2.0,
+              maxAngleChange: Math.PI / 4,
+              minFramingMargin: 0.1
+            },
+            performance: {
+              startTime: 0,
+              endTime: 0,
+              duration: 0,
+              operations: []
             }
           },
           performance_metrics: {
@@ -590,10 +617,13 @@ export class P2PPipelineImpl implements IP2PPipeline {
         floorOffset: envAnalysis.object?.floorOffset || 0,
         distances: envAnalysis.distances?.fromObjectToBoundary || {},
         constraints: {
+          minHeight: envAnalysis.cameraConstraints?.minHeight || 0,
+          maxHeight: envAnalysis.cameraConstraints?.maxHeight || 0,
           minDistance: envAnalysis.cameraConstraints?.minDistance || 0,
           maxDistance: envAnalysis.cameraConstraints?.maxDistance || 0,
-          minHeight: envAnalysis.cameraConstraints?.minHeight || 0,
-          maxHeight: envAnalysis.cameraConstraints?.maxHeight || 0
+          maxSpeed: envAnalysis.cameraConstraints?.maxSpeed || 0,
+          maxAngleChange: envAnalysis.cameraConstraints?.maxAngleChange || 0,
+          minFramingMargin: envAnalysis.cameraConstraints?.minFramingMargin || 0
         }
       };
 

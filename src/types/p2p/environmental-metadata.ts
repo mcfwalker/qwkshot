@@ -29,6 +29,16 @@ export interface EnvironmentalMetadata {
       duration: number;
     }>;
   };
+  bounds?: {
+    min: SerializedVector3;
+    max: SerializedVector3;
+    center: SerializedVector3;
+    dimensions: {
+      width: number;
+      height: number;
+      depth: number;
+    };
+  };
   constraints?: {
     minDistance: number;
     maxDistance: number;
