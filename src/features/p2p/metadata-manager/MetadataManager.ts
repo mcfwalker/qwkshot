@@ -8,10 +8,12 @@ import {
   NotFoundError,
   ValidationError,
   MetadataManagerConfig,
-  MetadataManager as IMetadataManager
+  MetadataManager as IMetadataManager,
+  ValidationResult
 } from '../../../types/p2p/metadata-manager';
 import { Orientation } from '../../../types/p2p/shared';
 import { Logger } from '../../../types/p2p/shared';
+import { EnvironmentalMetadata } from '../../../types/p2p/environmental-metadata';
 
 const DEFAULT_CONFIG: Required<MetadataManagerConfig> = {
   database: {
@@ -289,54 +291,39 @@ export class MetadataManagerImpl implements IMetadataManager {
    */
   async updateFloorOffset(modelId: string, floorOffset: number): Promise<void> {
     try {
-      // Validate floor offset
+      // Validate input
       if (typeof floorOffset !== 'number' || isNaN(floorOffset)) {
-        throw new ValidationError('Floor offset must be a valid number');
+        throw new ValidationError('floorOffset must be a valid number');
       }
 
       // Get current metadata
       const metadata = await this.getModelMetadata(modelId);
+      const objectHeight = metadata.geometry.dimensions.y;
 
-      // Get object height from geometry analysis if available
-      const objectHeight = metadata.analysis?.geometry?.dimensions?.y || 0;
-
-      // Validate against object height
+      // Validate floor offset
       if (floorOffset < -objectHeight) {
-        throw new ValidationError(`Floor offset cannot be less than -${objectHeight} (object height)`);
+        throw new ValidationError('floorOffset cannot be less than negative object height');
       }
 
-      // Update floor offset in environment analysis
-      if (!metadata.analysis) {
-        metadata.analysis = {};
-      }
-      if (!metadata.analysis.environment) {
-        metadata.analysis.environment = {
-          bounds: {
-            min: { x: 0, y: 0, z: 0 },
-            max: { x: 0, y: 0, z: 0 },
-            center: { x: 0, y: 0, z: 0 },
-            dimensions: { width: 0, height: 0, depth: 0 }
-          },
-          floorOffset,
-          distances: {},
-          constraints: {
-            minDistance: 0,
-            maxDistance: 0,
-            minHeight: 0,
-            maxHeight: 0
-          }
-        };
-      } else {
-        metadata.analysis.environment.floorOffset = floorOffset;
-      }
+      // Update camera constraints based on new floor offset
+      const currentConstraints = metadata.environment.constraints || {
+        minDistance: 1,
+        maxDistance: 20,
+        minHeight: floorOffset + objectHeight * 0.5,
+        maxHeight: floorOffset + objectHeight * 3,
+        maxSpeed: 1,
+        maxAngleChange: 45,
+        minFramingMargin: 0.1
+      };
+
+      metadata.environment.constraints = {
+        ...currentConstraints,
+        minHeight: floorOffset + objectHeight * 0.5,  // Minimum height is half the object height above floor
+        maxHeight: floorOffset + objectHeight * 3     // Maximum height is 3x the object height above floor
+      };
 
       // Store updated metadata
       await this.storeModelMetadata(modelId, metadata);
-
-      // Invalidate cache
-      if (this.config.caching.enabled) {
-        await this.cache.removeModelMetadata(modelId);
-      }
 
       this.logger.info(`Updated floor offset for model: ${modelId} to ${floorOffset}`);
     } catch (error) {
@@ -346,5 +333,281 @@ export class MetadataManagerImpl implements IMetadataManager {
       }
       throw new Error(`Failed to update floor offset for model: ${modelId}`);
     }
+  }
+
+  async createMetadata(modelId: string, userId: string, file: string): Promise<ModelMetadata> {
+    if (!modelId || !userId || !file) {
+      throw new ValidationError('modelId, userId, and file are required');
+    }
+
+    const now = new Date();
+    const metadata: ModelMetadata = {
+      id: modelId,
+      modelId,
+      userId,
+      file,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      orientation: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 }
+      },
+      featurePoints: [],
+      preferences: {
+        defaultCameraDistance: 5,
+        defaultCameraHeight: 1.6,
+        preferredViewAngles: [0, 45, 90, 135, 180],
+        uiPreferences: {
+          showGrid: true,
+          showAxes: true,
+          showMeasurements: true
+        }
+      },
+      geometry: {
+        vertexCount: 0,
+        faceCount: 0,
+        boundingBox: {
+          min: { x: 0, y: 0, z: 0 },
+          max: { x: 0, y: 0, z: 0 }
+        },
+        center: { x: 0, y: 0, z: 0 },
+        dimensions: { x: 0, y: 0, z: 0 }
+      },
+      environment: {
+        lighting: {
+          intensity: 1,
+          color: '#FFFFFF',
+          position: { x: 0, y: 10, z: 0 }
+        },
+        camera: {
+          position: { x: 0, y: 2, z: 5 },
+          target: { x: 0, y: 0, z: 0 },
+          fov: 45
+        },
+        scene: {
+          background: '#000000',
+          ground: '#808080',
+          atmosphere: '#87CEEB'
+        },
+        constraints: {
+          minDistance: 1,
+          maxDistance: 20,
+          minHeight: 0.5,
+          maxHeight: 10,
+          maxSpeed: 1,
+          maxAngleChange: 45,
+          minFramingMargin: 0.1
+        },
+        performance: {
+          startTime: now.getTime(),
+          endTime: now.getTime(),
+          duration: 0,
+          operations: []
+        }
+      },
+      performance_metrics: {
+        sceneAnalysis: {
+          startTime: 0,
+          endTime: 0,
+          duration: 0,
+          operations: [],
+          cacheHits: 0,
+          cacheMisses: 0,
+          databaseQueries: 0,
+          averageResponseTime: 0
+        },
+        environmentalAnalysis: {
+          startTime: 0,
+          endTime: 0,
+          duration: 0,
+          operations: [],
+          cacheHits: 0,
+          cacheMisses: 0,
+          databaseQueries: 0,
+          averageResponseTime: 0
+        }
+      }
+    };
+
+    await this.storeModelMetadata(modelId, metadata);
+    return metadata;
+  }
+
+  async updateEnvironmentalAnalysis(
+    modelId: string, 
+    environmentalData: EnvironmentalMetadata
+  ): Promise<void> {
+    try {
+      this.logger.info(`Updating environmental analysis for model: ${modelId}`, {
+        environmentalData
+      });
+
+      // Get current metadata
+      const metadata = await this.getModelMetadata(modelId);
+
+      // Update environmental analysis
+      metadata.environment = {
+        ...metadata.environment,
+        ...environmentalData
+      };
+
+      // Store updated metadata
+      await this.storeModelMetadata(modelId, metadata);
+
+      this.logger.info(`Successfully updated environmental analysis for model: ${modelId}`);
+    } catch (error) {
+      this.logger.error(`Failed to update environmental analysis for model: ${modelId}`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to update environmental analysis for model: ${modelId}`);
+    }
+  }
+
+  /**
+   * Store environmental metadata
+   */
+  async storeEnvironmentalMetadata(
+    modelId: string,
+    metadata: EnvironmentalMetadata
+  ): Promise<void> {
+    try {
+      // Validate metadata before storing
+      const validation = this.validateEnvironmentalMetadata(metadata);
+      if (!validation.isValid) {
+        throw new ValidationError(`Invalid environmental metadata: ${validation.errors.join(', ')}`);
+      }
+
+      await this.db.storeEnvironmentalMetadata(modelId, metadata);
+      if (this.config.caching.enabled) {
+        await this.cache.removeModelMetadata(modelId); // Invalidate cache
+      }
+      this.logger.info(`Stored environmental metadata for model: ${modelId}`);
+    } catch (error) {
+      this.logger.error(`Failed to store environmental metadata for model: ${modelId}`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to store environmental metadata for model: ${modelId}`);
+    }
+  }
+
+  /**
+   * Get environmental metadata with caching
+   */
+  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata> {
+    try {
+      // Try cache first if enabled
+      if (this.config.caching.enabled) {
+        const cached = await this.cache.getModelMetadata(modelId);
+        if (cached?.environment) {
+          this.logger.debug(`Cache hit for environmental metadata: ${modelId}`);
+          return cached.environment;
+        }
+      }
+
+      // Get from database
+      const metadata = await this.db.getEnvironmentalMetadata(modelId);
+      
+      // Store in cache if enabled
+      if (this.config.caching.enabled) {
+        const modelMetadata = await this.getModelMetadata(modelId);
+        await this.cache.setModelMetadata(modelId, modelMetadata, this.config.caching.ttl);
+      }
+
+      return metadata;
+    } catch (error) {
+      this.logger.error(`Failed to get environmental metadata for model: ${modelId}`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to get environmental metadata for model: ${modelId}`);
+    }
+  }
+
+  /**
+   * Update environmental metadata
+   */
+  async updateEnvironmentalMetadata(
+    modelId: string,
+    metadata: Partial<EnvironmentalMetadata>
+  ): Promise<void> {
+    try {
+      // Get current metadata
+      const current = await this.getEnvironmentalMetadata(modelId);
+      
+      // Merge with new metadata
+      const updated = { ...current, ...metadata };
+
+      // Validate merged metadata
+      const validation = this.validateEnvironmentalMetadata(updated);
+      if (!validation.isValid) {
+        throw new ValidationError(`Invalid environmental metadata: ${validation.errors.join(', ')}`);
+      }
+
+      await this.db.updateEnvironmentalMetadata(modelId, metadata);
+      if (this.config.caching.enabled) {
+        await this.cache.removeModelMetadata(modelId); // Invalidate cache
+      }
+      this.logger.info(`Updated environmental metadata for model: ${modelId}`);
+    } catch (error) {
+      this.logger.error(`Failed to update environmental metadata for model: ${modelId}`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Failed to update environmental metadata for model: ${modelId}`);
+    }
+  }
+
+  /**
+   * Validate environmental metadata
+   */
+  validateEnvironmentalMetadata(metadata: EnvironmentalMetadata): ValidationResult {
+    this.logger.debug('Validating environmental metadata', metadata);
+    const errors: string[] = [];
+
+    // Validate lighting
+    if (metadata.lighting) {
+      if (metadata.lighting.intensity !== undefined && (metadata.lighting.intensity < 0 || metadata.lighting.intensity > 1)) {
+        errors.push('Lighting intensity must be between 0 and 1');
+      }
+      if (metadata.lighting.color && !/^#[0-9A-Fa-f]{6}$/.test(metadata.lighting.color)) {
+        errors.push('Lighting color must be a valid hex color (e.g., #FF0000)');
+      }
+    }
+
+    // Validate camera
+    if (metadata.camera) {
+      if (metadata.camera.fov !== undefined && (metadata.camera.fov < 0 || metadata.camera.fov > 180)) {
+        errors.push('Camera FOV must be between 0 and 180 degrees');
+      }
+    }
+
+    // Validate constraints
+    if (metadata.constraints) {
+      if (metadata.constraints.minDistance !== undefined && metadata.constraints.maxDistance !== undefined) {
+        if (metadata.constraints.minDistance > metadata.constraints.maxDistance) {
+          errors.push('Minimum distance cannot be greater than maximum distance');
+        }
+      }
+      if (metadata.constraints.minHeight !== undefined && metadata.constraints.maxHeight !== undefined) {
+        if (metadata.constraints.minHeight > metadata.constraints.maxHeight) {
+          errors.push('Minimum height cannot be greater than maximum height');
+        }
+      }
+      if (metadata.constraints.maxSpeed !== undefined && metadata.constraints.maxSpeed <= 0) {
+        errors.push('Maximum speed must be greater than 0');
+      }
+      if (metadata.constraints.maxAngleChange !== undefined && metadata.constraints.maxAngleChange <= 0) {
+        errors.push('Maximum angle change must be greater than 0');
+      }
+      if (metadata.constraints.minFramingMargin !== undefined && metadata.constraints.minFramingMargin < 0) {
+        errors.push('Minimum framing margin cannot be negative');
+      }
+    }
+
+    return { isValid: errors.length === 0, errors };
   }
 } 

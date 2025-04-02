@@ -117,7 +117,8 @@ export interface P2PPipeline {
    */
   generatePath(
     modelId: string,
-    instruction: UserInstruction
+    userInput: string,
+    currentCameraState: { position: Vector3; target: Vector3 }
   ): Promise<AnimationOutput>;
 
   /**

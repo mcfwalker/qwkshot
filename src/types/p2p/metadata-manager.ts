@@ -6,6 +6,7 @@ import {
   SerializedVector3,
   SerializedOrientation
 } from './shared';
+import { EnvironmentalMetadata } from './environmental-metadata';
 
 /**
  * Configuration for the Metadata Manager
@@ -36,41 +37,20 @@ export interface ModelMetadata extends BaseMetadata {
   orientation: SerializedOrientation;
   featurePoints: ModelFeaturePoint[];
   preferences: UserPreferences;
-  analysis?: {
-    geometry?: {
-      vertexCount: number;
-      faceCount: number;
-      boundingBox: {
-        min: SerializedVector3;
-        max: SerializedVector3;
-      };
-      center: SerializedVector3;
-      dimensions: SerializedVector3;
+  geometry: {
+    vertexCount: number;
+    faceCount: number;
+    boundingBox: {
+      min: SerializedVector3;
+      max: SerializedVector3;
     };
-    environment?: {
-      bounds: {
-        min: SerializedVector3;
-        max: SerializedVector3;
-        center: SerializedVector3;
-        dimensions: {
-          width: number;
-          height: number;
-          depth: number;
-        };
-      };
-      floorOffset: number;
-      distances: Record<string, number>;
-      constraints: {
-        minDistance: number;
-        maxDistance: number;
-        minHeight: number;
-        maxHeight: number;
-      };
-    };
-    performance?: {
-      sceneAnalysis: PerformanceMetrics;
-      environmentalAnalysis: PerformanceMetrics;
-    };
+    center: SerializedVector3;
+    dimensions: SerializedVector3;
+  };
+  environment: EnvironmentalMetadata;
+  performance_metrics: {
+    sceneAnalysis: PerformanceMetrics;
+    environmentalAnalysis: PerformanceMetrics;
   };
 }
 
@@ -160,6 +140,21 @@ export interface MetadataManager {
   getModelMetadata(modelId: string): Promise<ModelMetadata>;
 
   /**
+   * Store environmental metadata for a model
+   */
+  storeEnvironmentalMetadata(modelId: string, metadata: EnvironmentalMetadata): Promise<void>;
+
+  /**
+   * Retrieve environmental metadata for a model
+   */
+  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata>;
+
+  /**
+   * Update environmental metadata for a model
+   */
+  updateEnvironmentalMetadata(modelId: string, metadata: Partial<EnvironmentalMetadata>): Promise<void>;
+
+  /**
    * Update model orientation
    */
   updateModelOrientation(modelId: string, orientation: Orientation): Promise<void>;
@@ -193,6 +188,11 @@ export interface MetadataManager {
    * Validate metadata
    */
   validateMetadata(metadata: ModelMetadata): ValidationResult;
+
+  /**
+   * Validate environmental metadata
+   */
+  validateEnvironmentalMetadata(metadata: EnvironmentalMetadata): ValidationResult;
 
   /**
    * Get performance metrics

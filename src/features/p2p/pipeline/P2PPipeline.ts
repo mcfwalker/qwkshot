@@ -251,7 +251,6 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
       let modelId: string;
       let sceneAnalysis: SceneAnalysis;
-      let envAnalysis: EnvironmentalAnalysis;
       let metadata: ModelMetadata;
 
       if (input.file) {
@@ -264,26 +263,12 @@ export class P2PPipelineImpl implements IP2PPipeline {
           spatialBounds: sceneAnalysis.spatial.bounds,
           safetyConstraints: sceneAnalysis.safetyConstraints
         });
-        
-        // Run environmental analysis based on scene analysis
-        this.logger.info('Starting environmental analysis...');
-        envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
-        this.logger.info('Raw environmental analysis result:', {
-          hasEnvironment: !!envAnalysis?.environment,
-          hasObject: !!envAnalysis?.object,
-          hasDistances: !!envAnalysis?.distances,
-          hasConstraints: !!envAnalysis?.cameraConstraints,
-          environmentData: envAnalysis?.environment,
-          objectData: envAnalysis?.object,
-          distancesData: envAnalysis?.distances,
-          constraintsData: envAnalysis?.cameraConstraints
-        });
 
         // Generate new model ID
         modelId = crypto.randomUUID();
         
         this.logger.info('Creating metadata object...');
-        // Create metadata object
+        // Create metadata object with only basic model information
         metadata = {
           id: modelId,
           modelId,
@@ -296,7 +281,7 @@ export class P2PPipelineImpl implements IP2PPipeline {
           }),
           preferences: {
             defaultCameraDistance: 5,
-            defaultCameraHeight: envAnalysis?.cameraConstraints?.minHeight || 0,
+            defaultCameraHeight: 1.6, // Default value, will be updated during environmental analysis
             preferredViewAngles: [],
             uiPreferences: {
               showGrid: true,
@@ -308,68 +293,54 @@ export class P2PPipelineImpl implements IP2PPipeline {
           createdAt: new Date(),
           updatedAt: new Date(),
           version: 1,
-          analysis: {
-            geometry: {
-              vertexCount: sceneAnalysis.glb.geometry.vertexCount,
-              faceCount: sceneAnalysis.glb.geometry.faceCount,
-              boundingBox: {
-                min: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.min),
-                max: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.max)
-              },
-              center: this.serializeVector3(sceneAnalysis.glb.geometry.center),
-              dimensions: this.serializeVector3(sceneAnalysis.glb.geometry.dimensions)
+          geometry: {
+            vertexCount: sceneAnalysis.glb.geometry.vertexCount,
+            faceCount: sceneAnalysis.glb.geometry.faceCount,
+            boundingBox: {
+              min: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.min),
+              max: this.serializeVector3(sceneAnalysis.glb.geometry.boundingBox.max)
             },
-            environment: {
-              bounds: envAnalysis?.environment ? {
-                min: this.serializeVector3(envAnalysis.environment.bounds.min),
-                max: this.serializeVector3(envAnalysis.environment.bounds.max),
-                center: this.serializeVector3(envAnalysis.environment.bounds.center),
-                dimensions: {
-                  width: envAnalysis.environment.dimensions.width,
-                  height: envAnalysis.environment.dimensions.height,
-                  depth: envAnalysis.environment.dimensions.depth
-                }
-              } : {
-                min: { x: 0, y: 0, z: 0 },
-                max: { x: 0, y: 0, z: 0 },
-                center: { x: 0, y: 0, z: 0 },
-                dimensions: { width: 0, height: 0, depth: 0 }
-              },
-              floorOffset: envAnalysis?.object?.floorOffset || 0,
-              distances: envAnalysis?.distances?.fromObjectToBoundary || {},
-              constraints: envAnalysis?.cameraConstraints ? {
-                minDistance: envAnalysis.cameraConstraints.minDistance,
-                maxDistance: envAnalysis.cameraConstraints.maxDistance,
-                minHeight: envAnalysis.cameraConstraints.minHeight,
-                maxHeight: envAnalysis.cameraConstraints.maxHeight
-              } : {
-                minDistance: 0,
-                maxDistance: 0,
-                minHeight: 0,
-                maxHeight: 0
-              }
+            center: this.serializeVector3(sceneAnalysis.glb.geometry.center),
+            dimensions: this.serializeVector3(sceneAnalysis.glb.geometry.dimensions)
+          },
+          environment: {
+            bounds: {
+              min: { x: 0, y: 0, z: 0 },
+              max: { x: 0, y: 0, z: 0 },
+              center: { x: 0, y: 0, z: 0 },
+              dimensions: { width: 0, height: 0, depth: 0 }
             },
-            performance: {
-              sceneAnalysis: sceneAnalysis.performance,
-              environmentalAnalysis: envAnalysis?.performance || {
-                startTime: 0,
-                endTime: 0,
-                duration: 0,
-                operations: [],
-                cacheHits: 0,
-                cacheMisses: 0,
-                databaseQueries: 0,
-                averageResponseTime: 0
-              }
+            floorOffset: 0,
+            distances: {},
+            constraints: {
+              minDistance: 0,
+              maxDistance: 0,
+              minHeight: 0,
+              maxHeight: 0
+            }
+          },
+          performance_metrics: {
+            sceneAnalysis: sceneAnalysis.performance,
+            environmentalAnalysis: {
+              startTime: 0,
+              endTime: 0,
+              duration: 0,
+              operations: [],
+              cacheHits: 0,
+              cacheMisses: 0,
+              databaseQueries: 0,
+              averageResponseTime: 0
             }
           }
         };
 
-        this.logger.info('Created metadata object with analysis:', {
-          hasGeometry: !!metadata.analysis?.geometry,
-          hasEnvironment: !!metadata.analysis?.environment,
-          environmentBounds: metadata.analysis?.environment?.bounds,
-          environmentConstraints: metadata.analysis?.environment?.constraints
+        // Log the final metadata structure
+        this.logger.info('Created metadata structure:', {
+          hasGeometry: !!metadata.geometry,
+          geometryData: metadata.geometry,
+          hasEnvironment: !!metadata.environment,
+          environmentData: metadata.environment,
+          fullMetadata: metadata
         });
 
         // Add log before storing
@@ -387,7 +358,6 @@ export class P2PPipelineImpl implements IP2PPipeline {
         // Load and analyze the model file
         const modelFile = await this.loadModelFile(metadata.file);
         sceneAnalysis = await this.sceneAnalyzer.analyzeScene(modelFile);
-        envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
       } else {
         throw new ModelProcessingError('Either file or modelId must be provided');
       }
@@ -410,31 +380,29 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
   async generatePath(
     modelId: string,
-    instruction: UserInstruction
+    userInput: string,
+    currentCameraState: { position: Vector3; target: Vector3 }
   ): Promise<AnimationOutput> {
     try {
-      this.logger.info('Generating camera path', { modelId, instruction });
+      this.logger.info('Generating path', { modelId, userInput });
       const startTime = Date.now();
 
-      // Get model metadata and analysis
+      // Get model metadata
       const metadata = await this.metadataManager.getModelMetadata(modelId);
-      // Load the actual file content before passing to scene analyzer
-      const modelFile = await this.loadModelFile(metadata.file); 
-      const analysis = await this.sceneAnalyzer.analyzeScene(modelFile);
+      if (!metadata) {
+        throw new PathGenerationError('Model metadata not found');
+      }
 
-      // Compile prompt - Assuming currentCameraState is needed and available?
-      // Placeholder for currentCameraState - this needs proper implementation
-      const currentCameraState = { 
-          position: new Vector3(), 
-          target: new Vector3() 
-      }; 
-      const compiledPrompt = await this.promptCompiler.compilePrompt(
-        instruction.text,
-        analysis,
-        metadata,
-        currentCameraState,
-        {}
+      // Compile prompt with environmental analysis
+      const compiledPrompt = await this.compileForLLM(
+        userInput,
+        modelId,
+        currentCameraState
       );
+
+      if (!compiledPrompt) {
+        throw new PathGenerationError('Failed to compile prompt');
+      }
 
       // Generate path
       const path = await this.llmEngine.generatePath(compiledPrompt);
@@ -442,7 +410,6 @@ export class P2PPipelineImpl implements IP2PPipeline {
       // Validate path
       const validation = this.llmEngine.validatePath(path);
       if (!validation.isValid) {
-        // Use validation.errors as per potential type definition
         throw new PathGenerationError(validation.errors?.join(', ') || 'Invalid path');
       }
 
@@ -577,41 +544,69 @@ export class P2PPipelineImpl implements IP2PPipeline {
   async compileForLLM(
     userInput: string,
     modelId: string,
-    currentCameraState: { position: Vector3; target: Vector3 } // Assuming Vector3 is available
+    currentCameraState: { position: Vector3; target: Vector3 }
   ): Promise<CompiledPrompt | null> {
     this.logger.info(`Compiling prompt for model: ${modelId}`);
     try {
-      // 1. Analyze Scene (or get cached analysis)
-      const modelMetadataForFile = await this.metadataManager.getModelMetadata(modelId);
-      if (!modelMetadataForFile) {
-           this.logger.error(`Metadata not found for model: ${modelId}`);
-           return null;
+      // 1. Get Model Metadata
+      const modelMetadata = await this.metadataManager.getModelMetadata(modelId);
+      if (!modelMetadata) {
+        this.logger.error(`Metadata not found for model: ${modelId}`);
+        return null;
       }
-      const modelFileForAnalysis = await this.loadModelFile(modelMetadataForFile.file);
-      const sceneAnalysis = await this.sceneAnalyzer.analyzeScene(modelFileForAnalysis);
+
+      // 2. Load and analyze the model file
+      const modelFile = await this.loadModelFile(modelMetadata.file);
+      const sceneAnalysis = await this.sceneAnalyzer.analyzeScene(modelFile);
       if (!sceneAnalysis) {
         this.logger.error('Scene analysis failed');
         return null;
       }
 
-      // 2. Get Model Metadata (already fetched above)
-      const modelMetadata = modelMetadataForFile; 
+      // 3. Perform environmental analysis with current camera state
+      this.logger.info('Starting environmental analysis with current camera state:', {
+        cameraPosition: currentCameraState.position,
+        cameraTarget: currentCameraState.target
+      });
 
-      // 3. Analyze Environment (using scene analysis result)
       const envAnalysis = await this.envAnalyzer.analyzeEnvironment(sceneAnalysis);
       if (!envAnalysis) {
         this.logger.error('Environmental analysis failed');
         return null;
       }
-      // We might need envAnalysis data in the prompt compiler too?
 
-      // 4. Compile Prompt
+      // 4. Update metadata with environmental analysis results
+      modelMetadata.environment = {
+        bounds: {
+          min: this.serializeVector3(envAnalysis.environment.bounds.min),
+          max: this.serializeVector3(envAnalysis.environment.bounds.max),
+          center: this.serializeVector3(envAnalysis.environment.bounds.center),
+          dimensions: {
+            width: envAnalysis.environment.dimensions.width,
+            height: envAnalysis.environment.dimensions.height,
+            depth: envAnalysis.environment.dimensions.depth
+          }
+        },
+        floorOffset: envAnalysis.object?.floorOffset || 0,
+        distances: envAnalysis.distances?.fromObjectToBoundary || {},
+        constraints: {
+          minDistance: envAnalysis.cameraConstraints?.minDistance || 0,
+          maxDistance: envAnalysis.cameraConstraints?.maxDistance || 0,
+          minHeight: envAnalysis.cameraConstraints?.minHeight || 0,
+          maxHeight: envAnalysis.cameraConstraints?.maxHeight || 0
+        }
+      };
+
+      // 5. Store updated metadata
+      await this.metadataManager.storeModelMetadata(modelId, modelMetadata);
+
+      // 6. Compile Prompt with environmental analysis
       const compiledPrompt = await this.promptCompiler.compilePrompt(
         userInput,
         sceneAnalysis,
+        envAnalysis, // Pass the environmental analysis directly
         modelMetadata,
-        currentCameraState,
-        {}
+        currentCameraState
       );
 
       this.logger.info(`Prompt compiled successfully for request: ${compiledPrompt.metadata.requestId}`);

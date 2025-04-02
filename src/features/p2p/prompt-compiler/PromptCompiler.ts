@@ -66,12 +66,18 @@ export class PromptCompilerImpl implements PromptCompiler {
       const sceneContext = this.extractSceneContext(sceneAnalysis);
       const userPreferences = this.extractUserPreferences(modelMetadata);
       const baseSafetyConstraints = this.extractBaseSafetyConstraints(sceneAnalysis, modelMetadata);
+      
+      // Use environmental metadata constraints if available, otherwise fall back to analysis constraints
+      const envMetadata = modelMetadata.environment;
       const finalConstraints = {
         ...baseSafetyConstraints,
-        minDistance: envAnalysis.cameraConstraints?.minDistance ?? baseSafetyConstraints.minDistance,
-        maxDistance: envAnalysis.cameraConstraints?.maxDistance ?? baseSafetyConstraints.maxDistance,
-        minHeight: envAnalysis.cameraConstraints?.minHeight ?? baseSafetyConstraints.minHeight,
-        maxHeight: envAnalysis.cameraConstraints?.maxHeight ?? baseSafetyConstraints.maxHeight,
+        minDistance: envMetadata.constraints?.minDistance ?? envAnalysis.cameraConstraints?.minDistance ?? baseSafetyConstraints.minDistance,
+        maxDistance: envMetadata.constraints?.maxDistance ?? envAnalysis.cameraConstraints?.maxDistance ?? baseSafetyConstraints.maxDistance,
+        minHeight: envMetadata.constraints?.minHeight ?? envAnalysis.cameraConstraints?.minHeight ?? baseSafetyConstraints.minHeight,
+        maxHeight: envMetadata.constraints?.maxHeight ?? envAnalysis.cameraConstraints?.maxHeight ?? baseSafetyConstraints.maxHeight,
+        maxSpeed: envMetadata.constraints?.maxSpeed ?? 1.0,
+        maxAngleChange: envMetadata.constraints?.maxAngleChange ?? Math.PI / 4,
+        minFramingMargin: envMetadata.constraints?.minFramingMargin ?? 0.1,
       };
 
       const { message: userInstructions } = this.processUserInput(userInput);
@@ -81,12 +87,7 @@ export class PromptCompilerImpl implements PromptCompiler {
       const compiledPrompt: CompiledPrompt = {
         systemMessage,
         userMessage: userInstructions,
-        constraints: {
-          ...finalConstraints,
-          maxSpeed: 1.0,
-          maxAngleChange: Math.PI / 4,
-          minFramingMargin: 0.1,
-        },
+        constraints: finalConstraints,
         metadata: {
           timestamp: new Date(),
           version: '1.1',
@@ -242,7 +243,42 @@ export class PromptCompilerImpl implements PromptCompiler {
       `- Dist to Boundary: L:${distances.left?.toFixed(2) ?? 'N/A'} R:${distances.right?.toFixed(2) ?? 'N/A'} F:${distances.front?.toFixed(2) ?? 'N/A'} B:${distances.back?.toFixed(2) ?? 'N/A'} T:${distances.top?.toFixed(2) ?? 'N/A'} Bot:${distances.bottom?.toFixed(2) ?? 'N/A'}` 
       : '- Distances to boundary: Not available';
 
-    return `You are an expert virtual cinematographer generating camera paths for a 3D model viewer. Your response MUST be ONLY a valid JSON object matching the specified format.\n\nIMPORTANT JSON OUTPUT FORMAT:\n\`\`\`json\n${jsonFormat}\n\`\`\`\n\nRULES:\n1. Respond ONLY with the JSON object described above. No explanations, apologies, or extra text.\n2. The sum of all keyframe durations MUST match the requested total duration. (Handle total duration logic outside this prompt if needed)\n3. Each keyframe MUST have a duration greater than 0.\n4. Start the camera path from the current camera state provided.\n5. Respect all safety constraints.\n6. Generate smooth, natural, and visually appealing camera movements.\n\nCURRENT CAMERA STATE:\n- Position: ${formatVector3(currentCameraState.position)}\n- Target: ${formatVector3(currentCameraState.target)}\n\nSCENE & ENVIRONMENT CONTEXT:\n- Model Center: ${formatVector3(sceneContext.center)}\n- Model Bounds: ${formatBounds(sceneContext.bounds)}\n- Environment Dimensions: W:${envAnalysis.environment?.dimensions?.width?.toFixed(2) ?? 'N/A'} H:${envAnalysis.environment?.dimensions?.height?.toFixed(2) ?? 'N/A'} D:${envAnalysis.environment?.dimensions?.depth?.toFixed(2) ?? 'N/A'}\n${distString}\n- Key Reference Points: ${JSON.stringify(sceneContext.referencePoints)}\n- Notable Features: ${JSON.stringify(sceneContext.features)}\n\nSAFETY CONSTRAINTS:\n- Min Distance from Center: ${constraints.minDistance?.toFixed(2) ?? 'N/A'}\n- Max Distance from Center: ${constraints.maxDistance?.toFixed(2) ?? 'N/A'}\n- Min Height (Y): ${constraints.minHeight?.toFixed(2) ?? 'N/A'}\n- Max Height (Y): ${constraints.maxHeight?.toFixed(2) ?? 'N/A'}\n- Restricted Zones: ${JSON.stringify(constraints.restrictedZones)}\n`;
+    // Add environmental metadata context if available
+    const envMetadata = sceneContext.modelMetadata?.environment;
+    const lightingInfo = envMetadata?.lighting ? 
+      `\n- Lighting: Intensity: ${envMetadata.lighting.intensity}, Color: ${envMetadata.lighting.color}` : '';
+    const sceneInfo = envMetadata?.scene ? 
+      `\n- Scene: Background: ${envMetadata.scene.background}, Ground: ${envMetadata.scene.ground}, Atmosphere: ${envMetadata.scene.atmosphere}` : '';
+
+    return `You are a camera path generator for a 3D model viewer. Your task is to generate a smooth, cinematic camera path based on the user's instructions while respecting the following constraints and context:
+
+Scene Context:
+- Object Dimensions: ${sceneContext.bounds.dimensions.x.toFixed(2)} x ${sceneContext.bounds.dimensions.y.toFixed(2)} x ${sceneContext.bounds.dimensions.z.toFixed(2)}
+- Object Center: (${sceneContext.bounds.center.x.toFixed(2)}, ${sceneContext.bounds.center.y.toFixed(2)}, ${sceneContext.bounds.center.z.toFixed(2)})${lightingInfo}${sceneInfo}
+${distString}
+
+Camera Constraints:
+- Min Distance: ${constraints.minDistance.toFixed(2)}
+- Max Distance: ${constraints.maxDistance.toFixed(2)}
+- Min Height: ${constraints.minHeight.toFixed(2)}
+- Max Height: ${constraints.maxHeight.toFixed(2)}
+- Max Speed: ${constraints.maxSpeed.toFixed(2)}
+- Max Angle Change: ${(constraints.maxAngleChange * 180 / Math.PI).toFixed(1)}°
+- Min Framing Margin: ${constraints.minFramingMargin.toFixed(2)}
+
+Current Camera State:
+- Position: (${currentCameraState.position.x.toFixed(2)}, ${currentCameraState.position.y.toFixed(2)}, ${currentCameraState.position.z.toFixed(2)})
+- Target: (${currentCameraState.target.x.toFixed(2)}, ${currentCameraState.target.y.toFixed(2)}, ${currentCameraState.target.z.toFixed(2)})
+
+Please generate a camera path that:
+1. Starts from the current camera position
+2. Follows the user's instructions
+3. Respects all constraints
+4. Maintains smooth motion
+5. Returns to a good viewing position
+
+Response Format:
+${jsonFormat}`;
   }
 
   private processUserInput(userInput: string): { message: string; constraints?: any } {

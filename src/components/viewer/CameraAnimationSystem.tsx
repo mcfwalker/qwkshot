@@ -10,8 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Vector3, Object3D, PerspectiveCamera } from 'three';
 import { toast } from 'sonner';
-import { analyzeScene, SceneGeometry } from '@/lib/scene-analysis';
+import { analyzeScene as analyzeSceneGeometry, SceneGeometry } from '@/lib/scene-analysis';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/MetadataManagerFactory';
+import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
+import { v4 as uuidv4 } from 'uuid';
+import { NextResponse } from 'next/server';
 
 interface CameraKeyframe {
   position: Vector3;
@@ -55,18 +59,34 @@ const CameraSystemFallback = () => (
   </Card>
 );
 
-export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = (props) => {
-  return (
-    <ErrorBoundary 
-      name="CameraAnimationSystem"
-      fallback={<CameraSystemFallback />}
-    >
-      <CameraAnimationSystemInner {...props} />
-    </ErrorBoundary>
-  );
-};
+// Create MetadataManagerFactory instance
+const metadataManagerFactory = new MetadataManagerFactory({
+  info: console.log,
+  warn: console.warn,
+  error: console.error,
+  debug: console.debug,
+  trace: console.trace,
+  performance: console.debug
+});
 
-const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
+// Create and initialize MetadataManager
+const metadataManager = metadataManagerFactory.create({
+  database: {
+    type: 'supabase',
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  },
+  caching: {
+    enabled: true,
+    ttl: 5 * 60 * 1000
+  },
+  validation: {
+    strict: false,
+    maxFeaturePoints: 100
+  }
+});
+
+export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   onAnimationUpdate,
   onAnimationStop,
   onAnimationStart,
@@ -84,100 +104,142 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
+  const [hasSetStartPosition, setHasSetStartPosition] = useState(false);
+  const [modelId, setModelId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const progressRef = useRef(0);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // Update the ref whenever progress changes
+  // Generate UUID when model is loaded
   useEffect(() => {
-    progressRef.current = progress;
-  }, [progress]);
+    if (modelRef.current) {
+      const pathParts = window.location.pathname.split('/');
+      const existingUuid = pathParts.find(part => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+      );
 
-  useEffect(() => {
-    let lastTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
-      lastTime = currentTime;
-
-      if (isPlaying && keyframes.length > 0) {
-        const newProgress = progressRef.current + (100 / duration) * deltaTime;
-        
-        if (newProgress >= 100) {
-          setProgress(0);
-          onAnimationStop();
-        } else {
-          setProgress(newProgress);
-          // Interpolate between keyframes based on progress
-          const normalizedProgress = newProgress / 100;
-          const totalDuration = keyframes.reduce((sum: number, kf: CameraKeyframe) => sum + kf.duration, 0);
-          let currentTime = normalizedProgress * totalDuration;
-          
-          let currentKeyframeIndex = 0;
-          let accumulatedDuration = 0;
-          
-          // Find the current keyframe pair
-          while (currentKeyframeIndex < keyframes.length - 1 && 
-                 accumulatedDuration + keyframes[currentKeyframeIndex].duration < currentTime) {
-            accumulatedDuration += keyframes[currentKeyframeIndex].duration;
-            currentKeyframeIndex++;
-          }
-          
-          const k1 = keyframes[currentKeyframeIndex];
-          const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
-          
-          // Calculate local progress within current keyframe pair
-          const localProgress = (currentTime - accumulatedDuration) / k1.duration;
-          
-          // Interpolate position and target
-          const position = new Vector3().lerpVectors(
-            k1.position,
-            k2.position,
-            Math.min(localProgress, 1)
-          );
-          const target = new Vector3().lerpVectors(
-            k1.target,
-            k2.target,
-            Math.min(localProgress, 1)
-          );
-          
-          onAnimationUpdate(normalizedProgress);
-          
-          // Update camera position and target
-          if (cameraRef.current && controlsRef.current) {
-            cameraRef.current.position.copy(position);
-            controlsRef.current.target.copy(target);
-          }
-        }
-          
-        animationFrameRef.current = requestAnimationFrame(animate);
+      if (!existingUuid) {
+        const newUuid = uuidv4();
+        setModelId(newUuid);
+        const newPath = `/viewer/${newUuid}`;
+        window.history.pushState({}, '', newPath);
+        console.log('Generated new UUID for model:', newUuid);
+      } else {
+        setModelId(existingUuid);
+        console.log('Using existing UUID from URL:', existingUuid);
       }
-    };
-
-    if (isPlaying && keyframes.length > 0) {
-      animationFrameRef.current = requestAnimationFrame(animate);
     }
+  }, [modelRef.current]);
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+  // Handle key press for setting start position
+  useEffect(() => {
+    const handleKeyPress = async (event: KeyboardEvent) => {
+      if (event.key === 's' && !hasSetStartPosition && modelId) {
+        try {
+          if (!modelId) {
+            toast.error('No valid model ID found');
+            return;
+          }
+
+          // Analyze the current scene
+          const sceneGeometry = analyzeSceneGeometry(modelRef.current as Object3D);
+          
+          // Add current camera information
+          sceneGeometry.currentCamera = {
+            position: {
+              x: cameraRef.current.position.x,
+              y: cameraRef.current.position.y,
+              z: cameraRef.current.position.z
+            },
+            target: {
+              x: controlsRef.current.target.x,
+              y: controlsRef.current.target.y,
+              z: controlsRef.current.target.z
+            },
+            modelOrientation: {
+              front: { x: 0, y: 0, z: 1 }, // Default front direction
+              up: { x: 0, y: 1, z: 0 }     // Default up direction
+            }
+          };
+
+          // Store environmental metadata
+          const environmentalMetadata: EnvironmentalMetadata = {
+            lighting: {
+              intensity: 1.0,
+              color: '#ffffff',
+              position: {
+                x: 0,
+                y: 10,
+                z: 0
+              }
+            },
+            camera: {
+              position: {
+                x: cameraRef.current.position.x,
+                y: cameraRef.current.position.y,
+                z: cameraRef.current.position.z
+              },
+              target: {
+                x: controlsRef.current.target.x,
+                y: controlsRef.current.target.y,
+                z: controlsRef.current.target.z
+              },
+              fov: cameraRef.current.fov
+            },
+            scene: {
+              background: '#000000',
+              ground: '#808080',
+              atmosphere: '#87CEEB'
+            },
+            constraints: {
+              minDistance: sceneGeometry.safeDistance.min,
+              maxDistance: sceneGeometry.safeDistance.max,
+              minHeight: sceneGeometry.floor.height,
+              maxHeight: sceneGeometry.boundingBox.max.y,
+              maxSpeed: 2.0,
+              maxAngleChange: 45,
+              minFramingMargin: 0.1
+            }
+          };
+
+          // Initialize and store metadata
+          await metadataManager.initialize();
+          await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
+          
+          setHasSetStartPosition(true);
+          toast.success('Camera start position set!');
+        } catch (error) {
+          console.error('Failed to set camera start position:', error);
+          toast.error('Failed to set camera start position');
+        }
       }
     };
-  }, [isPlaying, duration, keyframes, onAnimationUpdate, onAnimationStop, cameraRef, controlsRef]);
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [modelRef, cameraRef, controlsRef, modelId, hasSetStartPosition]);
 
   const handleGeneratePath = async () => {
+    if (!hasSetStartPosition) {
+      toast.error('Please set a camera start position first (press "s"');
+      return;
+    }
     if (!instruction.trim() || !modelRef.current || !cameraRef.current || !controlsRef.current) {
       return;
     }
 
     setIsGenerating(true);
     try {
+      if (!modelRef.current) {
+        throw new Error('Model reference is not available');
+      }
+      
       // Analyze the current scene
-      const sceneGeometry = analyzeScene(modelRef.current);
+      const sceneGeometry = analyzeSceneGeometry(modelRef.current as Object3D);
       
       // Add current camera information
       sceneGeometry.currentCamera = {
@@ -197,6 +259,16 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
         }
       };
 
+      // Get the model ID from the URL - ensure it's a valid UUID
+      const pathParts = window.location.pathname.split('/');
+      const modelId = pathParts.find(part => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+      );
+      
+      if (!modelId) {
+        throw new Error('No valid model ID found in URL');
+      }
+
       // Call the API to generate camera path
       const response = await fetch('/api/camera-path', {
         method: 'POST',
@@ -206,7 +278,8 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
         body: JSON.stringify({
           instruction,
           sceneGeometry,
-          duration: parseFloat(inputDuration) // Include the user's requested duration
+          duration: parseFloat(inputDuration),
+          modelId
         }),
       });
 
@@ -409,71 +482,76 @@ const CameraAnimationSystemInner: React.FC<CameraAnimationSystemProps> = ({
   };
 
   return (
-    <Card className="viewer-panel">
-      <CardHeader className="viewer-panel-header px-2">
-        <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-6">
-        <div className="camera-path-fields">
-          <Textarea
-            placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            onFocus={() => setIsPromptFocused(true)}
-            onBlur={() => setIsPromptFocused(false)}
-            className="min-h-[140px] resize-none"
-            active={isPromptFocused}
-          />
+    <ErrorBoundary 
+      name="CameraAnimationSystem"
+      fallback={<CameraSystemFallback />}
+    >
+      <Card className="viewer-panel">
+        <CardHeader className="viewer-panel-header px-2">
+          <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-6">
+          <div className="camera-path-fields">
+            <Textarea
+              placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              onFocus={() => setIsPromptFocused(true)}
+              onBlur={() => setIsPromptFocused(false)}
+              className="min-h-[140px] resize-none"
+              active={isPromptFocused}
+            />
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
-              <div className="w-20">
-                <Input
-                  id="duration-input"
-                  type="number"
-                  value={inputDuration}
-                  onChange={handleDurationChange}
-                  onBlur={(e) => {
-                    handleDurationBlur(e);
-                    setIsPromptFocused(false);
-                  }}
-                  onFocus={() => setIsPromptFocused(true)}
-                  min={1}
-                  max={20}
-                  step={0.5}
-                  className="text-right"
-                  disabled={isPlaying}
-                  active={isPromptFocused}
-                />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
+                <div className="w-20">
+                  <Input
+                    id="duration-input"
+                    type="number"
+                    value={inputDuration}
+                    onChange={handleDurationChange}
+                    onBlur={(e) => {
+                      handleDurationBlur(e);
+                      setIsPromptFocused(false);
+                    }}
+                    onFocus={() => setIsPromptFocused(true)}
+                    min={1}
+                    max={20}
+                    step={0.5}
+                    className="text-right"
+                    disabled={isPlaying}
+                    active={isPromptFocused}
+                  />
+                </div>
               </div>
+              <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
             </div>
-            <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
-          </div>
 
-          <div className="mt-8">
-            <Button
-              onClick={handleGeneratePath}
-              disabled={isGenerating || !instruction.trim()}
-              variant="primary"
-              size="lg"
-              className="w-full"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  Generating Path...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-6 w-6" />
-                  Generate Path
-                </>
-              )}
-            </Button>
+            <div className="mt-8">
+              <Button
+                onClick={handleGeneratePath}
+                disabled={isGenerating || !instruction.trim()}
+                variant="primary"
+                size="lg"
+                className="w-full"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    Generating Path...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-6 w-6" />
+                    Generate Path
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </ErrorBoundary>
   );
-} 
+}; 

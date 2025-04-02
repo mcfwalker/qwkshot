@@ -4,6 +4,7 @@ import { ModelMetadata, ModelFeaturePoint, UserPreferences, DatabaseError, NotFo
 import { Orientation, BaseMetadata } from '../../../../types/p2p/shared';
 import { Logger } from '../../../../types/p2p/shared';
 import { getSupabaseClient } from '../../../../lib/supabase';
+import { EnvironmentalMetadata } from '../../../../types/p2p/environmental-metadata';
 
 /**
  * Configuration for the Supabase adapter
@@ -48,58 +49,95 @@ export class SupabaseAdapter implements DatabaseAdapter {
     metadata: ModelMetadata
   ): Promise<void> {
     try {
+      // Log incoming metadata
       this.logger.info(`Storing metadata for model: ${modelId}`, { 
         originalMetadata: metadata,
-        hasAnalysis: !!metadata.analysis,
-        hasEnvironment: !!metadata.analysis?.environment,
-        environmentData: metadata.analysis?.environment
+        hasGeometry: !!metadata.geometry,
+        geometryData: metadata.geometry,
+        hasEnvironment: !!metadata.environment,
+        environmentData: metadata.environment
       });
 
-      // Construct the complete metadata object directly
-      const now = new Date();
+      // Ensure we preserve the root-level structure
       const completeMetadataPayload = {
-        // Spreading originalMetadata ensures we keep fields not explicitly listed
         ...metadata,
-        // Explicitly set/overwrite fields managed by this function
-        id: modelId, // Ensure these IDs are set if not present in incoming metadata
-        modelId,
-        updatedAt: now.toISOString(),
-        // Increment version based on a default or assume 1 if no existing data concept
-        // Use incoming version if available, otherwise default calculation
-        version: metadata.version ? metadata.version + 1 : 1, 
-        // Ensure analysis structure is present with defaults
-        analysis: {
-          geometry: metadata.analysis?.geometry || {},
-          environment: metadata.analysis?.environment || { 
-              bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 }, center: { x: 0, y: 0, z: 0 }, dimensions: { width: 0, height: 0, depth: 0 } },
-              floorOffset: 0,
-              distances: {},
-              constraints: { minDistance: 0, maxDistance: 0, minHeight: 0, maxHeight: 0 }
+        geometry: metadata.geometry || {
+          vertexCount: 0,
+          faceCount: 0,
+          boundingBox: {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 }
           },
-          performance: metadata.analysis?.performance || {}
+          center: { x: 0, y: 0, z: 0 },
+          dimensions: { x: 0, y: 0, z: 0 }
         },
-        // Conditionally add createdAt if it exists in the input
-        ...(metadata.createdAt && { 
-          createdAt: metadata.createdAt instanceof Date 
-            ? metadata.createdAt 
-            : new Date(metadata.createdAt) 
-        })
+        environment: metadata.environment || {
+          bounds: {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 },
+            center: { x: 0, y: 0, z: 0 },
+            dimensions: { width: 0, height: 0, depth: 0 }
+          },
+          floorOffset: 0,
+          distances: {},
+          constraints: {
+            minDistance: 0,
+            maxDistance: 0,
+            minHeight: 0,
+            maxHeight: 0
+          }
+        },
+        performance_metrics: metadata.performance_metrics || {
+          sceneAnalysis: {
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+            operations: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            databaseQueries: 0,
+            averageResponseTime: 0
+          },
+          environmentalAnalysis: {
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+            operations: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            databaseQueries: 0,
+            averageResponseTime: 0
+          }
+        },
+        updatedAt: new Date().toISOString(),
+        version: (metadata.version || 0) + 1
       };
 
-      this.logger.info(`Prepared complete metadata payload for storage:`, { 
-        metadataPayload: completeMetadataPayload
+      // Log the prepared payload
+      this.logger.info(`Prepared metadata payload for storage:`, { 
+        payloadGeometry: completeMetadataPayload.geometry,
+        payloadEnvironment: completeMetadataPayload.environment,
+        fullPayload: completeMetadataPayload
       });
 
-      // Directly update the model with the complete payload
-      const { error } = await this.client
+      // Update the model with the complete payload
+      const { data, error } = await this.client
         .from('models')
-        .update({ metadata: completeMetadataPayload }) // Update with the fully formed object
-        .eq('id', modelId);
+        .update({ metadata: completeMetadataPayload })
+        .eq('id', modelId)
+        .select();
 
       if (error) {
         this.logger.error(`Database error while storing metadata: ${error.message}`, { error });
         throw new DatabaseError(error.message);
       }
+
+      // Log the response from Supabase
+      this.logger.info(`Supabase storage response:`, { 
+        success: !error,
+        storedData: data,
+        modelId
+      });
 
       this.logger.info(`Successfully stored metadata for model: ${modelId}`);
 
@@ -157,25 +195,53 @@ export class SupabaseAdapter implements DatabaseAdapter {
         createdAt: new Date(data.created_at),
         updatedAt: new Date(metadata.updatedAt || data.created_at),
         version: metadata.version || 1,
-        analysis: {
-          geometry: metadata.analysis?.geometry || {},
-          environment: {
-            bounds: metadata.analysis?.environment?.bounds || {
-              min: { x: 0, y: 0, z: 0 },
-              max: { x: 0, y: 0, z: 0 },
-              center: { x: 0, y: 0, z: 0 },
-              dimensions: { width: 0, height: 0, depth: 0 }
-            },
-            floorOffset: metadata.analysis?.environment?.floorOffset || 0,
-            distances: metadata.analysis?.environment?.distances || {},
-            constraints: metadata.analysis?.environment?.constraints || {
-              minDistance: 0,
-              maxDistance: 0,
-              minHeight: 0,
-              maxHeight: 0
-            }
+        geometry: metadata.geometry || {
+          vertexCount: 0,
+          faceCount: 0,
+          boundingBox: {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 }
           },
-          performance: metadata.analysis?.performance || {}
+          center: { x: 0, y: 0, z: 0 },
+          dimensions: { x: 0, y: 0, z: 0 }
+        },
+        environment: metadata.environment || {
+          bounds: {
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 0, y: 0, z: 0 },
+            center: { x: 0, y: 0, z: 0 },
+            dimensions: { width: 0, height: 0, depth: 0 }
+          },
+          floorOffset: 0,
+          distances: {},
+          constraints: {
+            minDistance: 0,
+            maxDistance: 0,
+            minHeight: 0,
+            maxHeight: 0
+          }
+        },
+        performance_metrics: metadata.performance_metrics || {
+          sceneAnalysis: {
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+            operations: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            databaseQueries: 0,
+            averageResponseTime: 0
+          },
+          environmentalAnalysis: {
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+            operations: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            databaseQueries: 0,
+            averageResponseTime: 0
+          }
         }
       };
     } catch (error) {
@@ -390,6 +456,84 @@ export class SupabaseAdapter implements DatabaseAdapter {
     } catch (error) {
       this.logger.error(`Failed to get feature point count for model: ${modelId}`, error);
       throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to get feature point count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Store environmental metadata
+   */
+  async storeEnvironmentalMetadata(
+    modelId: string,
+    metadata: EnvironmentalMetadata
+  ): Promise<void> {
+    try {
+      this.logger.info(`Storing environmental metadata for model: ${modelId}`);
+      
+      const { error } = await this.client
+        .from('models')
+        .update({ environmental_metadata: metadata })
+        .eq('id', modelId);
+
+      if (error) throw new DatabaseError(error.message);
+
+      this.logger.info(`Successfully stored environmental metadata for model: ${modelId}`);
+    } catch (error) {
+      this.logger.error(`Failed to store environmental metadata for model: ${modelId}`, error);
+      throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to store environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Retrieve environmental metadata
+   */
+  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata> {
+    try {
+      this.logger.info(`Retrieving environmental metadata for model: ${modelId}`);
+      
+      const { data, error } = await this.client
+        .from('models')
+        .select('environmental_metadata')
+        .eq('id', modelId)
+        .single();
+
+      if (error) throw new DatabaseError(error.message);
+      if (!data) throw new NotFoundError(`Model not found: ${modelId}`);
+
+      return data.environmental_metadata || {};
+    } catch (error) {
+      this.logger.error(`Failed to retrieve environmental metadata for model: ${modelId}`, error);
+      if (error instanceof NotFoundError) throw error;
+      throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to retrieve environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update environmental metadata
+   */
+  async updateEnvironmentalMetadata(
+    modelId: string,
+    metadata: Partial<EnvironmentalMetadata>
+  ): Promise<void> {
+    try {
+      this.logger.info(`Updating environmental metadata for model: ${modelId}`);
+      
+      // Get current environmental metadata
+      const current = await this.getEnvironmentalMetadata(modelId);
+      
+      // Merge with new metadata
+      const updated = { ...current, ...metadata };
+
+      const { error } = await this.client
+        .from('models')
+        .update({ environmental_metadata: updated })
+        .eq('id', modelId);
+
+      if (error) throw new DatabaseError(error.message);
+
+      this.logger.info(`Successfully updated environmental metadata for model: ${modelId}`);
+    } catch (error) {
+      this.logger.error(`Failed to update environmental metadata for model: ${modelId}`, error);
+      throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to update environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 } 

@@ -1,5 +1,6 @@
 import { ModelMetadata, ModelFeaturePoint, UserPreferences } from '../../../../types/p2p/metadata-manager';
 import { Orientation } from '../../../../types/p2p/shared';
+import { EnvironmentalMetadata } from '../../../../types/p2p/environmental-metadata';
 
 /**
  * Interface for database operations
@@ -22,6 +23,27 @@ export interface DatabaseAdapter {
    * Retrieve model metadata
    */
   getModelMetadata(modelId: string): Promise<ModelMetadata>;
+
+  /**
+   * Store environmental metadata
+   */
+  storeEnvironmentalMetadata(
+    modelId: string,
+    metadata: EnvironmentalMetadata
+  ): Promise<void>;
+
+  /**
+   * Retrieve environmental metadata
+   */
+  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata>;
+
+  /**
+   * Update environmental metadata
+   */
+  updateEnvironmentalMetadata(
+    modelId: string,
+    metadata: Partial<EnvironmentalMetadata>
+  ): Promise<void>;
 
   /**
    * Update model orientation
