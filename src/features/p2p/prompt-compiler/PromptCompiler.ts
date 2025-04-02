@@ -1,9 +1,34 @@
 import { Vector3 } from 'three';
-import { P2PError, Logger } from '../../../types/p2p/shared';
-import type { PromptCompiler, PromptCompilerConfig, CompiledPrompt, ValidationResult, PerformanceMetrics } from '../../../types/p2p';
-import type { SceneAnalysis } from '../../../types/p2p';
-import type { ModelMetadata } from '../../../types/p2p';
-import { EnvironmentalAnalysis } from '../../../types/p2p/environmental-analyzer';
+import { PromptCompiler, PromptCompilerConfig, CompiledPrompt } from '@/types/p2p/prompt-compiler';
+import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
+import { SceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { Logger, ValidationResult, PerformanceMetrics } from '@/types/p2p/shared';
+import { P2PError } from '@/types/p2p/shared';
+import { ModelMetadata } from '@/types/p2p';
+
+interface SceneContext {
+  objectDimensions: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  objectCenter: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  sceneScale: number;
+}
+
+interface CameraConstraints {
+  minDistance: number;
+  maxDistance: number;
+  minHeight: number;
+  maxHeight: number;
+  maxSpeed: number;
+  maxAngleChange: number;
+  minFramingMargin: number;
+}
 
 // Helper function to format Vector3 for the prompt
 const formatVector3 = (v: { x: number; y: number; z: number }, precision: number = 2): string => {
@@ -18,41 +43,108 @@ const formatBounds = (b: any, precision: number = 2): string => {
   return `min: ${formatVector3(b.min, precision)}, max: ${formatVector3(b.max, precision)}`;
 };
 
+interface LLMFriendlyCameraState {
+  distance: number;      // Distance from object center
+  height: number;       // Y-position relative to object
+  angle: number;       // Horizontal angle around object (in degrees)
+  tilt: number;       // Up/down angle (in degrees)
+  fov: number;       // Field of view
+}
+
 export class PromptCompilerImpl implements PromptCompiler {
   private config: PromptCompilerConfig;
+  private logger: Logger;
   private metrics: PerformanceMetrics = {
     startTime: 0,
     endTime: 0,
     duration: 0,
     operations: [],
-    // Initialize missing fields
     cacheHits: 0,
     cacheMisses: 0,
     databaseQueries: 0,
-    averageResponseTime: 0,
+    averageResponseTime: 0
   };
 
-  constructor(config: PromptCompilerConfig, private logger: Logger) {
+  constructor(config: PromptCompilerConfig, logger: Logger) {
     this.config = config;
+    this.logger = logger;
   }
 
   async initialize(): Promise<void> {
     this.metrics.startTime = Date.now();
-    // Reset metrics on initialization if needed
-    this.metrics = {
-        startTime: Date.now(),
-        endTime: 0,
-        duration: 0,
-        operations: [],
-        cacheHits: 0,
-        cacheMisses: 0,
-        databaseQueries: 0,
-        averageResponseTime: 0,
-    };
+    this.logger.info('Initializing PromptCompiler');
   }
 
   getPerformanceMetrics(): PerformanceMetrics {
     return this.metrics;
+  }
+
+  private transformCameraState(position: Vector3, target: Vector3, fov: number): LLMFriendlyCameraState {
+    // Calculate distance from camera to target
+    const distance = position.distanceTo(target);
+    
+    // Calculate height relative to target
+    const height = position.y - target.y;
+    
+    // Calculate horizontal angle (in degrees)
+    const angle = Math.atan2(position.x - target.x, position.z - target.z) * (180 / Math.PI);
+    
+    // Calculate tilt angle (in degrees)
+    const horizontalDistance = Math.sqrt(
+      Math.pow(position.x - target.x, 2) + Math.pow(position.z - target.z, 2)
+    );
+    const tilt = Math.atan2(height, horizontalDistance) * (180 / Math.PI);
+
+    return {
+      distance,
+      height,
+      angle,
+      tilt,
+      fov
+    };
+  }
+
+  private generateSystemMessage(
+    sceneAnalysis: SceneAnalysis,
+    envAnalysis: EnvironmentalAnalysis,
+    modelMetadata: ModelMetadata,
+    currentCameraState: LLMFriendlyCameraState
+  ): string {
+    const { environment, object, distances, cameraConstraints } = envAnalysis;
+    const { lighting, scene } = modelMetadata.environment || {};
+
+    return `You are a professional cinematographer tasked with creating a camera path for a 3D scene.
+
+Scene Information:
+- Object dimensions: ${object.dimensions.width.toFixed(2)}x${object.dimensions.height.toFixed(2)}x${object.dimensions.depth.toFixed(2)} units
+- Floor offset: ${object.floorOffset.toFixed(2)} units
+- Scene complexity: ${sceneAnalysis.spatial.complexity}
+- Available space: ${distances.fromObjectToBoundary.front.toFixed(2)} units front, ${distances.fromObjectToBoundary.back.toFixed(2)} units back
+
+Camera Constraints:
+- Height range: ${cameraConstraints.minHeight.toFixed(2)} to ${cameraConstraints.maxHeight.toFixed(2)} units
+- Distance range: ${cameraConstraints.minDistance.toFixed(2)} to ${cameraConstraints.maxDistance.toFixed(2)} units
+- Movement speed: Maintain smooth transitions between keyframes
+- Framing: Keep the object centered and well-framed
+
+Current Camera State:
+- Distance from object: ${currentCameraState.distance.toFixed(2)} units
+- Height above object: ${currentCameraState.height.toFixed(2)} units
+- Horizontal angle: ${currentCameraState.angle.toFixed(2)} degrees
+- Tilt angle: ${currentCameraState.tilt.toFixed(2)} degrees
+- Field of view: ${currentCameraState.fov.toFixed(2)} degrees
+
+Environmental Conditions:
+${lighting ? `- Lighting: ${lighting.intensity} intensity, ${lighting.color} color` : ''}
+${scene ? `- Background: ${scene.background}
+- Ground: ${scene.ground}
+- Atmosphere: ${scene.atmosphere}` : ''}
+
+Please generate a camera path that:
+1. Maintains smooth transitions between keyframes
+2. Stays within the specified constraints
+3. Considers the environmental conditions
+4. Creates visually appealing shots that highlight the object's features`;
   }
 
   async compilePrompt(
@@ -60,262 +152,105 @@ export class PromptCompilerImpl implements PromptCompiler {
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    currentCameraState: { position: Vector3; target: Vector3 }
+    currentCameraState: { position: Vector3; target: Vector3; fov: number }
   ): Promise<CompiledPrompt> {
-    try {
-      const sceneContext = this.extractSceneContext(sceneAnalysis);
-      const userPreferences = this.extractUserPreferences(modelMetadata);
-      const baseSafetyConstraints = this.extractBaseSafetyConstraints(sceneAnalysis, modelMetadata);
-      
-      // Use environmental metadata constraints if available, otherwise fall back to analysis constraints
-      const envMetadata = modelMetadata.environment;
-      const finalConstraints = {
-        ...baseSafetyConstraints,
-        minDistance: envMetadata.constraints?.minDistance ?? envAnalysis.cameraConstraints?.minDistance ?? baseSafetyConstraints.minDistance,
-        maxDistance: envMetadata.constraints?.maxDistance ?? envAnalysis.cameraConstraints?.maxDistance ?? baseSafetyConstraints.maxDistance,
-        minHeight: envMetadata.constraints?.minHeight ?? envAnalysis.cameraConstraints?.minHeight ?? baseSafetyConstraints.minHeight,
-        maxHeight: envMetadata.constraints?.maxHeight ?? envAnalysis.cameraConstraints?.maxHeight ?? baseSafetyConstraints.maxHeight,
-        maxSpeed: envMetadata.constraints?.maxSpeed ?? 1.0,
-        maxAngleChange: envMetadata.constraints?.maxAngleChange ?? Math.PI / 4,
-        minFramingMargin: envMetadata.constraints?.minFramingMargin ?? 0.1,
-      };
+    const startTime = performance.now();
+    
+    const llmFriendlyCameraState = this.transformCameraState(
+      currentCameraState.position,
+      currentCameraState.target,
+      currentCameraState.fov
+    );
 
-      const { message: userInstructions } = this.processUserInput(userInput);
-      const systemMessage = this.generateSystemMessage(sceneContext, envAnalysis, finalConstraints, currentCameraState);
-      const tokenCount = this.calculateTokenCount(systemMessage, userInstructions);
+    const systemMessage = this.generateSystemMessage(
+      sceneAnalysis,
+      envAnalysis,
+      modelMetadata,
+      llmFriendlyCameraState
+    );
 
-      const compiledPrompt: CompiledPrompt = {
-        systemMessage,
-        userMessage: userInstructions,
-        constraints: finalConstraints,
-        metadata: {
-          timestamp: new Date(),
-          version: '1.1',
-          optimizationHistory: [],
-          performanceMetrics: this.metrics,
-          requestId: 'test-request-id', // TODO: Generate proper UUID
-          userId: modelMetadata.userId,
-        },
-        tokenCount,
-      };
+    const endTime = performance.now();
+    this.metrics = {
+      ...this.metrics,
+      endTime,
+      duration: endTime - this.metrics.startTime,
+      operations: [
+        ...this.metrics.operations,
+        {
+          name: 'compile_prompt',
+          duration: endTime - startTime,
+          success: true
+        }
+      ]
+    };
 
-      return compiledPrompt;
-    } catch (error) {
-      console.error("Error compiling prompt:", error);
-      if (error instanceof P2PError) {
-        throw error;
-      } else {
-        throw new P2PError(
-          error instanceof Error ? error.message : 'Failed to compile prompt',
-          'COMPILATION_ERROR',
-          'PROMPT_COMPILER'
-        );
+    return {
+      systemMessage,
+      userMessage: userInput,
+      constraints: envAnalysis.cameraConstraints,
+      metadata: {
+        timestamp: new Date(),
+        version: '1.0',
+        optimizationHistory: [],
+        performanceMetrics: this.metrics,
+        requestId: crypto.randomUUID(),
+        userId: modelMetadata.userId
       }
-    }
+    };
   }
 
   validatePrompt(prompt: CompiledPrompt): ValidationResult {
     const errors: string[] = [];
-    try {
-      // Check if required fields are present
-      if (!prompt.systemMessage) errors.push('Missing systemMessage');
-      if (!prompt.userMessage) errors.push('Missing userMessage');
 
-      // Validate constraints
-      if (!this.validateConstraints(prompt.constraints)) {
-        errors.push('Invalid constraint values');
-      }
-
-      // Check if constraints are within safety bounds (example)
-      const { minDistance, maxDistance } = prompt.constraints;
-      // Use default values if undefined for validation purposes
-      const safeMinDistance = minDistance ?? 0.5;
-      const safeMaxDistance = maxDistance ?? 10.0;
-      if (safeMinDistance < 0.5 || safeMaxDistance > 10.0) {
-        errors.push('Distance constraints exceed safety bounds (0.5 - 10.0)');
-      }
-      // Add more specific constraint validations here
-
-      return { isValid: errors.length === 0, errors };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown validation error';
-        return {
-            isValid: false,
-            errors: [...errors, message], // Include caught error along with others
-        };
+    if (!prompt.systemMessage) {
+      errors.push('Missing system message');
     }
+
+    if (!prompt.userMessage) {
+      errors.push('Missing user message');
+    }
+
+    if (!prompt.constraints) {
+      errors.push('Missing constraints');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 
   async optimizePrompt(prompt: CompiledPrompt): Promise<CompiledPrompt> {
-    try {
-      // Create a copy of the prompt to optimize
-      const optimized = { ...prompt };
+    const startTime = performance.now();
+    
+    // Simple optimization: trim whitespace and remove duplicate newlines
+    const optimizedSystemMessage = prompt.systemMessage
+      .trim()
+      .replace(/\n{3,}/g, '\n\n');
+    
+    const optimizedUserMessage = prompt.userMessage
+      .trim()
+      .replace(/\n{3,}/g, '\n\n');
 
-      // Calculate initial token count
-      const initialTokenCount = this.calculateTokenCount(
-        prompt.systemMessage,
-        prompt.userMessage
-      );
-
-      // Optimize system message
-      optimized.systemMessage = this.optimizeMessage(prompt.systemMessage);
-
-      // Optimize user message
-      optimized.userMessage = this.optimizeMessage(prompt.userMessage);
-
-      // Calculate final token count
-      const finalTokenCount = this.calculateTokenCount(
-        optimized.systemMessage,
-        optimized.userMessage
-      );
-
-      // Update metadata with optimization info
-      optimized.metadata = {
-        ...optimized.metadata,
+    const endTime = performance.now();
+    
+    return {
+      ...prompt,
+      systemMessage: optimizedSystemMessage,
+      userMessage: optimizedUserMessage,
+      metadata: {
+        ...prompt.metadata,
         optimizationHistory: [
-          ...optimized.metadata.optimizationHistory,
+          ...prompt.metadata.optimizationHistory,
           {
             timestamp: new Date(),
-            action: 'message_optimization',
-            tokenCountBefore: initialTokenCount,
-            tokenCountAfter: finalTokenCount,
-            details: 'Optimized message length while preserving meaning',
-          },
-        ],
-      };
-
-      // Add token count to the optimized prompt
-      optimized.tokenCount = finalTokenCount;
-
-      return optimized;
-    } catch (error) {
-      throw new P2PError('Failed to optimize prompt', 'OPTIMIZATION_ERROR', 'PROMPT_COMPILER');
-    }
-  }
-
-  private extractSceneContext(sceneAnalysis: SceneAnalysis) {
-    const bounds = sceneAnalysis.spatial?.bounds || { min: {x:0,y:0,z:0}, max: {x:0,y:0,z:0}, center: {x:0,y:0,z:0} };
-    const referencePoints = sceneAnalysis.spatial?.referencePoints || {};
-    const features = sceneAnalysis.features || [];
-    return {
-      bounds,
-      center: bounds.center,
-      referencePoints,
-      features,
+            action: 'basic_optimization',
+            tokenCountBefore: prompt.systemMessage.length + prompt.userMessage.length,
+            tokenCountAfter: optimizedSystemMessage.length + optimizedUserMessage.length,
+            details: 'Removed excess whitespace and newlines'
+          }
+        ]
+      }
     };
-  }
-
-  private extractUserPreferences(modelMetadata: ModelMetadata) {
-    const prefs = modelMetadata.preferences || {};
-    return {
-      defaultDistance: prefs.defaultCameraDistance ?? 5.0,
-      preferredViewAngles: prefs.preferredViewAngles ?? [],
-    };
-  }
-
-  private extractBaseSafetyConstraints(sceneAnalysis: SceneAnalysis, modelMetadata: ModelMetadata) {
-    const sceneConstraints = sceneAnalysis.safetyConstraints || {};
-    const userPrefs = modelMetadata.preferences;
-    const userPrefsConstraints = userPrefs && (userPrefs as any).safetyConstraints ? (userPrefs as any).safetyConstraints : {};
-    const defaultMinDistance = 0.5;
-    const defaultMaxDistance = 10.0;
-    const defaultMinHeight = 0.1;
-    const defaultMaxHeight = 50.0;
-    return {
-      minDistance: Math.max(sceneConstraints.minDistance ?? defaultMinDistance, userPrefsConstraints.minDistance ?? defaultMinDistance),
-      maxDistance: Math.min(sceneConstraints.maxDistance ?? defaultMaxDistance, userPrefsConstraints.maxDistance ?? defaultMaxDistance),
-      minHeight: Math.max(sceneConstraints.minHeight ?? defaultMinHeight, userPrefsConstraints.minHeight ?? defaultMinHeight, 0),
-      maxHeight: Math.min(sceneConstraints.maxHeight ?? defaultMaxHeight, userPrefsConstraints.maxHeight ?? defaultMaxHeight),
-      restrictedZones: [...(sceneConstraints.restrictedZones || [])],
-    };
-  }
-
-  private generateSystemMessage(
-    sceneContext: any,
-    envAnalysis: EnvironmentalAnalysis,
-    constraints: any,
-    currentCameraState: { position: Vector3; target: Vector3 }
-  ): string {
-    const jsonFormat = `{\n  \"keyframes\": [\n    {\n      \"position\": {\"x\": number, \"y\": number, \"z\": number},\n      \"target\": {\"x\": number, \"y\": number, \"z\": number},\n      \"duration\": number // Duration > 0\n    }\n    // ... more keyframes\n  ]\n}`;
-
-    const distances = envAnalysis.distances?.fromObjectToBoundary;
-    const distString = distances ? 
-      `- Dist to Boundary: L:${distances.left?.toFixed(2) ?? 'N/A'} R:${distances.right?.toFixed(2) ?? 'N/A'} F:${distances.front?.toFixed(2) ?? 'N/A'} B:${distances.back?.toFixed(2) ?? 'N/A'} T:${distances.top?.toFixed(2) ?? 'N/A'} Bot:${distances.bottom?.toFixed(2) ?? 'N/A'}` 
-      : '- Distances to boundary: Not available';
-
-    // Add environmental metadata context if available
-    const envMetadata = sceneContext.modelMetadata?.environment;
-    const lightingInfo = envMetadata?.lighting ? 
-      `\n- Lighting: Intensity: ${envMetadata.lighting.intensity}, Color: ${envMetadata.lighting.color}` : '';
-    const sceneInfo = envMetadata?.scene ? 
-      `\n- Scene: Background: ${envMetadata.scene.background}, Ground: ${envMetadata.scene.ground}, Atmosphere: ${envMetadata.scene.atmosphere}` : '';
-
-    return `You are a camera path generator for a 3D model viewer. Your task is to generate a smooth, cinematic camera path based on the user's instructions while respecting the following constraints and context:
-
-Scene Context:
-- Object Dimensions: ${sceneContext.bounds.dimensions.x.toFixed(2)} x ${sceneContext.bounds.dimensions.y.toFixed(2)} x ${sceneContext.bounds.dimensions.z.toFixed(2)}
-- Object Center: (${sceneContext.bounds.center.x.toFixed(2)}, ${sceneContext.bounds.center.y.toFixed(2)}, ${sceneContext.bounds.center.z.toFixed(2)})${lightingInfo}${sceneInfo}
-${distString}
-
-Camera Constraints:
-- Min Distance: ${constraints.minDistance.toFixed(2)}
-- Max Distance: ${constraints.maxDistance.toFixed(2)}
-- Min Height: ${constraints.minHeight.toFixed(2)}
-- Max Height: ${constraints.maxHeight.toFixed(2)}
-- Max Speed: ${constraints.maxSpeed.toFixed(2)}
-- Max Angle Change: ${(constraints.maxAngleChange * 180 / Math.PI).toFixed(1)}°
-- Min Framing Margin: ${constraints.minFramingMargin.toFixed(2)}
-
-Current Camera State:
-- Position: (${currentCameraState.position.x.toFixed(2)}, ${currentCameraState.position.y.toFixed(2)}, ${currentCameraState.position.z.toFixed(2)})
-- Target: (${currentCameraState.target.x.toFixed(2)}, ${currentCameraState.target.y.toFixed(2)}, ${currentCameraState.target.z.toFixed(2)})
-
-Please generate a camera path that:
-1. Starts from the current camera position
-2. Follows the user's instructions
-3. Respects all constraints
-4. Maintains smooth motion
-5. Returns to a good viewing position
-
-Response Format:
-${jsonFormat}`;
-  }
-
-  private processUserInput(userInput: string): { message: string; constraints?: any } {
-    const { instructions, constraints } = this.parseUserInstructions(userInput);
-    return {
-      message: instructions,
-      constraints,
-    };
-  }
-
-  private parseUserInstructions(userInput: string): { instructions: string; constraints: any } {
-    const constraints = {};
-    const durationMatch = userInput.match(/duration.*?(\\d+)\\s*seconds?/i);
-    let requestedDuration: number | undefined;
-    if (durationMatch && durationMatch[1]) {
-      requestedDuration = parseInt(durationMatch[1], 10);
-    }
-    return { instructions: userInput, constraints };
-  }
-
-  private validateConstraints(constraints: any): boolean {
-    if (!constraints) return false;
-    return (
-      typeof constraints.minDistance === 'number' &&
-      typeof constraints.maxDistance === 'number' &&
-      constraints.minDistance <= constraints.maxDistance &&
-      typeof constraints.minHeight === 'number' &&
-      typeof constraints.maxHeight === 'number' &&
-      constraints.minHeight <= constraints.maxHeight
-    );
-  }
-
-  private optimizeMessage(message: string): string {
-    return message.trim();
-  }
-
-  private calculateTokenCount(systemMessage: string, userMessage: string): number {
-    return Math.ceil((systemMessage.length + userMessage.length) / 4);
   }
 } 
