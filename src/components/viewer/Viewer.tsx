@@ -14,6 +14,7 @@ import { SceneControls } from './SceneControls';
 import { PlaybackPanel } from './PlaybackPanel';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { StartPositionHint } from './StartPositionHint';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -43,6 +44,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
+  const [hasSetStartPosition, setHasSetStartPosition] = useState(false);
   
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
@@ -128,8 +130,13 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     setIsPlaying(false);
   }, []);
 
+  const handleStartPositionSet = useCallback(() => {
+    setHasSetStartPosition(true);
+  }, []);
+
   return (
     <div className={cn('relative w-full h-full', className)}>
+      <StartPositionHint visible={modelUrl != null && !hasSetStartPosition} />
       <Canvas
         ref={canvasRef}
         camera={{ position: [5, 5, 5], fov }}
@@ -228,6 +235,8 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           cameraRef={cameraRef}
           controlsRef={controlsRef}
           canvasRef={canvasRef}
+          hasSetStartPosition={hasSetStartPosition}
+          onStartPositionSet={handleStartPositionSet}
         />
       </div>
 

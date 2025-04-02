@@ -36,6 +36,8 @@ interface CameraAnimationSystemProps {
   controlsRef: React.RefObject<any>;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   onPathGenerated?: () => void;
+  hasSetStartPosition: boolean;
+  onStartPositionSet: () => void;
 }
 
 const CameraSystemFallback = () => (
@@ -99,12 +101,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   controlsRef,
   canvasRef,
   onPathGenerated,
+  hasSetStartPosition,
+  onStartPositionSet,
 }) => {
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
-  const [hasSetStartPosition, setHasSetStartPosition] = useState(false);
   const [modelId, setModelId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
@@ -212,7 +215,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           await metadataManager.initialize();
           await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
           
-          setHasSetStartPosition(true);
+          onStartPositionSet();
           toast.success('Camera start position set!');
         } catch (error) {
           console.error('Failed to set camera start position:', error);
@@ -223,7 +226,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [modelRef, cameraRef, controlsRef, modelId, hasSetStartPosition]);
+  }, [modelRef, cameraRef, controlsRef, modelId, hasSetStartPosition, onStartPositionSet]);
 
   const handleGeneratePath = async () => {
     if (!hasSetStartPosition) {
