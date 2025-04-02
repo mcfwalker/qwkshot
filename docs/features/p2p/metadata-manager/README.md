@@ -1,13 +1,14 @@
 # Metadata Manager
 
 ## Overview
-The Metadata Manager is responsible for handling user-specified metadata and model information. It manages the storage and retrieval of model orientation, feature points, and other user-defined information that helps improve camera path generation.
+The Metadata Manager is responsible for handling user-specified metadata and model information. It manages the storage and retrieval of model orientation, feature points, camera start positions, and other user-defined information that helps improve camera path generation.
 
 ## Status
 ⚠️ **Current Status**: Functional but needs refinement
 - Complex data structure handling needs optimization
 - Database integration requires enhancement
 - Error handling needs improvement
+- Camera start position handling implemented
 
 ## Interface
 
@@ -27,6 +28,10 @@ interface MetadataManager {
   addFeaturePoint(modelId: string, point: FeaturePoint): Promise<void>;
   removeFeaturePoint(modelId: string, pointId: string): Promise<void>;
   getFeaturePoints(modelId: string): Promise<FeaturePoint[]>;
+
+  // Camera position management
+  storeStartPosition(modelId: string, position: CameraPosition): Promise<void>;
+  getStartPosition(modelId: string): Promise<CameraPosition | null>;
 }
 ```
 
@@ -40,6 +45,9 @@ interface ModelMetadata {
   orientation: ModelOrientation;
   featurePoints: FeaturePoint[];
   preferences: UserPreferences;
+  camera?: {
+    startPosition?: CameraPosition;
+  };
   analysis?: {
     scene?: SceneAnalysis;
     environment?: EnvironmentalAnalysis;
@@ -82,6 +90,13 @@ interface SafetyConstraints {
   minHeight: number;
   maxHeight: number;
 }
+
+interface CameraPosition {
+  position: Vector3;
+  target: Vector3;
+  fov: number;
+  timestamp: Date;
+}
 ```
 
 ## Known Issues
@@ -108,6 +123,7 @@ interface SafetyConstraints {
 - Data validation
 - Error handling
 - Transaction management
+- Camera position storage and retrieval
 
 ### 2. Metadata Management
 - Store and retrieve metadata
@@ -115,6 +131,7 @@ interface SafetyConstraints {
 - Version control
 - Data consistency
 - Analysis data integration
+- Camera start position tracking
 
 ### 3. Feature Point Handling
 - Add/remove points
@@ -123,12 +140,12 @@ interface SafetyConstraints {
 - Track changes
 - Error recovery
 
-### 4. User Preferences
-- Store defaults
-- Handle updates
-- Apply constraints
-- Validate changes
-- Persist updates
+### 4. Camera Position Management
+- Store start position
+- Validate camera data
+- Handle position updates
+- Track position history
+- Ensure data consistency
 
 ## Current Focus Areas
 1. **Data Persistence**
@@ -149,7 +166,18 @@ interface SafetyConstraints {
 ```typescript
 const manager = new MetadataManager();
 
-// Store metadata
+// Store camera start position
+await manager.storeStartPosition(modelId, {
+  position: new Vector3(0, 2, 5),
+  target: new Vector3(0, 0, 0),
+  fov: 50,
+  timestamp: new Date()
+});
+
+// Retrieve start position
+const startPosition = await manager.getStartPosition(modelId);
+
+// Store metadata with camera position
 await manager.storeModelMetadata(modelId, {
   modelId,
   userId: 'user123',
@@ -172,19 +200,10 @@ await manager.storeModelMetadata(modelId, {
       minHeight: 1,
       maxHeight: 5
     }
+  },
+  camera: {
+    startPosition: startPosition
   }
-});
-
-// Retrieve metadata
-const metadata = await manager.getModelMetadata(modelId);
-
-// Update orientation
-await manager.updateModelOrientation(modelId, {
-  front: new Vector3(1, 0, 0),
-  up: new Vector3(0, 1, 0),
-  right: new Vector3(0, 0, 1),
-  center: new Vector3(0, 0, 0),
-  scale: 1
 });
 ```
 
@@ -195,6 +214,8 @@ The manager includes comprehensive tests covering:
 - Error scenarios
 - Performance metrics
 - Integration testing
+- Camera position management
+- Start position validation
 
 ## Future Improvements
 1. **Storage Optimization**
@@ -202,15 +223,18 @@ The manager includes comprehensive tests covering:
    - Enhance error handling
    - Improve logging
    - Optimize performance
+   - Streamline camera data storage
 
 2. **Integration Enhancement**
    - Better database coordination
    - Improved error handling
    - Enhanced logging
    - Performance optimization
+   - Camera position synchronization
 
 ## Related Components
 - Environmental Analyzer
 - Scene Analyzer
 - Viewer Integration
-- Camera Controller 
+- Camera Controller
+- Animation System 

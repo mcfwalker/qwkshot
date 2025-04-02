@@ -78,11 +78,23 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 ### 7. Viewer Integration
 - **Purpose**: Execute and visualize camera paths
 - **Key Features**:
-  - Camera animation
-  - Path preview
-  - Interactive controls
+  - Camera animation with ref-based progress tracking
+  - Smooth interpolation between keyframes
+  - Interactive start position system
+  - Animation frame management
+  - UI feedback system
   - Export capabilities
-- **Status**: 🚧 Planned
+- **Status**: ⚠️ Partially Implemented
+- **Recent Improvements**:
+  - Implemented ref-based animation system
+  - Added start position hint UI
+  - Enhanced animation frame cleanup
+  - Improved state management
+  - Added visual feedback for user actions
+- **Known Issues**:
+  - Need for easing functions
+  - Limited animation preview capabilities
+  - Basic progress tracking
 - **Interface**: See [Viewer Integration Documentation](./viewer-integration/README.md)
 
 ### 8. Feedback System
@@ -113,6 +125,7 @@ graph TD
     style C fill:#ff9900
     style D fill:#ff9900
     style E fill:#00ff00
+    style H fill:#ffff00
 ```
 
 ## Data Flow
@@ -159,7 +172,12 @@ graph TD
 
 8. **Execution**
    - Viewer Integration executes path
-   - Provides interactive controls
+   - Implements ref-based progress tracking
+   - Manages animation frame lifecycle
+   - Provides interactive start position system
+   - Handles proper resource cleanup
+   - Enables smooth transitions between keyframes
+   - Provides visual feedback through UI components
    - Enables export options
 
 9. **Feedback Loop**

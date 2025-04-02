@@ -14,6 +14,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Extract reference points| Identify important features and landmarks in the scene                           |
 | Support large files     | Handle files up to 100MB with efficient processing                               |
 | Detect symmetry         | Identify symmetry planes and patterns in the scene                               |
+| Optimize start position | Determine optimal initial camera position and orientation                        |
+| Validate animation paths| Ensure generated paths meet safety and quality standards                        |
 
 ---
 
@@ -28,6 +30,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Position validation    | Validate camera positions against environment and object constraints             |
 | Height restrictions    | Enforce minimum and maximum camera heights                                      |
 | Movement boundaries    | Define safe movement zones and restricted areas                                 |
+| Start position validation| Validate and optimize initial camera position                                   |
+| Animation constraints  | Define safe animation paths and movement patterns                              |
 
 ---
 
@@ -41,6 +45,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Database integration    | Interface with Supabase for persistent storage                                   |
 | Analysis data storage   | Store scene and environmental analysis results                                   |
 | User preferences       | Manage default camera settings and viewing preferences                           |
+| Start position storage | Store and retrieve camera start positions and preferences                       |
+| Animation preferences  | Store and manage animation settings and constraints                             |
 
 ---
 
@@ -55,6 +61,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Token length management | Optionally trim or simplify to stay under token limits                           |
 | Track metadata          | Attach request ID, timestamp, or user info to the payload                        |
 | Safety validation       | Enforce distance, height, and movement constraints                               |
+| Start position context  | Include start position information in prompt context                            |
+| Animation constraints   | Include animation preferences and constraints in prompt                         |
 
 ---
 
@@ -73,6 +81,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Pass Data to Interpreter       | Hand off the clean, parsed keyframe data to the Scene Interpreter component.       |
 | Generate Motion Segments       | Create structured camera movements from LLM output                                |
 | Validate Path Safety           | Ensure generated paths meet safety and quality standards                          |
+| Consider start position        | Use start position as context for path generation                                |
+| Generate animation paths       | Create smooth, natural camera movements                                          |
 
 ---
 
@@ -88,6 +98,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Preview and playback    | Optional debug path rendering in the scene                                       |
 | Generate keyframes      | Create detailed camera positions and orientations                                |
 | Handle motion types     | Process linear, spline, orbital, and composite movements                         |
+| Start position handling | Manage initial camera position and transitions                                  |
+| Animation execution     | Execute smooth camera movements with proper timing                               |
 
 ---
 
@@ -102,6 +114,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Export output           | Enable capture, export, or transition to video-processing pipeline               |
 | Preview generation      | Create visual previews of planned camera movements                               |
 | Interactive controls    | Manage playback speed, position, and camera adjustments                          |
+| Start position UI       | Provide interface for setting and adjusting start position                      |
+| Animation controls      | Manage animation playback, timing, and transitions                              |
 
 ---
 
@@ -116,6 +130,8 @@ This document outlines the major components and responsibilities of the LLM-driv
 | Monitor model health    | Optionally track error rate, malformed paths, or prompt failures                 |
 | Component metrics       | Track performance and usage of individual pipeline components                    |
 | Health monitoring       | Monitor system health and provide recommendations                                |
+| Start position metrics  | Track start position success rate and user satisfaction                         |
+| Animation metrics       | Monitor animation smoothness and performance                                     |
 
 ---
 
