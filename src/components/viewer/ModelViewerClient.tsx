@@ -84,58 +84,93 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
 
     // Load model
     const loader = new GLTFLoader()
+    let currentModel: THREE.Object3D | null = null;
     loader.load(
       signedUrl,
       (gltf: GLTF) => {
-        scene.add(gltf.scene)
+        // Remove previous model if it exists
+        if (currentModel) {
+          scene.remove(currentModel);
+          currentModel.traverse((child: THREE.Object3D) => {
+            if (child instanceof THREE.Mesh) {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach(material => material.dispose());
+                } else {
+                  child.material.dispose();
+                }
+              }
+            }
+          });
+        }
+        
+        // Add new model
+        currentModel = gltf.scene;
+        scene.add(gltf.scene);
 
         // Center and scale model
-        const box = new THREE.Box3().setFromObject(gltf.scene)
-        const center = box.getCenter(new THREE.Vector3())
-        const size = box.getSize(new THREE.Vector3())
-        const maxDim = Math.max(size.x, size.y, size.z)
-        const scale = 2 / maxDim
-        gltf.scene.scale.multiplyScalar(scale)
-        gltf.scene.position.sub(center.multiplyScalar(scale))
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 2 / maxDim;
+        gltf.scene.scale.multiplyScalar(scale);
+        gltf.scene.position.sub(center.multiplyScalar(scale));
 
         // Update camera
-        camera.position.z = 3
-        controls.update()
+        camera.position.z = 3;
+        controls.update();
       },
       undefined,
       (err: unknown) => {
-        const error = err instanceof Error ? err : new Error('Failed to load model')
-        console.error('Error loading model:', error)
-        toast.error('Failed to load 3D model')
+        const error = err instanceof Error ? err : new Error('Failed to load model');
+        console.error('Error loading model:', error);
+        toast.error('Failed to load 3D model');
       }
     )
 
     // Animation loop
     function animate() {
-      requestAnimationFrame(animate)
-      controls.update()
-      renderer.render(scene, camera)
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
     }
-    animate()
+    animate();
 
     // Handle resize
     function handleResize() {
-      if (!containerRef.current) return
-      const width = containerRef.current.clientWidth
-      const height = containerRef.current.clientHeight
+      if (!containerRef.current) return;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
       
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
-      renderer.setSize(width, height)
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
     }
-    window.addEventListener('resize', handleResize)
+    window.addEventListener('resize', handleResize);
 
     // Cleanup
     return () => {
-      window.removeEventListener('resize', handleResize)
-      renderer.dispose()
-      scene.clear()
-      containerRef.current?.removeChild(renderer.domElement)
+      window.removeEventListener('resize', handleResize);
+      if (currentModel) {
+        scene.remove(currentModel);
+        currentModel.traverse((child: THREE.Object3D) => {
+          if (child instanceof THREE.Mesh) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach(material => material.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          }
+        });
+      }
+      renderer.dispose();
+      scene.clear();
+      containerRef.current?.removeChild(renderer.domElement);
     }
   }, [signedUrl]) // Added signedUrl dependency
 

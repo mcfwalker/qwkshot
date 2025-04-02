@@ -122,18 +122,20 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
       );
 
-      if (!existingUuid) {
+      if (existingUuid) {
+        setModelId(existingUuid);
+        console.log('Using existing UUID from URL:', existingUuid);
+      }
+      // Only generate new UUID if one doesn't exist and we haven't set one yet
+      else if (!modelId) {
         const newUuid = uuidv4();
         setModelId(newUuid);
         const newPath = `/viewer/${newUuid}`;
         window.history.pushState({}, '', newPath);
         console.log('Generated new UUID for model:', newUuid);
-      } else {
-        setModelId(existingUuid);
-        console.log('Using existing UUID from URL:', existingUuid);
       }
     }
-  }, [modelRef.current]);
+  }, [modelRef.current, modelId]);
 
   // Handle key press for setting start position
   useEffect(() => {
@@ -289,18 +291,20 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       }
 
       const data = await response.json();
-      console.log('Camera path API response:', data);
+      console.log('Raw camera path API response:', {
+        keyframes: data.keyframes,
+        currentCamera: {
+          position: cameraRef.current.position.toArray(),
+          target: controlsRef.current.target.toArray()
+        }
+      });
       
-      // Validate that we have keyframes data
+      // Validate and parse keyframes
       if (!data.keyframes) {
         throw new Error('Missing keyframes in API response');
       }
       
-      // Ensure keyframes is an array
-      const keyframesArray = Array.isArray(data.keyframes) 
-        ? data.keyframes 
-        : [];
-        
+      const keyframesArray = Array.isArray(data.keyframes) ? data.keyframes : [];
       if (keyframesArray.length === 0) {
         throw new Error('No keyframes returned from API');
       }
@@ -310,32 +314,34 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       for (let i = 0; i < keyframesArray.length; i++) {
         const kf = keyframesArray[i];
         try {
-          newKeyframes.push({
+          const keyframe = {
             position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
             target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
             duration: kf.duration
+          };
+          console.log(`Parsed keyframe ${i}:`, {
+            position: keyframe.position.toArray(),
+            target: keyframe.target.toArray(),
+            duration: keyframe.duration
           });
+          newKeyframes.push(keyframe);
         } catch (err) {
           console.error(`Error parsing keyframe ${i}:`, kf, err);
-          // Skip invalid keyframes rather than failing completely
         }
-      }
-      
-      if (newKeyframes.length === 0) {
-        throw new Error('Failed to parse any valid keyframes');
       }
 
       setKeyframes(newKeyframes);
+      const totalDuration = newKeyframes.reduce((sum, kf) => sum + kf.duration, 0);
+      console.log('Animation setup:', {
+        totalDuration,
+        keyframeCount: newKeyframes.length,
+        startPosition: cameraRef.current.position.toArray(),
+        startTarget: controlsRef.current.target.toArray()
+      });
       
-      // Update total duration based on keyframes
-      const totalDuration = newKeyframes.reduce((sum: number, kf: CameraKeyframe) => sum + kf.duration, 0);
       setDuration(totalDuration);
-      
-      // Reset progress and start animation
       setProgress(0);
       onAnimationStart();
-      
-      // Notify that a path has been generated
       onPathGenerated?.();
       
       toast.success('Camera path generated successfully');
@@ -347,12 +353,28 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
+  const handleAnimationStart = () => {
+    console.log('Animation starting...', {
+      keyframesCount: keyframes.length,
+      totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
+      hasCamera: !!cameraRef.current,
+      hasControls: !!controlsRef.current
+    });
+    onAnimationStart();
+  };
+
   const handleProgressChange = (values: number[]) => {
     const value = values[0];
+    console.log('Progress update:', {
+      value,
+      isPlaying,
+      keyframesPresent: keyframes.length > 0
+    });
+    
     if (!isPlaying && keyframes.length > 0) {
       setProgress(value);
       const normalizedProgress = value / 100;
-      const totalDuration = keyframes.reduce((sum: number, kf: CameraKeyframe) => sum + kf.duration, 0);
+      const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
       let currentTime = normalizedProgress * totalDuration;
       
       let currentKeyframeIndex = 0;
@@ -379,6 +401,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         k2.target,
         Math.min(localProgress, 1)
       );
+
+      console.log('Camera update:', {
+        position: position.toArray(),
+        target: target.toArray(),
+        currentKeyframeIndex,
+        localProgress,
+        currentTime,
+        totalDuration
+      });
       
       if (cameraRef.current && controlsRef.current) {
         cameraRef.current.position.copy(position);
@@ -386,6 +417,107 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       }
     }
   };
+
+  // Add animation frame effect
+  useEffect(() => {
+    if (isPlaying && keyframes.length > 0) {
+      console.log('Starting animation with state:', {
+        keyframeCount: keyframes.length,
+        totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
+        currentProgress: progress
+      });
+
+      let animationStartTime = performance.now();
+      let lastProgressUpdate = 0;
+      
+      const animate = () => {
+        const currentTime = performance.now();
+        const elapsedTime = (currentTime - animationStartTime) / 1000; // Convert to seconds
+        const currentProgress = Math.min((elapsedTime / duration) * 100, 100);
+        
+        // Only update progress state when it changes by at least 1%
+        if (Math.floor(currentProgress) > Math.floor(lastProgressUpdate)) {
+          lastProgressUpdate = currentProgress;
+          setProgress(currentProgress);
+          onAnimationUpdate(currentProgress);
+        }
+
+        // Calculate camera position based on current progress
+        const normalizedProgress = currentProgress / 100;
+        const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
+        let animationTime = normalizedProgress * totalDuration;
+        
+        let currentKeyframeIndex = 0;
+        let accumulatedDuration = 0;
+        
+        // Find current keyframe pair
+        while (currentKeyframeIndex < keyframes.length - 1 && 
+               accumulatedDuration + keyframes[currentKeyframeIndex].duration < animationTime) {
+          accumulatedDuration += keyframes[currentKeyframeIndex].duration;
+          currentKeyframeIndex++;
+        }
+        
+        const k1 = keyframes[currentKeyframeIndex];
+        const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
+        
+        const localProgress = (animationTime - accumulatedDuration) / k1.duration;
+
+        // Log detailed interpolation state every 500ms
+        if (Math.floor(currentTime / 500) > Math.floor(animationStartTime / 500)) {
+          console.log('Animation interpolation:', {
+            progress: currentProgress,
+            keyframe: {
+              current: currentKeyframeIndex,
+              localProgress,
+              time: animationTime
+            }
+          });
+        }
+        
+        const position = new Vector3().lerpVectors(
+          k1.position,
+          k2.position,
+          Math.min(localProgress, 1)
+        );
+        const target = new Vector3().lerpVectors(
+          k1.target,
+          k2.target,
+          Math.min(localProgress, 1)
+        );
+
+        // Update camera position
+        if (cameraRef.current && controlsRef.current) {
+          cameraRef.current.position.copy(position);
+          controlsRef.current.target.copy(target);
+          controlsRef.current.update();
+        }
+        
+        if (currentProgress < 100) {
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          console.log('Animation complete:', {
+            finalPosition: position.toArray(),
+            finalTarget: target.toArray()
+          });
+          animationFrameRef.current = undefined;
+          onAnimationStop();
+        }
+      };
+      
+      // Cancel any existing animation frame before starting new one
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = requestAnimationFrame(animate);
+      
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = undefined;
+        }
+      };
+    }
+  }, [isPlaying, keyframes, duration]); // Removed progress from dependencies
 
   const startRecording = async () => {
     if (!canvasRef?.current) {
