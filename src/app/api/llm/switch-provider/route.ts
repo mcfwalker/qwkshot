@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createRouteSupabaseClient } from '@/lib/supabase-route';
+import { getSupabaseClient } from '@/lib/supabase-route';
 import { ProviderType } from '@/lib/llm/types';
 import { LLMProviderRegistry } from '@/lib/llm/registry';
 import { getProviderConfig, isProviderConfigured } from '@/lib/llm/config';
@@ -11,7 +11,7 @@ export const maxDuration = 30; // Increase timeout to 30 seconds
 export async function POST(request: Request) {
   try {
     // Check authentication
-    const supabase = await createRouteSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {

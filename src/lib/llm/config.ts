@@ -31,7 +31,7 @@ const DEFAULT_CONFIG = {
     maxTokens: 2000,
   },
   gemini: {
-    model: 'gemini-2.0-flash',
+    model: 'gemini-pro',
     temperature: 0.7,
     maxTokens: 2000,
   },
@@ -51,9 +51,12 @@ export function getProviderConfig(type: ProviderType): ProviderConfig {
         throw new Error(`Missing ${envKeys.apiKey} environment variable`);
       }
 
+      const organization = process.env[(envKeys as any).organization];
+
       const config: OpenAIProviderConfig = {
+        type: 'openai',
         apiKey,
-        organization: process.env[envKeys.organization],
+        organization,
         model: process.env[envKeys.model] || defaults.model,
         temperature: defaults.temperature,
         maxTokens: defaults.maxTokens,
@@ -69,6 +72,7 @@ export function getProviderConfig(type: ProviderType): ProviderConfig {
       }
 
       const config: GeminiProviderConfig = {
+        type: 'gemini',
         apiKey,
         model: process.env[envKeys.model] || defaults.model,
         temperature: defaults.temperature,

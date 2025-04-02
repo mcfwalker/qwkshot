@@ -14,17 +14,14 @@ import { Logger } from '@/types/p2p/shared';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Increase to 60 seconds from default of 10
 
-// Simple debug logs at the very start
-console.log('DEBUG - API Route Loading');
-
 // Create a logger instance
 const logger: Logger = {
-  info: console.log,
-  warn: console.warn,
-  error: console.error,
-  debug: console.debug,
-  trace: console.trace,
-  performance: console.debug // Use debug for performance logs
+  info: (...args) => console.log('[Camera Path]', ...args),
+  warn: (...args) => console.warn('[Camera Path]', ...args),
+  error: (...args) => console.error('[Camera Path]', ...args),
+  debug: (...args) => console.debug('[Camera Path]', ...args),
+  trace: (...args) => console.trace('[Camera Path]', ...args),
+  performance: (...args) => console.debug('[Camera Path Performance]', ...args)
 };
 
 // Create MetadataManagerFactory
@@ -32,25 +29,27 @@ const metadataManagerFactory = new MetadataManagerFactory(logger);
 
 export async function POST(request: Request) {
   try {
+    logger.info('Starting camera path generation request');
+    
     // Ensure LLM system is initialized
     await ensureLLMSystemInitialized();
+    logger.debug('LLM system initialized');
 
     const body = await request.json();
-    
-    // Log the full request body
-    console.log('Full camera path request:', JSON.stringify(body, null, 2));
+    logger.debug('Request body:', body);
 
     const { instruction, sceneGeometry, duration, modelId } = body;
 
     if (!instruction || !sceneGeometry || !duration || !modelId) {
-      console.error('Missing parameters:', { 
-        instruction: !!instruction, 
-        sceneGeometry: !!sceneGeometry,
-        duration: !!duration,
-        modelId: !!modelId
-      });
+      const missing = {
+        instruction: !instruction,
+        sceneGeometry: !sceneGeometry,
+        duration: !duration,
+        modelId: !modelId
+      };
+      logger.error('Missing parameters:', missing);
       return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { error: 'Missing required parameters', details: missing },
         { status: 400 }
       );
     }
@@ -58,11 +57,13 @@ export async function POST(request: Request) {
     // Get the LLM provider
     const provider = await getActiveProvider() as LLMProvider;
     if (!provider) {
+      logger.error('No LLM provider available');
       return NextResponse.json(
         { error: 'No LLM provider available' },
         { status: 500 }
       );
     }
+    logger.info('Using provider:', provider.getProviderType());
 
     // Convert camera state to Vector3
     const currentCameraState = {
@@ -77,6 +78,11 @@ export async function POST(request: Request) {
         sceneGeometry.currentCamera.target.z
       )
     };
+
+    logger.debug('Camera state:', {
+      position: currentCameraState.position.toArray(),
+      target: currentCameraState.target.toArray()
+    });
 
     console.log('Generating path with:', {
       modelId,
@@ -156,111 +162,146 @@ ${instruction}`,
     console.log('Generated prompt:', JSON.stringify(prompt, null, 2));
 
     // Generate the path
-    const result = await provider.generateCameraPath(prompt, duration);
-    
-    // Log the full response
-    console.log('Generated animation:', JSON.stringify(result, null, 2));
+    logger.info('Generating camera path with provider:', provider.getProviderType());
+    try {
+      const result = await provider.generateCameraPath(prompt, duration);
+      logger.debug('Generated animation result:', result);
+      
+      if (!result.keyframes || !Array.isArray(result.keyframes)) {
+        logger.error('Invalid keyframes in result:', result);
+        return NextResponse.json(
+          { error: 'Invalid keyframes returned from provider' },
+          { status: 500 }
+        );
+      }
 
-    // Log performance metrics
-    console.log('Performance metrics:', JSON.stringify(prompt.metadata.performanceMetrics, null, 2));
+      // Validate keyframes
+      const validationErrors = result.keyframes.map((kf, index) => {
+        const issues = [];
+        if (!kf.position || typeof kf.position.x !== 'number') issues.push('invalid position');
+        if (!kf.target || typeof kf.target.x !== 'number') issues.push('invalid target');
+        if (typeof kf.duration !== 'number' || kf.duration <= 0) issues.push('invalid duration');
+        return issues.length ? { index, issues } : null;
+      }).filter(Boolean);
 
-    // Store environmental metadata
-    const environmentalMetadata: EnvironmentalMetadata = {
-      lighting: {
-        intensity: 1.0,
-        color: '#ffffff',
-        position: {
-          x: 0,
-          y: 10,
-          z: 0
-        }
-      },
-      camera: {
-        position: {
-          x: currentCameraState.position.x,
-          y: currentCameraState.position.y,
-          z: currentCameraState.position.z
-        },
-        target: {
-          x: currentCameraState.target.x,
-          y: currentCameraState.target.y,
-          z: currentCameraState.target.z
-        },
-        fov: 45
-      },
-      scene: {
-        background: '#000000',
-        ground: '#808080',
-        atmosphere: '#87CEEB'
-      },
-      shot: {
-        type: 'cinematic',
-        duration: duration,
-        keyframes: result.keyframes.map(kf => ({
+      if (validationErrors.length > 0) {
+        logger.error('Keyframe validation errors:', validationErrors);
+        return NextResponse.json(
+          { error: 'Invalid keyframes in response', details: validationErrors },
+          { status: 500 }
+        );
+      }
+
+      const totalDuration = result.keyframes.reduce((sum, kf) => sum + kf.duration, 0);
+      logger.info('Path generated successfully', {
+        keyframeCount: result.keyframes.length,
+        totalDuration,
+        requestedDuration: duration
+      });
+
+      // Store environmental metadata
+      const environmentalMetadata: EnvironmentalMetadata = {
+        lighting: {
+          intensity: 1.0,
+          color: '#ffffff',
           position: {
-            x: kf.position.x,
-            y: kf.position.y,
-            z: kf.position.z
+            x: 0,
+            y: 10,
+            z: 0
+          }
+        },
+        camera: {
+          position: {
+            x: currentCameraState.position.x,
+            y: currentCameraState.position.y,
+            z: currentCameraState.position.z
           },
           target: {
-            x: kf.target.x,
-            y: kf.target.y,
-            z: kf.target.z
+            x: currentCameraState.target.x,
+            y: currentCameraState.target.y,
+            z: currentCameraState.target.z
           },
-          duration: kf.duration
-        }))
-      },
-      constraints: {
-        minDistance: sceneGeometry.safeDistance.min,
-        maxDistance: sceneGeometry.safeDistance.max,
-        minHeight: sceneGeometry.floor.height,
-        maxHeight: sceneGeometry.boundingBox.max.y,
-        maxSpeed: 2.0,
-        maxAngleChange: 45,
-        minFramingMargin: 0.1
-      },
-      performance: {
-        startTime: Date.now(),
-        endTime: Date.now(),
-        duration: Date.now() - prompt.metadata.performanceMetrics.startTime,
-        operations: prompt.metadata.performanceMetrics.operations
-      }
-    };
+          fov: 45
+        },
+        scene: {
+          background: '#000000',
+          ground: '#808080',
+          atmosphere: '#87CEEB'
+        },
+        shot: {
+          type: 'cinematic',
+          duration: duration,
+          keyframes: result.keyframes.map(kf => ({
+            position: {
+              x: kf.position.x,
+              y: kf.position.y,
+              z: kf.position.z
+            },
+            target: {
+              x: kf.target.x,
+              y: kf.target.y,
+              z: kf.target.z
+            },
+            duration: kf.duration
+          }))
+        },
+        constraints: {
+          minDistance: sceneGeometry.safeDistance.min,
+          maxDistance: sceneGeometry.safeDistance.max,
+          minHeight: sceneGeometry.floor.height,
+          maxHeight: sceneGeometry.boundingBox.max.y,
+          maxSpeed: 2.0,
+          maxAngleChange: 45,
+          minFramingMargin: 0.1
+        },
+        performance: {
+          startTime: Date.now(),
+          endTime: Date.now(),
+          duration: Date.now() - prompt.metadata.performanceMetrics.startTime,
+          operations: prompt.metadata.performanceMetrics.operations
+        }
+      };
 
-    // Create and initialize MetadataManager
-    const metadataManager = metadataManagerFactory.create({
-      database: {
-        type: 'supabase',
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      },
-      caching: {
-        enabled: true,
-        ttl: 5 * 60 * 1000 // 5 minutes
-      },
-      validation: {
-        strict: false,
-        maxFeaturePoints: 100
-      }
-    });
-
-    await metadataManager.initialize();
-
-    // Store the environmental metadata
-    await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error('Error generating camera path:', error);
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+      // Create and initialize MetadataManager
+      const metadataManager = metadataManagerFactory.create({
+        database: {
+          type: 'supabase',
+          url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+          key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+        },
+        caching: {
+          enabled: true,
+          ttl: 5 * 60 * 1000 // 5 minutes
+        },
+        validation: {
+          strict: false,
+          maxFeaturePoints: 100
+        }
       });
+
+      await metadataManager.initialize();
+
+      // Store the environmental metadata
+      await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
+
+      return NextResponse.json(result);
+    } catch (error) {
+      logger.error('Error generating camera path:', error);
+      return NextResponse.json(
+        { 
+          error: error instanceof Error ? error.message : 'Failed to generate camera path',
+          details: process.env.NODE_ENV === 'development' ? error : undefined
+        },
+        { status: 500 }
+      );
     }
+  } catch (error) {
+    logger.error('Unhandled error in camera path route:', error);
     return NextResponse.json(
-      { error: 'Failed to generate camera path' },
+      { 
+        error: error instanceof Error ? error.message : 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error : undefined
+      },
       { status: 500 }
     );
   }
