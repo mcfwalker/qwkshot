@@ -2,7 +2,7 @@
 
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
-import { Suspense, useRef, useState, useCallback } from 'react';
+import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
 import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
@@ -53,7 +53,30 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const startPositionRef = useRef<Vector3 | null>(null);
   const startTargetRef = useRef<Vector3 | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
-  const { isLocked } = useViewerStore();
+  const { isLocked, setModelId } = useViewerStore();
+
+  // Extract and set modelId when modelUrl changes
+  useEffect(() => {
+    if (modelUrl) {
+      // First try to get modelId from URL pathname
+      const pathParts = window.location.pathname.split('/');
+      let modelId = pathParts.find(part => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+      );
+
+      // If not found in pathname, try to extract from modelUrl
+      if (!modelId) {
+        modelId = modelUrl.split('/').find(part => 
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+        );
+      }
+
+      console.log('Setting modelId in store:', modelId);
+      setModelId(modelId || null);
+    } else {
+      setModelId(null);
+    }
+  }, [modelUrl, setModelId]);
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -151,9 +174,6 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     <div className={cn('relative w-full h-full', className)}>
       <StartPositionHint 
         visible={modelUrl != null}
-        modelId={modelUrl ? modelUrl.split('/').find(part => 
-          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
-        ) : undefined}
         modelRef={modelRef}
         cameraRef={cameraRef}
         controlsRef={controlsRef}

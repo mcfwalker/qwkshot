@@ -33,24 +33,36 @@ const metadataManager = metadataManagerFactory.create({
 
 interface ViewerState {
   isLocked: boolean;
+  modelId: string | null;
   toggleLock: () => void;
   setLock: (locked: boolean) => void;
+  setModelId: (id: string | null) => void;
   storeEnvironmentalMetadata: (
-    modelId: string,
     modelRef: Object3D,
     cameraRef: PerspectiveCamera,
     controlsRef: any
   ) => Promise<void>;
 }
 
-export const useViewerStore = create<ViewerState>((set) => ({
+export const useViewerStore = create<ViewerState>((set, get) => ({
   isLocked: false,
+  modelId: null,
   toggleLock: () => set((state) => ({ isLocked: !state.isLocked })),
   setLock: (locked) => set({ isLocked: locked }),
-  storeEnvironmentalMetadata: async (modelId, modelRef, cameraRef, controlsRef) => {
+  setModelId: (id) => set({ modelId: id }),
+  storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef) => {
+    const { modelId } = get();
+    if (!modelId) {
+      console.error('No model ID available');
+      throw new Error('No model ID available');
+    }
+
     try {
+      console.log('Storing environmental metadata for model:', modelId);
+      
       // Analyze the current scene
       const sceneGeometry = analyzeSceneGeometry(modelRef);
+      console.log('Scene geometry analyzed:', sceneGeometry);
       
       // Create environmental metadata
       const environmentalMetadata: EnvironmentalMetadata = {
@@ -92,9 +104,21 @@ export const useViewerStore = create<ViewerState>((set) => ({
         }
       };
 
-      // Initialize and store metadata
+      console.log('Created environmental metadata:', environmentalMetadata);
+
+      // Initialize and store/update metadata
       await metadataManager.initialize();
-      await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
+      try {
+        console.log('Attempting to get existing metadata...');
+        await metadataManager.getEnvironmentalMetadata(modelId);
+        console.log('Existing metadata found, updating...');
+        await metadataManager.updateEnvironmentalMetadata(modelId, environmentalMetadata);
+        console.log('Metadata updated successfully');
+      } catch (error) {
+        console.log('No existing metadata found, storing new metadata...');
+        await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
+        console.log('New metadata stored successfully');
+      }
     } catch (error) {
       console.error('Failed to store environmental metadata:', error);
       throw error;
