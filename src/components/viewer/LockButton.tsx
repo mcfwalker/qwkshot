@@ -1,29 +1,45 @@
-import { Button } from '@/components/ui/button';
+'use client';
+
 import { Lock, Unlock } from 'lucide-react';
-import { useViewerStore } from '@/store/viewerStore';
-import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
-export const LockButton = () => {
-  const { isLocked, toggleLock } = useViewerStore();
+interface LockButtonProps {
+  isLocked: boolean;
+  onToggle: () => void;
+  className?: string;
+}
 
-  const handleLockToggle = () => {
-    toggleLock();
-    toast.success(isLocked ? 'Viewer unlocked' : 'Viewer locked');
-  };
-
+export const LockButton = ({ isLocked, onToggle, className }: LockButtonProps) => {
   return (
-    <Button
-      variant="secondary"
-      size="icon"
-      className="viewer-button"
-      onClick={handleLockToggle}
-      aria-label={isLocked ? 'Unlock viewer' : 'Lock viewer'}
-    >
-      {isLocked ? (
-        <Lock className="viewer-button-icon" />
-      ) : (
-        <Unlock className="viewer-button-icon" />
-      )}
-    </Button>
+    <div className={cn('flex items-center w-full', className)}>
+      <div className="flex-1">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="secondary"
+                onClick={onToggle}
+                className="w-full h-9 bg-background hover:bg-accent flex items-center justify-center gap-2 text-sm font-normal border border-[#444444]"
+              >
+                {isLocked ? (
+                  <Lock className="h-4 w-4 text-lime-400" />
+                ) : (
+                  <Unlock className="h-4 w-4 text-orange-400" />
+                )}
+                {isLocked ? 'Composition Locked!' : 'Lock composition'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {isLocked 
+                ? 'Scene is locked. Camera and model position cannot be changed'
+                : 'Lock the scene to generate camera paths'
+              }
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    </div>
   );
 }; 

@@ -47,7 +47,18 @@ interface ViewerState {
 export const useViewerStore = create<ViewerState>((set, get) => ({
   isLocked: false,
   modelId: null,
-  toggleLock: () => set((state) => ({ isLocked: !state.isLocked })),
+  toggleLock: () => {
+    const currentState = get();
+    console.log('Toggling lock state in store. Current state:', {
+      isLocked: currentState.isLocked,
+      modelId: currentState.modelId
+    });
+    set((state) => {
+      const newState = { isLocked: !state.isLocked };
+      console.log('New state:', newState);
+      return newState;
+    });
+  },
   setLock: (locked) => set({ isLocked: locked }),
   setModelId: (id) => set({ modelId: id }),
   storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef) => {

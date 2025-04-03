@@ -17,6 +17,7 @@ import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { v4 as uuidv4 } from 'uuid';
 import { NextResponse } from 'next/server';
 import { LockButton } from './LockButton';
+import { useViewerStore } from '@/store/viewerStore';
 
 interface CameraKeyframe {
   position: Vector3;
@@ -37,8 +38,6 @@ interface CameraAnimationSystemProps {
   controlsRef: React.RefObject<any>;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   onPathGenerated?: () => void;
-  hasSetStartPosition: boolean;
-  onStartPositionSet: () => void;
 }
 
 const CameraSystemFallback = () => (
@@ -102,8 +101,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   controlsRef,
   canvasRef,
   onPathGenerated,
-  hasSetStartPosition,
-  onStartPositionSet,
 }) => {
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
@@ -117,6 +114,22 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const animationFrameRef = useRef<number | undefined>(undefined);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const { isLocked, toggleLock, storeEnvironmentalMetadata } = useViewerStore();
+
+  // Debug logging for button state
+  useEffect(() => {
+    const buttonState = {
+      isLocked,
+      isGenerating,
+      hasInstruction: !!instruction.trim(),
+      isDisabled: !isLocked || isGenerating,
+      instruction: instruction,
+      instructionLength: instruction.length,
+      instructionTrimmed: instruction.trim(),
+      instructionTrimmedLength: instruction.trim().length
+    };
+    console.log('Detailed button state:', buttonState);
+  }, [isLocked, isGenerating, instruction]);
 
   // Generate UUID when model is loaded
   useEffect(() => {
@@ -133,100 +146,12 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   }, [modelRef.current]);
 
-  // Handle key press for setting start position
-  useEffect(() => {
-    const handleKeyPress = async (event: KeyboardEvent) => {
-      if (event.key === 's' && !hasSetStartPosition && modelId) {
-        try {
-          if (!modelId) {
-            toast.error('No valid model ID found');
-            return;
-          }
-
-          // Analyze the current scene
-          const sceneGeometry = analyzeSceneGeometry(modelRef.current as Object3D);
-          
-          // Add current camera information
-          sceneGeometry.currentCamera = {
-            position: {
-              x: cameraRef.current.position.x,
-              y: cameraRef.current.position.y,
-              z: cameraRef.current.position.z
-            },
-            target: {
-              x: controlsRef.current.target.x,
-              y: controlsRef.current.target.y,
-              z: controlsRef.current.target.z
-            },
-            modelOrientation: {
-              front: { x: 0, y: 0, z: 1 }, // Default front direction
-              up: { x: 0, y: 1, z: 0 }     // Default up direction
-            }
-          };
-
-          // Store environmental metadata
-          const environmentalMetadata: EnvironmentalMetadata = {
-            lighting: {
-              intensity: 1.0,
-              color: '#ffffff',
-              position: {
-                x: 0,
-                y: 10,
-                z: 0
-              }
-            },
-            camera: {
-              position: {
-                x: cameraRef.current.position.x,
-                y: cameraRef.current.position.y,
-                z: cameraRef.current.position.z
-              },
-              target: {
-                x: controlsRef.current.target.x,
-                y: controlsRef.current.target.y,
-                z: controlsRef.current.target.z
-              },
-              fov: cameraRef.current.fov
-            },
-            scene: {
-              background: '#000000',
-              ground: '#808080',
-              atmosphere: '#87CEEB'
-            },
-            constraints: {
-              minDistance: sceneGeometry.safeDistance.min,
-              maxDistance: sceneGeometry.safeDistance.max,
-              minHeight: sceneGeometry.floor.height,
-              maxHeight: sceneGeometry.boundingBox.max.y,
-              maxSpeed: 2.0,
-              maxAngleChange: 45,
-              minFramingMargin: 0.1
-            }
-          };
-
-          // Initialize and store metadata
-          await metadataManager.initialize();
-          await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
-          
-          onStartPositionSet();
-          toast.success('Camera start position set!');
-        } catch (error) {
-          console.error('Failed to set camera start position:', error);
-          toast.error('Failed to set camera start position');
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [modelRef, cameraRef, controlsRef, modelId, hasSetStartPosition, onStartPositionSet]);
-
   const handleGeneratePath = async () => {
-    if (!hasSetStartPosition) {
-      toast.error('Please set a camera start position first (press "s"');
+    if (!instruction.trim()) {
+      toast.error('Please describe the camera movement you want');
       return;
     }
-    if (!instruction.trim() || !modelRef.current || !cameraRef.current || !controlsRef.current) {
+    if (!modelRef.current || !cameraRef.current || !controlsRef.current) {
       return;
     }
 
@@ -609,6 +534,37 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
+  const handleLockToggle = async () => {
+    try {
+      console.log('Lock toggle initiated. Current state:', {
+        isLocked,
+        hasModelRef: !!modelRef?.current,
+        hasCameraRef: !!cameraRef?.current,
+        hasControlsRef: !!controlsRef?.current
+      });
+
+      if (!isLocked && modelRef?.current && cameraRef?.current && controlsRef?.current) {
+        console.log('Locking scene, storing metadata...');
+        await storeEnvironmentalMetadata(
+          modelRef.current,
+          cameraRef.current,
+          controlsRef.current
+        );
+        toast.success('Scene composition locked and saved');
+      } else if (isLocked) {
+        console.log('Unlocking scene...');
+        toast.success('Scene unlocked');
+      }
+      
+      console.log('Toggling lock state...');
+      toggleLock();
+      console.log('Lock state toggled. New state:', { isLocked: !isLocked });
+    } catch (error) {
+      console.error('Failed to store environmental metadata:', error);
+      toast.error('Failed to store scene composition');
+    }
+  };
+
   return (
     <ErrorBoundary 
       name="CameraAnimationSystem"
@@ -619,63 +575,69 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-6 space-y-4">
+          <LockButton 
+            isLocked={isLocked}
+            onToggle={handleLockToggle}
+          />
+
           <div className="camera-path-fields space-y-4">
-            <Textarea
-              placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              onFocus={() => setIsPromptFocused(true)}
-              onBlur={() => setIsPromptFocused(false)}
-              className="min-h-[140px] resize-none"
-              active={isPromptFocused}
-            />
+            <div className="space-y-4">
+              <Textarea
+                placeholder="Describe the camera movement you want..."
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                disabled={!isLocked}
+                className="min-h-[100px] resize-none"
+              />
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
-                <div className="w-20">
-                  <Input
-                    id="duration-input"
-                    type="number"
-                    value={inputDuration}
-                    onChange={handleDurationChange}
-                    onBlur={(e) => {
-                      handleDurationBlur(e);
-                      setIsPromptFocused(false);
-                    }}
-                    onFocus={() => setIsPromptFocused(true)}
-                    min={1}
-                    max={20}
-                    step={0.5}
-                    className="text-right"
-                    disabled={isPlaying}
-                    active={isPromptFocused}
-                  />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
+                  <div className="w-20">
+                    <Input
+                      id="duration-input"
+                      type="number"
+                      value={inputDuration}
+                      onChange={handleDurationChange}
+                      onBlur={(e) => {
+                        handleDurationBlur(e);
+                        setIsPromptFocused(false);
+                      }}
+                      onFocus={() => setIsPromptFocused(true)}
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      className="text-right"
+                      disabled={!isLocked || isGenerating}
+                      active={isPromptFocused}
+                    />
+                  </div>
                 </div>
+                <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
               </div>
-              <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
-            </div>
 
-            <div className="mt-8">
-              <Button
-                onClick={handleGeneratePath}
-                disabled={isGenerating || !instruction.trim()}
-                variant="primary"
-                size="lg"
-                className="w-full"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    Generating Path...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="h-6 w-6" />
-                    Generate Path
-                  </>
-                )}
-              </Button>
+              <div className="mt-8">
+                <Button
+                  onClick={handleGeneratePath}
+                  disabled={!isLocked || isGenerating}
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  aria-disabled={!isLocked || isGenerating}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      Generating Path...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-6 w-6" />
+                      Generate Path
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
