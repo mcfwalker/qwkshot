@@ -120,55 +120,16 @@ export type Model = {
       }
     }
     performance_metrics?: {
-      sceneAnalysis: {
-        startTime: number
-        endTime: number
-        duration: number
-        operations: Array<{
-          name: string
-          duration: number
-          success: boolean
-          error?: string
-        }>
-        cacheHits: number
-        cacheMisses: number
-        databaseQueries: number
-        averageResponseTime: number
-      }
-      spatialAnalysis: {
-        startTime: number
-        endTime: number
-        duration: number
-        operations: Array<{
-          name: string
-          duration: number
-          success: boolean
-          error?: string
-        }>
-        cacheHits: number
-        cacheMisses: number
-        databaseQueries: number
-        averageResponseTime: number
-      }
-      featureAnalysis: {
-        startTime: number
-        endTime: number
-        duration: number
-        operations: Array<{
-          name: string
-          duration: number
-          success: boolean
-          error?: string
-        }>
-        cacheHits: number
-        cacheMisses: number
-        databaseQueries: number
-        averageResponseTime: number
-      }
+      sceneAnalysis: Record<string, any>
+      spatialAnalysis: Record<string, any>
+      featureAnalysis: Record<string, any>
     }
+    createdAt?: string
+    updatedAt?: string
+    version?: number
   }
-  tags?: string[]
-  user_id?: string
+  tags: string[]
+  user_id: string
 }
 
 export type Collection = {

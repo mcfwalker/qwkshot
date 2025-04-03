@@ -35,7 +35,7 @@ export interface DatabaseAdapter {
   /**
    * Retrieve environmental metadata
    */
-  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata>;
+  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata | null>;
 
   /**
    * Update environmental metadata

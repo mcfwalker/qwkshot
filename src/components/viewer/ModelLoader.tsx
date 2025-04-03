@@ -206,7 +206,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       });
 
       // Save the model with the processed metadata
-      await uploadModel(currentFile, {
+      const savedModel = await uploadModel(currentFile, {
         name,
         description: '',
         tags: [],
@@ -281,14 +281,23 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
             sceneAnalysis: analysis.performance,
             spatialAnalysis: analysis.spatial.performance,
             featureAnalysis: analysis.featureAnalysis.performance
-          }
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1
         }
       });
-      toast.success('Model saved to library');
+
+      // Update the URL to include the model ID
+      const newPath = `/viewer/${savedModel.id}`;
+      window.history.pushState({}, '', newPath);
+
+      // Get the signed URL for the model
+      const url = await loadModel(savedModel.id);
+      onModelLoad(url);
     } catch (error) {
-      console.error('Failed to save model:', error);
-      toast.error('Failed to save model to library');
-      throw error; // Propagate error to dialog
+      console.error('Error saving model:', error);
+      toast.error('Failed to save model');
     }
   };
 
@@ -296,6 +305,9 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     try {
       setLoading(true);
       const url = await loadModel(model.id);
+      // Update the URL to include the model ID
+      const newPath = `/viewer/${model.id}`;
+      window.history.pushState({}, '', newPath);
       onModelLoad(url);
     } catch (error) {
       console.error('Error loading model:', error);

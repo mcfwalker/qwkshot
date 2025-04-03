@@ -121,24 +121,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   useEffect(() => {
     if (modelRef.current) {
       const pathParts = window.location.pathname.split('/');
-      const existingUuid = pathParts.find(part => 
+      const modelId = pathParts.find(part => 
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
       );
 
-      if (existingUuid) {
-        setModelId(existingUuid);
-        console.log('Using existing UUID from URL:', existingUuid);
-      }
-      // Only generate new UUID if one doesn't exist and we haven't set one yet
-      else if (!modelId) {
-        const newUuid = uuidv4();
-        setModelId(newUuid);
-        const newPath = `/viewer/${newUuid}`;
-        window.history.pushState({}, '', newPath);
-        console.log('Generated new UUID for model:', newUuid);
+      if (modelId) {
+        setModelId(modelId);
+        console.log('Using model ID from URL:', modelId);
       }
     }
-  }, [modelRef.current, modelId]);
+  }, [modelRef.current]);
 
   // Handle key press for setting start position
   useEffect(() => {

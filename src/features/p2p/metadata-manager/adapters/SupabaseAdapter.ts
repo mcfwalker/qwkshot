@@ -462,31 +462,47 @@ export class SupabaseAdapter implements DatabaseAdapter {
   /**
    * Store environmental metadata
    */
-  async storeEnvironmentalMetadata(
-    modelId: string,
-    metadata: EnvironmentalMetadata
-  ): Promise<void> {
+  async storeEnvironmentalMetadata(modelId: string, metadata: EnvironmentalMetadata): Promise<void> {
     try {
-      this.logger.info(`Storing environmental metadata for model: ${modelId}`);
+      this.logger.info(`Storing environmental metadata for model: ${modelId}`, {
+        metadata,
+        modelId,
+        timestamp: new Date().toISOString()
+      });
       
-      const { error } = await this.client
+      const { data, error } = await this.client
         .from('models')
         .update({ environmental_metadata: metadata })
-        .eq('id', modelId);
+        .eq('id', modelId)
+        .select('environmental_metadata');
 
-      if (error) throw new DatabaseError(error.message);
+      if (error) {
+        this.logger.error(`Database error while storing environmental metadata: ${error.message}`, {
+          error,
+          modelId,
+          metadata
+        });
+        throw new DatabaseError(error.message);
+      }
 
-      this.logger.info(`Successfully stored environmental metadata for model: ${modelId}`);
+      this.logger.info(`Successfully stored environmental metadata for model: ${modelId}`, {
+        storedData: data,
+        modelId
+      });
     } catch (error) {
-      this.logger.error(`Failed to store environmental metadata for model: ${modelId}`, error);
-      throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to store environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.error(`Failed to store environmental metadata for model: ${modelId}`, {
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        modelId,
+        metadata
+      });
+      throw new DatabaseError(`Failed to store environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
    * Retrieve environmental metadata
    */
-  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata> {
+  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata | null> {
     try {
       this.logger.info(`Retrieving environmental metadata for model: ${modelId}`);
       
@@ -499,11 +515,10 @@ export class SupabaseAdapter implements DatabaseAdapter {
       if (error) throw new DatabaseError(error.message);
       if (!data) throw new NotFoundError(`Model not found: ${modelId}`);
 
-      return data.environmental_metadata || {};
+      return data.environmental_metadata || null;
     } catch (error) {
       this.logger.error(`Failed to retrieve environmental metadata for model: ${modelId}`, error);
-      if (error instanceof NotFoundError) throw error;
-      throw error instanceof DatabaseError ? error : new DatabaseError(`Failed to retrieve environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new DatabaseError(`Failed to retrieve environmental metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

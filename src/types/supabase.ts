@@ -18,6 +18,7 @@ export interface Database {
           file_url: string
           thumbnail_url?: string
           metadata: Json
+          environmental_metadata: Json | null
           tags?: string[]
           user_id: string
         }
@@ -29,6 +30,7 @@ export interface Database {
           file_url: string
           thumbnail_url?: string
           metadata?: Json
+          environmental_metadata?: Json | null
           tags?: string[]
           user_id: string
         }
@@ -40,6 +42,7 @@ export interface Database {
           file_url?: string
           thumbnail_url?: string
           metadata?: Json
+          environmental_metadata?: Json | null
           tags?: string[]
           user_id?: string
         }
