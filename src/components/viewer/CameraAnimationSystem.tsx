@@ -16,6 +16,7 @@ import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/Metadata
 import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { v4 as uuidv4 } from 'uuid';
 import { NextResponse } from 'next/server';
+import { LockButton } from './LockButton';
 
 interface CameraKeyframe {
   position: Vector3;
@@ -613,12 +614,12 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       name="CameraAnimationSystem"
       fallback={<CameraSystemFallback />}
     >
-      <Card className="viewer-panel">
-        <CardHeader className="viewer-panel-header px-2">
+      <Card className="viewer-card border-[#444444]">
+        <CardHeader className="viewer-panel-header">
           <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-6">
-          <div className="camera-path-fields">
+        <CardContent className="px-4 pb-6 space-y-4">
+          <div className="camera-path-fields space-y-4">
             <Textarea
               placeholder="Describe the camera movement you want (e.g., 'Orbit around the model focusing on the front!')"
               value={instruction}

@@ -15,6 +15,7 @@ import { PlaybackPanel } from './PlaybackPanel';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { StartPositionHint } from './StartPositionHint';
+import { useViewerStore } from '@/store/viewerStore';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -52,6 +53,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const startPositionRef = useRef<Vector3 | null>(null);
   const startTargetRef = useRef<Vector3 | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
+  const { isLocked } = useViewerStore();
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -77,13 +79,21 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   };
 
   const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to move the camera.');
+      return;
+    }
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.copy(position);
       controlsRef.current.target.copy(target);
     }
-  }, []);
+  }, [isLocked]);
 
   const handleAnimationUpdate = useCallback((progress: number) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to play animations.');
+      return;
+    }
     if (!cameraRef.current || !controlsRef.current || !startPositionRef.current || !startTargetRef.current) {
       return;
     }
@@ -106,16 +116,19 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     // Update camera and controls
     cameraRef.current.position.copy(newPosition);
     controlsRef.current.target.copy(target);
-  }, [playbackSpeed]);
+  }, [isLocked, playbackSpeed]);
 
   const handleAnimationStart = useCallback(() => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to play animations.');
+      return;
+    }
     if (cameraRef.current && controlsRef.current) {
-      // Store starting position and target
       startPositionRef.current = cameraRef.current.position.clone();
       startTargetRef.current = controlsRef.current.target.clone();
       setIsPlaying(true);
     }
-  }, []);
+  }, [isLocked]);
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
@@ -136,7 +149,15 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
 
   return (
     <div className={cn('relative w-full h-full', className)}>
-      <StartPositionHint visible={modelUrl != null && !hasSetStartPosition} />
+      <StartPositionHint 
+        visible={modelUrl != null}
+        modelId={modelUrl ? modelUrl.split('/').find(part => 
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+        ) : undefined}
+        modelRef={modelRef}
+        cameraRef={cameraRef}
+        controlsRef={controlsRef}
+      />
       <Canvas
         ref={canvasRef}
         camera={{ position: [5, 5, 5], fov }}
@@ -161,11 +182,13 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
             makeDefault
             listenToKeyEvents={window}
             domElement={canvasRef.current}
-            enableZoom={true}
+            enableZoom={!isLocked}
+            enableRotate={!isLocked}
+            enablePan={!isLocked}
             mouseButtons={{
-              LEFT: MOUSE.ROTATE,
-              MIDDLE: MOUSE.DOLLY,
-              RIGHT: MOUSE.PAN
+              LEFT: isLocked ? undefined : MOUSE.ROTATE,
+              MIDDLE: isLocked ? undefined : MOUSE.DOLLY,
+              RIGHT: isLocked ? undefined : MOUSE.PAN
             }}
           />
           

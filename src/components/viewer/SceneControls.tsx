@@ -6,6 +6,8 @@ import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FloorType } from './Floor';
 import FloorControls from './FloorControls';
+import { useViewerStore } from '@/store/viewerStore';
+import { toast } from 'sonner';
 
 interface SceneControlsProps {
   modelHeight: number;
@@ -26,6 +28,24 @@ export function SceneControls({
   onFloorTypeChange,
   onFloorTextureChange,
 }: SceneControlsProps) {
+  const { isLocked } = useViewerStore();
+
+  const handleModelHeightChange = (values: number[]) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to adjust model height.');
+      return;
+    }
+    onModelHeightChange(values[0]);
+  };
+
+  const handleFovChange = (values: number[]) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to adjust field of view.');
+      return;
+    }
+    onFovChange(values[0]);
+  };
+
   return (
     <Card className="viewer-panel">
       <CardHeader className="viewer-panel-header px-2 pb-6 pt-5">
@@ -40,11 +60,12 @@ export function SceneControls({
           </div>
           <Slider
             value={[modelHeight]}
-            onValueChange={(values) => onModelHeightChange(values[0])}
+            onValueChange={handleModelHeightChange}
             min={0}
             max={5}
             step={0.1}
             className="viewer-slider"
+            disabled={isLocked}
           />
         </div>
 
@@ -56,11 +77,12 @@ export function SceneControls({
           </div>
           <Slider
             value={[fov]}
-            onValueChange={(values) => onFovChange(values[0])}
+            onValueChange={handleFovChange}
             min={20}
             max={120}
             step={1}
             className="viewer-slider"
+            disabled={isLocked}
           />
         </div>
 
