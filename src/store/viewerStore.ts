@@ -54,7 +54,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       modelId: currentState.modelId
     });
     set((state) => {
-      const newState = { isLocked: !state.isLocked };
+      const newState = { ...state, isLocked: !state.isLocked };
       console.log('New state:', newState);
       return newState;
     });

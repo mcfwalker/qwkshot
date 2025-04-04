@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Play, Pause, Clock, Wand2, Loader2, Video, Square, RefreshCcw } from 'lucide-react';
+import { Play, Pause, Clock, Wand2, Loader2, Video, Square, RefreshCcw, Camera, FileCode2, X } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Vector3, Object3D, PerspectiveCamera } from 'three';
+import { Vector3, Object3D, PerspectiveCamera, Mesh, Material, BufferGeometry } from 'three';
 import { toast } from 'sonner';
 import { analyzeScene as analyzeSceneGeometry, SceneGeometry } from '@/lib/scene-analysis';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -18,6 +18,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { NextResponse } from 'next/server';
 import { LockButton } from './LockButton';
 import { useViewerStore } from '@/store/viewerStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 interface CameraKeyframe {
   position: Vector3;
@@ -38,6 +41,8 @@ interface CameraAnimationSystemProps {
   controlsRef: React.RefObject<any>;
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   onPathGenerated?: () => void;
+  onPlaybackSpeedChange: (speed: number) => void;
+  disabled?: boolean;
 }
 
 const CameraSystemFallback = () => (
@@ -88,6 +93,49 @@ const metadataManager = metadataManagerFactory.create({
   }
 });
 
+// Add speed options constant
+const SPEED_OPTIONS = [
+  { value: 0.25, label: '0.25' },
+  { value: 0.5, label: '0.5' },
+  { value: 0.75, label: '0.75' },
+  { value: 1, label: '1' },
+  { value: 1.25, label: '1.25' },
+  { value: 1.5, label: '1.5' },
+  { value: 1.75, label: '1.75' },
+  { value: 2, label: '2' }
+];
+
+// Update the generate path states type
+type GeneratePathState = 'initial' | 'generating' | 'ready';
+
+// Fun, cinematic-themed messages for the generating state
+const generatingMessages = [
+  "Setting up the perfect shot...",
+  "Calculating cinematic angles...",
+  "Choreographing the camera moves...",
+  "Finding the dramatic moments...",
+  "Making it look epic...",
+  "Adding that cinematic magic...",
+  "Crafting the perfect sequence...",
+  "Directing your scene..."
+];
+
+// Update the generate path states configuration
+const generatePathStates: Record<GeneratePathState, { text: string; icon: React.ReactNode }> = {
+  initial: {
+    text: "Generate Path",
+    icon: <Wand2 className="h-6 w-6" />
+  },
+  generating: {
+    text: generatingMessages[0],
+    icon: <Loader2 className="h-6 w-6 animate-spin" />
+  },
+  ready: {
+    text: "Ready for playback!",
+    icon: null
+  }
+};
+
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   onAnimationUpdate,
   onAnimationStop,
@@ -101,6 +149,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   controlsRef,
   canvasRef,
   onPathGenerated,
+  onPlaybackSpeedChange,
+  disabled,
 }) => {
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
@@ -110,11 +160,17 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
+  const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
   const progressRef = useRef(0);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const { isLocked, toggleLock, storeEnvironmentalMetadata } = useViewerStore();
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [takeCount, setTakeCount] = useState(0);
+  const [modelName, setModelName] = useState<string | null>(null);
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
 
   // Debug logging for button state
   useEffect(() => {
@@ -135,10 +191,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   useEffect(() => {
     if (modelRef.current) {
       const pathParts = window.location.pathname.split('/');
-      const modelId = pathParts.find(part => 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
-      );
-
+      const modelId = pathParts[pathParts.length - 1]; // Get the last segment of the path
+      
       if (modelId) {
         setModelId(modelId);
         console.log('Using model ID from URL:', modelId);
@@ -146,23 +200,85 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   }, [modelRef.current]);
 
+  // Add effect for cycling through messages during generation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isGenerating) {
+      interval = setInterval(() => {
+        setMessageIndex((prev) => (prev + 1) % generatingMessages.length);
+      }, 2000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isGenerating]);
+
   const handleGeneratePath = async () => {
     if (!instruction.trim()) {
       toast.error('Please describe the camera movement you want');
       return;
     }
-    if (!modelRef.current || !cameraRef.current || !controlsRef.current) {
+
+    // Early validation of required refs
+    if (!modelRef?.current) {
+      console.error('Model reference is not available');
+      toast.error('Model not loaded properly');
+      return;
+    }
+
+    if (!cameraRef?.current) {
+      console.error('Camera reference is not available');
+      toast.error('Camera not initialized properly');
+      return;
+    }
+
+    if (!controlsRef?.current) {
+      console.error('Controls reference is not available');
+      toast.error('Camera controls not initialized properly');
       return;
     }
 
     setIsGenerating(true);
+    setGeneratePathState('generating');
+    setMessageIndex(0); // Reset message index
+    
     try {
-      if (!modelRef.current) {
-        throw new Error('Model reference is not available');
-      }
+      // Get the model ID from the URL
+      const pathParts = window.location.pathname.split('/');
+      const modelId = pathParts[pathParts.length - 1];
       
+      if (!modelId) {
+        throw new Error('No model ID found in URL');
+      }
+
+      console.log('Fetching model details for ID:', modelId);
+
+      // Fetch model name from Supabase
+      const { data: modelData, error: modelError } = await supabase
+        .from('models')
+        .select('name')
+        .eq('id', modelId)
+        .single();
+
+      if (modelError) {
+        console.error('Failed to fetch model details:', modelError);
+        throw new Error(`Failed to fetch model details: ${modelError.message}`);
+      }
+
+      if (!modelData || !modelData.name) {
+        throw new Error('Invalid model data received');
+      }
+
+      console.log('Model data received:', modelData);
+      setModelName(modelData.name);
+      setTakeCount(prev => prev + 1);
+
       // Analyze the current scene
-      const sceneGeometry = analyzeSceneGeometry(modelRef.current as Object3D);
+      const sceneGeometry = analyzeSceneGeometry(modelRef.current);
       
       // Add current camera information
       sceneGeometry.currentCamera = {
@@ -177,23 +293,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           z: controlsRef.current.target.z
         },
         modelOrientation: {
-          front: { x: 0, y: 0, z: 1 }, // Default front direction
-          up: { x: 0, y: 1, z: 0 }     // Default up direction
+          front: { x: 0, y: 0, z: 1 },
+          up: { x: 0, y: 1, z: 0 }
         }
       };
-
-      // Get the model ID from the URL - ensure it's a valid UUID
-      const pathParts = window.location.pathname.split('/');
-      const modelId = pathParts.find(part => 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
-      );
       
-      if (!modelId) {
-        throw new Error('No valid model ID found in URL');
-      }
-
       // Call the API to generate camera path
-      const response = await fetch('/api/camera-path', {
+      const pathResponse = await fetch('/api/camera-path', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -206,19 +312,12 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
+      if (!pathResponse.ok) {
+        const error = await pathResponse.json();
         throw new Error(error.error || 'Failed to generate camera path');
       }
 
-      const data = await response.json();
-      console.log('Raw camera path API response:', {
-        keyframes: data.keyframes,
-        currentCamera: {
-          position: cameraRef.current.position.toArray(),
-          target: controlsRef.current.target.toArray()
-        }
-      });
+      const data = await pathResponse.json();
       
       // Validate and parse keyframes
       if (!data.keyframes) {
@@ -240,11 +339,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
             target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
             duration: kf.duration
           };
-          console.log(`Parsed keyframe ${i}:`, {
-            position: keyframe.position.toArray(),
-            target: keyframe.target.toArray(),
-            duration: keyframe.duration
-          });
           newKeyframes.push(keyframe);
         } catch (err) {
           console.error(`Error parsing keyframe ${i}:`, kf, err);
@@ -253,15 +347,9 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
       setKeyframes(newKeyframes);
       const totalDuration = newKeyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      console.log('Animation setup:', {
-        totalDuration,
-        keyframeCount: newKeyframes.length,
-        startPosition: cameraRef.current.position.toArray(),
-        startTarget: controlsRef.current.target.toArray()
-      });
-      
       setDuration(totalDuration);
       setProgress(0);
+      setGeneratePathState('ready');
       onAnimationStart();
       onPathGenerated?.();
       
@@ -269,6 +357,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     } catch (error) {
       console.error('Error generating camera path:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate camera path');
+      setGeneratePathState('initial');
     } finally {
       setIsGenerating(false);
     }
@@ -440,62 +529,101 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   }, [isPlaying, keyframes, duration]); // Removed progress from dependencies
 
-  const startRecording = async () => {
+  const handleDownload = async () => {
     if (!canvasRef?.current) {
       toast.error('Canvas not available for recording');
       return;
     }
 
     try {
-      const stream = canvasRef.current.captureStream(60);
+      // Check supported MIME types
+      const mimeTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      
+      const supportedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+      
+      if (!supportedType) {
+        toast.error('No supported video recording format found');
+        return;
+      }
+
+      // Get the canvas stream
+      const stream = canvasRef.current.captureStream(30);
+      
+      // Create a MediaRecorder with the supported type
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 5000000 // 5 Mbps
+        mimeType: supportedType,
+        videoBitsPerSecond: 8000000
       });
 
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
+      // Collect data chunks during recording
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
 
+      // Handle recording completion
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'camera-path-animation.webm';
-        a.click();
-        URL.revokeObjectURL(url);
+        if (chunksRef.current.length === 0) {
+          toast.error('No video data was recorded');
+          setIsRecording(false);
+          return;
+        }
+
+        const blob = new Blob(chunksRef.current, { type: supportedType });
+        
+        // Only create download if we have data
+        if (blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'camera-path-animation.webm';
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          toast.error('Generated video file was empty');
+        }
+        
+        setIsRecording(false);
       };
 
-      mediaRecorder.start();
+      // Start recording
       setIsRecording(true);
-      setProgress(0);
+      mediaRecorder.start(50); // Request data every 50ms
+
+      // Start the animation
       onAnimationStart();
+
+      // Stop recording after duration + small buffer
+      const recordingDuration = (duration * 1000) + 100;
+      setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+        }
+      }, recordingDuration);
+
     } catch (error) {
       console.error('Error starting recording:', error);
       toast.error('Failed to start recording. Please try again.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
       setIsRecording(false);
-      onAnimationStop();
     }
   };
 
+  // Cleanup recording on unmount
   useEffect(() => {
-    // Stop recording when animation completes
-    if (isRecording && progress >= 100) {
-      stopRecording();
-    }
-  }, [isRecording, progress]);
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   const handlePlayPause = () => {
     if (isPlaying) {
@@ -565,20 +693,95 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   };
 
+  // Handle playback speed change
+  const handleSpeedChange = (values: number[]) => {
+    const value = values[0];
+    const closestOption = SPEED_OPTIONS.reduce((prev, curr) => {
+      return Math.abs(curr.value - value) < Math.abs(prev.value - value) ? curr : prev;
+    });
+    
+    setPlaybackSpeed(closestOption.value);
+    onPlaybackSpeedChange(closestOption.value);
+  };
+
+  // Handle scene clear
+  const handleClearScene = () => {
+    if (!isConfirmingClear) {
+      setIsConfirmingClear(true);
+      return;
+    }
+
+    // Reset all states
+    setProgress(0);
+    setKeyframes([]);
+    setInstruction('');
+    setGeneratePathState('initial');
+    setTakeCount(0);
+    setModelName(null);
+    onAnimationStop();
+    setIsConfirmingClear(false);
+
+    // Reset camera to initial position
+    if (cameraRef.current && controlsRef.current) {
+      cameraRef.current.position.set(5, 5, 5);
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+    }
+
+    // Clear the model
+    if (modelRef.current) {
+      // Remove all children from the model
+      while (modelRef.current.children.length > 0) {
+        const child = modelRef.current.children[0];
+        modelRef.current.remove(child);
+        
+        // Dispose of geometries and materials
+        if (child instanceof Mesh) {
+          if (child.geometry) {
+            (child.geometry as BufferGeometry).dispose();
+          }
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((material: Material) => material.dispose());
+            } else {
+              (child.material as Material).dispose();
+            }
+          }
+        }
+      }
+    }
+
+    // Unlock the scene if it's locked
+    if (isLocked) {
+      toggleLock();
+    }
+
+    toast.success('Scene cleared');
+  };
+
+  // Add handler for creating a new shot
+  const handleCreateNewShot = () => {
+    // Reset only the states needed for a new shot
+    setInstruction('');
+    setGeneratePathState('initial');
+    setIsConfirmingClear(false);
+    
+    // Unlock the scene if it's locked
+    if (isLocked) {
+      toggleLock();
+    }
+
+    toast.success('Ready for a new shot');
+  };
+
   return (
-    <ErrorBoundary 
-      name="CameraAnimationSystem"
-      fallback={<CameraSystemFallback />}
-    >
+    <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
       <Card className="viewer-card border-[#444444]">
         <CardHeader className="viewer-panel-header">
           <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-6 space-y-4">
-          <LockButton 
-            isLocked={isLocked}
-            onToggle={handleLockToggle}
-          />
+          <LockButton isLocked={isLocked} onToggle={handleLockToggle} />
 
           <div className="camera-path-fields space-y-4">
             <div className="space-y-4">
@@ -599,17 +802,12 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                       type="number"
                       value={inputDuration}
                       onChange={handleDurationChange}
-                      onBlur={(e) => {
-                        handleDurationBlur(e);
-                        setIsPromptFocused(false);
-                      }}
-                      onFocus={() => setIsPromptFocused(true)}
+                      onBlur={handleDurationBlur}
                       min={1}
                       max={20}
                       step={0.5}
                       className="text-right"
                       disabled={!isLocked || isGenerating}
-                      active={isPromptFocused}
                     />
                   </div>
                 </div>
@@ -617,26 +815,158 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
               </div>
 
               <div className="mt-8">
-                <Button
-                  onClick={handleGeneratePath}
-                  disabled={!isLocked || isGenerating}
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  aria-disabled={!isLocked || isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                      Generating Path...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="h-6 w-6" />
-                      Generate Path
-                    </>
+                <motion.button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleGeneratePath();
+                  }}
+                  disabled={!isLocked || generatePathState === 'ready'}
+                  className={cn(
+                    buttonVariants({ variant: "primary", size: "lg" }),
+                    "w-full",
+                    isGenerating && "opacity-100 cursor-not-allowed",
+                    generatePathState === 'ready' && 
+                    "bg-[#1a1a1a] border border-[#444444] text-white hover:bg-[#1a1a1a] cursor-not-allowed"
                   )}
-                </Button>
+                  whileHover={isGenerating || generatePathState === 'ready' ? undefined : { scale: 1.02 }}
+                  whileTap={isGenerating || generatePathState === 'ready' ? undefined : { scale: 0.98 }}
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={generatePathState === 'generating' ? messageIndex : generatePathState}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex items-center justify-center gap-2 w-full"
+                    >
+                      {generatePathState === 'generating' 
+                        ? <Loader2 className="h-6 w-6 animate-spin" />
+                        : generatePathStates[generatePathState].icon
+                      }
+                      <span className="font-medium">
+                        {generatePathState === 'generating' 
+                          ? generatingMessages[messageIndex]
+                          : generatePathStates[generatePathState].text
+                        }
+                      </span>
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.button>
+              </div>
+
+              {/* Status Message Pill */}
+              <div className="mt-4 bg-[#2a2a2a] rounded-full px-4 py-2 text-sm text-center">
+                {keyframes.length > 0 
+                  ? `Take ${takeCount}: ${modelName || 'Untitled'}`
+                  : "No shot available"
+                }
+              </div>
+
+              {/* Playback Controls */}
+              <div className="mt-6 space-y-6">
+                <div className="flex justify-between gap-2">
+                  <Button
+                    onClick={handlePlayPause}
+                    variant="secondary"
+                    size="icon"
+                    className={cn(
+                      "flex-1 border border-[#444444] hover:bg-secondary/20",
+                      keyframes.length > 0 && "bg-[#bef264] text-black hover:bg-[#bef264]/90"
+                    )}
+                    disabled={!keyframes.length || isGenerating}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-4 w-4" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleDownload}
+                    variant="secondary"
+                    size="default"
+                    disabled={!keyframes.length || isPlaying || isRecording}
+                    className="flex-1 border border-[#444444] hover:bg-secondary/20"
+                  >
+                    {isRecording ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Recording...
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-4 w-4 mr-2" />
+                        Download
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="viewer-label">Playback Speed</Label>
+                    <span className="text-sm text-muted-foreground">
+                      {(duration / playbackSpeed).toFixed(1)}s
+                    </span>
+                  </div>
+                  <div className="playback-speed-slider">
+                    <div className="mark-container">
+                      {SPEED_OPTIONS.map((option) => (
+                        <div
+                          key={option.value}
+                          className={`mark ${option.value === 1 ? 'normal' : ''}`}
+                          style={{
+                            left: `${((option.value - 0.25) / (2 - 0.25)) * 100}%`
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <Slider
+                      value={[playbackSpeed]}
+                      onValueChange={handleSpeedChange}
+                      min={0.25}
+                      max={2}
+                      step={0.25}
+                      className="viewer-slider"
+                      disabled={isPlaying || !keyframes.length || isRecording}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-7">
+                      <span>0.25x</span>
+                      <span>2.0x</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clear Scene Button */}
+                <div className="flex justify-between mt-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCreateNewShot}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Create new shot
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearScene}
+                    className={cn(
+                      "text-muted-foreground hover:text-destructive",
+                      isConfirmingClear && "text-destructive"
+                    )}
+                  >
+                    {isConfirmingClear ? (
+                      <>
+                        <X className="h-4 w-4 mr-2" />
+                        Confirm Clear
+                      </>
+                    ) : (
+                      "Clear Scene"
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

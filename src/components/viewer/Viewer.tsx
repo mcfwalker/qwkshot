@@ -11,7 +11,6 @@ import CameraTelemetry from './CameraTelemetry';
 import { CameraAnimationSystem } from './CameraAnimationSystem';
 import Floor, { FloorType } from './Floor';
 import { SceneControls } from './SceneControls';
-import { PlaybackPanel } from './PlaybackPanel';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
@@ -168,10 +167,6 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   }, [isLocked]);
 
   const handleAnimationUpdate = useCallback((progress: number) => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to play animations.');
-      return;
-    }
     if (!cameraRef.current || !controlsRef.current) {
       return;
     }
@@ -194,17 +189,13 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     // Update camera and controls
     cameraRef.current.position.copy(newPosition);
     controlsRef.current.target.copy(target);
-  }, [isLocked, playbackSpeed]);
+  }, [playbackSpeed]);
 
   const handleAnimationStart = useCallback(() => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to play animations.');
-      return;
-    }
     if (cameraRef.current && controlsRef.current) {
       setIsPlaying(true);
     }
-  }, [isLocked]);
+  }, []);
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
@@ -221,67 +212,37 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   return (
     <div className={cn('relative w-full h-full', className)}>
       <Canvas
-        ref={canvasRef}
-        camera={{ position: [5, 5, 5], fov }}
         className="w-full h-full"
-        onCreated={({ gl }) => {
-          gl.setClearColor('#0a0a0a');
-        }}
+        ref={canvasRef}
+        shadows
+        camera={{ position: [5, 5, 5], fov }}
       >
         <Suspense fallback={null}>
+          {/* Camera setup */}
           <PerspectiveCamera
-            ref={cameraRef}
             makeDefault
-            position={[0, 2, 5]}
+            position={[5, 5, 5]}
             fov={fov}
+            ref={cameraRef}
           />
+
+          {/* Controls */}
           <OrbitControls
             ref={controlsRef}
             enableDamping
             dampingFactor={0.05}
-            minDistance={2}
-            maxDistance={10}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={0}
-            target={[0, 0, 0]}
-            makeDefault
-            listenToKeyEvents={window}
-            domElement={canvasRef.current}
-            enableZoom={!isLocked}
-            enableRotate={!isLocked}
-            enablePan={!isLocked}
             mouseButtons={{
-              LEFT: isLocked ? undefined : MOUSE.ROTATE,
-              MIDDLE: isLocked ? undefined : MOUSE.DOLLY,
-              RIGHT: isLocked ? undefined : MOUSE.PAN
+              LEFT: MOUSE.ROTATE,
+              MIDDLE: MOUSE.DOLLY,
+              RIGHT: MOUSE.PAN
             }}
+            enabled={!isLocked}
           />
-          
-          {/* Ambient light for overall scene illumination */}
-          <ambientLight intensity={0.5} />
-          
-          {/* Directional light for shadows and highlights */}
-          <directionalLight
-            position={[5, 5, 5]}
-            intensity={1}
-            castShadow
-            shadow-mapSize={[1024, 1024]}
-            shadow-camera-far={50}
-            shadow-camera-left={-10}
-            shadow-camera-right={10}
-            shadow-camera-top={10}
-            shadow-camera-bottom={-10}
-          />
-          
-          {/* Add the floor */}
-          <Floor 
-            type={floorType} 
-            texture={floorTexture} 
-            size={20} 
-            divisions={20} 
-          />
-          
-          {/* Display either the loaded model or a placeholder cube */}
+
+          {/* Floor */}
+          <Floor type={floorType} texture={floorTexture} />
+
+          {/* Model */}
           {modelUrl ? (
             <Model url={modelUrl} modelRef={modelRef} height={modelHeight} />
           ) : (
@@ -296,7 +257,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
         </Suspense>
       </Canvas>
 
-      {/* Scene Controls panel - positioned below Cast container */}
+      {/* Scene Controls panel */}
       <div className="absolute left-4 top-[calc(4rem+20rem+1rem)] w-80 z-10">
         <SceneControls
           modelHeight={modelHeight}
@@ -309,7 +270,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
         />
       </div>
 
-      {/* Camera Animation System - positioned in upper right */}
+      {/* Camera Animation System */}
       <div className="absolute right-4 top-4 w-80 z-10">
         <CameraAnimationSystem
           onAnimationUpdate={handleAnimationUpdate}
@@ -324,18 +285,8 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           controlsRef={controlsRef}
           canvasRef={canvasRef}
           onPathGenerated={handlePathGenerated}
-        />
-      </div>
-
-      {/* Playback panel - positioned below Camera Animation System */}
-      <div className="absolute right-4 top-[calc(4rem+24rem+1rem)] w-80 z-10">
-        <PlaybackPanel
-          isPlaying={isPlaying}
-          duration={duration}
           onPlaybackSpeedChange={setPlaybackSpeed}
-          onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
           disabled={!modelRef.current}
-          canvasRef={canvasRef}
         />
       </div>
 
