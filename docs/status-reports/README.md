@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-03-1901 - Viewer Lock Mechanism and Start Position Refactor
 - M3DV-SR-2025-04-02-0935 - P2P Pipeline Integration and Branch Cleanup
 - M3DV-SR-2025-04-01-2032 - Animation System Improvements and UI Enhancement
 - M3DV-SR-2025-03-31-1944 - Environmental Analysis Data Storage Investigation

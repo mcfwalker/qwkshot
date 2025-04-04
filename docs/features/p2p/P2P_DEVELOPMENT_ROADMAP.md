@@ -152,7 +152,7 @@ This document outlines the development phases and future requirements for the Pr
   - Smooth keyframe interpolation
   - Resource cleanup optimization
 - [x] UI enhancements
-  - Start position hint system
+  - Lock mechanism for camera position capture
   - Visual feedback components
   - Framer-motion integration
 - [ ] Advanced features
@@ -160,6 +160,8 @@ This document outlines the development phases and future requirements for the Pr
   - Easing functions
   - Advanced export capabilities
   - Custom animation curves
+  - Animation playback UX enhancement
+  - Lock state and animation coordination
 
 ### Phase 7: Feedback System
 - Session logging

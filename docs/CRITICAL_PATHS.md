@@ -82,10 +82,12 @@ Ask yourself:
     - Environment bounds validation
     - Camera constraints definition
     - Movement boundaries
+    - Camera position validation through lock mechanism
   - Metadata Manager
     - User preferences and settings
     - Scene analysis data persistence
     - Feature point tracking
+    - Environmental metadata storage and retrieval
   - Prompt Compiler
     - System and user prompt merging
     - Scene metadata integration
@@ -102,6 +104,8 @@ Ask yourself:
     - Camera animation execution
     - Scene visualization
     - Path preview and controls
+    - Lock mechanism for camera position capture
+    - Animation playback with lock state coordination
   - Feedback & Logging Layer
     - Input/output logging
     - Performance metrics
@@ -190,6 +194,11 @@ Ask yourself:
        - ✓ Complete data recovery
        - ✓ Version control for updates
        - ✓ Handles large datasets
+     - [ ] Environmental metadata handling
+       - ✓ Stores camera position on lock
+       - ✓ Retrieves metadata for path generation
+       - ✓ Maintains metadata consistency
+       - ✓ Handles metadata updates
 
    - Prompt Compiler Tests
      - [ ] System/user prompt merging
@@ -252,10 +261,10 @@ Ask yourself:
        - ✓ Natural acceleration/deceleration
        - ✓ Accurate timing control
        - ✓ Smooth speed transitions
-     - [ ] Start position management
-       - ✓ Accurate initial placement
-       - ✓ Smooth transition entry
-       - ✓ Handles position updates
+     - [ ] Lock mechanism validation
+       - ✓ Validates camera position on lock
+       - ✓ Handles lock state transitions
+       - ✓ Coordinates with animation playback
 
    - Three.js Viewer Tests
      - [ ] Camera animation execution
@@ -278,6 +287,11 @@ Ask yourself:
        - ✓ Frame-accurate seeking
        - ✓ Smooth speed adjustment
        - ✓ Reliable pause/resume
+     - [ ] Lock mechanism functionality
+       - ✓ Captures position on lock
+       - ✓ Validates position before lock
+       - ✓ Coordinates with animation state
+       - ✓ Handles unlock transitions
 
    - Feedback & Logging Tests
      - [ ] Input/output logging
@@ -370,11 +384,21 @@ Ask yourself:
    - Check component connections
    - Verify data formats
    - Review error logs
+   - Validate environmental metadata
+   - Check lock mechanism state
+   - Verify animation coordination
 
 3. **LLM Provider Problems**
    - Validate API keys
    - Check provider availability
    - Verify response formats
+
+4. **Lock Mechanism Issues**
+   - Verify camera position capture
+   - Check lock state transitions
+   - Validate animation coordination
+   - Review environmental metadata
+   - Check position validation rules
 
 ### Before Deployment
 - [ ] Environment variables configured
@@ -382,6 +406,8 @@ Ask yourself:
 - [ ] Authentication flow tested
 - [ ] Core features verified
 - [ ] P2P pipeline operational
+- [ ] Lock mechanism tested
+- [ ] Environmental metadata validated
 
 ## 📝 Documentation Requirements
 
