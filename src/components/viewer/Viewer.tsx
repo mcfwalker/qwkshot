@@ -2,7 +2,7 @@
 
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
-import { Suspense, useRef, useState, useCallback } from 'react';
+import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
 import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
@@ -14,7 +14,7 @@ import { SceneControls } from './SceneControls';
 import { PlaybackPanel } from './PlaybackPanel';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { StartPositionHint } from './StartPositionHint';
+import { useViewerStore } from '@/store/viewerStore';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -39,19 +39,99 @@ interface ViewerProps {
 export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState(10);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
-  const [hasSetStartPosition, setHasSetStartPosition] = useState(false);
-  
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
+  const [isRecordingComplete, setIsRecordingComplete] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadComplete, setIsDownloadComplete] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [isPathGenerated, setIsPathGenerated] = useState(false);
+  const [isAnimationPaused, setIsAnimationPaused] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [isModelError, setIsModelError] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitializationError, setIsInitializationError] = useState(false);
+  const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
+  const [isMetadataError, setIsMetadataError] = useState(false);
+  const [isMetadataLoading, setIsMetadataLoading] = useState(true);
+  const [isSceneAnalyzed, setIsSceneAnalyzed] = useState(false);
+  const [isSceneError, setIsSceneError] = useState(false);
+  const [isSceneAnalyzing, setIsSceneAnalyzing] = useState(true);
+  const [isEnvironmentLoaded, setIsEnvironmentLoaded] = useState(false);
+  const [isEnvironmentError, setIsEnvironmentError] = useState(false);
+  const [isEnvironmentLoading, setIsEnvironmentLoading] = useState(true);
+  const [isLightingSetup, setIsLightingSetup] = useState(false);
+  const [isLightingError, setIsLightingError] = useState(false);
+  const [isLightingLoading, setIsLightingLoading] = useState(true);
+  const [isCameraSetup, setIsCameraSetup] = useState(false);
+  const [isCameraError, setIsCameraError] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(true);
+  const [isControlsSetup, setIsControlsSetup] = useState(false);
+  const [isControlsError, setIsControlsError] = useState(false);
+  const [isControlsLoading, setIsControlsLoading] = useState(true);
+  const [isRendererSetup, setIsRendererSetup] = useState(false);
+  const [isRendererError, setIsRendererError] = useState(false);
+  const [isRendererLoading, setIsRendererLoading] = useState(true);
+  const [isAnimationSetup, setIsAnimationSetup] = useState(false);
+  const [isAnimationError, setIsAnimationError] = useState(false);
+  const [isAnimationLoading, setIsAnimationLoading] = useState(true);
+  const [isRecordingSetup, setIsRecordingSetup] = useState(false);
+  const [isRecordingError, setIsRecordingError] = useState(false);
+  const [isRecordingLoading, setIsRecordingLoading] = useState(true);
+  const [isDownloadSetup, setIsDownloadSetup] = useState(false);
+  const [isDownloadError, setIsDownloadError] = useState(false);
+  const [isDownloadLoading, setIsDownloadLoading] = useState(true);
+  const [isPathSetup, setIsPathSetup] = useState(false);
+  const [isPathError, setIsPathError] = useState(false);
+  const [isPathLoading, setIsPathLoading] = useState(true);
+  const [isUISetup, setIsUISetup] = useState(false);
+  const [isUIError, setIsUIError] = useState(false);
+  const [isUILoading, setIsUILoading] = useState(true);
+  const [isSystemSetup, setIsSystemSetup] = useState(false);
+  const [isSystemError, setIsSystemError] = useState(false);
+  const [isSystemLoading, setIsSystemLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
-  const startPositionRef = useRef<Vector3 | null>(null);
-  const startTargetRef = useRef<Vector3 | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
+  const { isLocked, setModelId } = useViewerStore();
+
+  // Extract and set modelId when modelUrl changes
+  useEffect(() => {
+    if (modelUrl) {
+      // First try to get modelId from URL pathname
+      const pathParts = window.location.pathname.split('/');
+      let modelId = pathParts.find(part => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+      );
+
+      // If not found in pathname, try to extract from modelUrl
+      if (!modelId) {
+        modelId = modelUrl.split('/').find(part => 
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+        );
+      }
+
+      console.log('Setting modelId in store:', modelId);
+      setModelId(modelId || null);
+    } else {
+      setModelId(null);
+    }
+  }, [modelUrl, setModelId]);
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -77,14 +157,22 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   };
 
   const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to move the camera.');
+      return;
+    }
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.copy(position);
       controlsRef.current.target.copy(target);
     }
-  }, []);
+  }, [isLocked]);
 
   const handleAnimationUpdate = useCallback((progress: number) => {
-    if (!cameraRef.current || !controlsRef.current || !startPositionRef.current || !startTargetRef.current) {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to play animations.');
+      return;
+    }
+    if (!cameraRef.current || !controlsRef.current) {
       return;
     }
 
@@ -106,41 +194,39 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     // Update camera and controls
     cameraRef.current.position.copy(newPosition);
     controlsRef.current.target.copy(target);
-  }, [playbackSpeed]);
+  }, [isLocked, playbackSpeed]);
 
   const handleAnimationStart = useCallback(() => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to play animations.');
+      return;
+    }
     if (cameraRef.current && controlsRef.current) {
-      // Store starting position and target
-      startPositionRef.current = cameraRef.current.position.clone();
-      startTargetRef.current = controlsRef.current.target.clone();
       setIsPlaying(true);
     }
-  }, []);
+  }, [isLocked]);
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
-    // Reset to starting position if needed
-    if (startPositionRef.current && startTargetRef.current && cameraRef.current && controlsRef.current) {
-      cameraRef.current.position.copy(startPositionRef.current);
-      controlsRef.current.target.copy(startTargetRef.current);
-    }
   }, []);
 
   const handleAnimationPause = useCallback(() => {
     setIsPlaying(false);
   }, []);
 
-  const handleStartPositionSet = useCallback(() => {
-    setHasSetStartPosition(true);
+  const handlePathGenerated = useCallback(() => {
+    setIsPathGenerated(true);
   }, []);
 
   return (
     <div className={cn('relative w-full h-full', className)}>
-      <StartPositionHint visible={modelUrl != null && !hasSetStartPosition} />
       <Canvas
         ref={canvasRef}
         camera={{ position: [5, 5, 5], fov }}
         className="w-full h-full"
+        onCreated={({ gl }) => {
+          gl.setClearColor('#0a0a0a');
+        }}
       >
         <Suspense fallback={null}>
           <PerspectiveCamera
@@ -161,11 +247,13 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
             makeDefault
             listenToKeyEvents={window}
             domElement={canvasRef.current}
-            enableZoom={true}
+            enableZoom={!isLocked}
+            enableRotate={!isLocked}
+            enablePan={!isLocked}
             mouseButtons={{
-              LEFT: MOUSE.ROTATE,
-              MIDDLE: MOUSE.DOLLY,
-              RIGHT: MOUSE.PAN
+              LEFT: isLocked ? undefined : MOUSE.ROTATE,
+              MIDDLE: isLocked ? undefined : MOUSE.DOLLY,
+              RIGHT: isLocked ? undefined : MOUSE.PAN
             }}
           />
           
@@ -235,8 +323,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           cameraRef={cameraRef}
           controlsRef={controlsRef}
           canvasRef={canvasRef}
-          hasSetStartPosition={hasSetStartPosition}
-          onStartPositionSet={handleStartPositionSet}
+          onPathGenerated={handlePathGenerated}
         />
       </div>
 

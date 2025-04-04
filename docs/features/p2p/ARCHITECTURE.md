@@ -80,21 +80,24 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 - **Key Features**:
   - Camera animation with ref-based progress tracking
   - Smooth interpolation between keyframes
-  - Interactive start position system
+  - Lock mechanism for camera position capture
   - Animation frame management
   - UI feedback system
   - Export capabilities
 - **Status**: ⚠️ Partially Implemented
 - **Recent Improvements**:
   - Implemented ref-based animation system
-  - Added start position hint UI
+  - Added lock mechanism for camera position capture
   - Enhanced animation frame cleanup
   - Improved state management
   - Added visual feedback for user actions
+  - Removed redundant start position system
 - **Known Issues**:
+  - Animation playback requires scene unlock (UX improvement needed)
   - Need for easing functions
   - Limited animation preview capabilities
   - Basic progress tracking
+  - Lock state and animation playback coordination
 - **Interface**: See [Viewer Integration Documentation](./viewer-integration/README.md)
 
 ### 8. Feedback System

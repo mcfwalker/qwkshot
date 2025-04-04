@@ -1,14 +1,14 @@
 # Metadata Manager
 
 ## Overview
-The Metadata Manager is responsible for handling user-specified metadata and model information. It manages the storage and retrieval of model orientation, feature points, camera start positions, and other user-defined information that helps improve camera path generation.
+The Metadata Manager is responsible for handling user-specified metadata and model information. It manages the storage and retrieval of model orientation, feature points, camera positions, and other user-defined information that helps improve camera path generation.
 
 ## Status
 ⚠️ **Current Status**: Functional but needs refinement
 - Complex data structure handling needs optimization
 - Database integration requires enhancement
 - Error handling needs improvement
-- Camera start position handling implemented
+- Camera position handling through lock mechanism implemented
 
 ## Interface
 
@@ -30,8 +30,8 @@ interface MetadataManager {
   getFeaturePoints(modelId: string): Promise<FeaturePoint[]>;
 
   // Camera position management
-  storeStartPosition(modelId: string, position: CameraPosition): Promise<void>;
-  getStartPosition(modelId: string): Promise<CameraPosition | null>;
+  storeEnvironmentalMetadata(modelId: string, metadata: EnvironmentalMetadata): Promise<void>;
+  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata | null>;
 }
 ```
 
@@ -45,12 +45,27 @@ interface ModelMetadata {
   orientation: ModelOrientation;
   featurePoints: FeaturePoint[];
   preferences: UserPreferences;
-  camera?: {
-    startPosition?: CameraPosition;
-  };
   analysis?: {
     scene?: SceneAnalysis;
     environment?: EnvironmentalAnalysis;
+  };
+}
+
+interface EnvironmentalMetadata {
+  camera: {
+    position: Vector3;
+    target: Vector3;
+    fov: number;
+  };
+  lighting: {
+    intensity: number;
+    color: string;
+  };
+  constraints: {
+    minDistance: number;
+    maxDistance: number;
+    minHeight: number;
+    maxHeight: number;
   };
 }
 
@@ -123,7 +138,7 @@ interface CameraPosition {
 - Data validation
 - Error handling
 - Transaction management
-- Camera position storage and retrieval
+- Environmental metadata storage and retrieval
 
 ### 2. Metadata Management
 - Store and retrieve metadata
@@ -131,7 +146,7 @@ interface CameraPosition {
 - Version control
 - Data consistency
 - Analysis data integration
-- Camera start position tracking
+- Camera position tracking through lock mechanism
 
 ### 3. Feature Point Handling
 - Add/remove points
@@ -153,12 +168,14 @@ interface CameraPosition {
    - Optimize data structure
    - Enhance error handling
    - Improve logging
+   - Streamline environmental metadata storage
 
 2. **Integration**
    - Refine database operations
    - Optimize data flow
    - Enhance error handling
    - Improve performance
+   - Enhance lock mechanism integration
 
 ## Usage Examples
 

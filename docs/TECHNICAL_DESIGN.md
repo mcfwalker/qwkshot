@@ -140,38 +140,79 @@ await new Promise(resolve => setTimeout(resolve, 500))
 
 ### 1.6. Error Handling Strategy
 - **Client-Side:**
-  - Input validation before operations
-  - Graceful handling of RPC errors
-  - User-friendly error messages via toast notifications
-  - Loading states for operations
+  - Use React Error Boundaries for component tree errors
+  - Handle RPC errors with proper user feedback
+  - Implement loading states and progress indicators
+  - Use toast notifications for user feedback
+  - Handle animation state errors with clear user guidance
+  - Provide contextual help for lock state requirements
+  - Implement graceful fallbacks for animation playback
+
 - **Server-Side:**
-  - RPC function validation
-  - Proper error responses with CORS headers
-  - Logging for debugging
-- **Example:**
-```typescript
-try {
-  // Input validation
-  if (!name?.trim()) {
-    toast.error('Name cannot be empty')
-    return
-  }
+  - Implement RPC functions with proper validation
+  - Return appropriate HTTP status codes
+  - Include CORS headers in all responses
+  - Log errors with sufficient context
+  - Validate environmental metadata integrity
+  - Ensure proper lock state synchronization
 
-  // RPC call with error handling
-  const { error } = await supabase.rpc('update_model_name', {
-    model_id: modelId,
-    new_name: name.trim()
-  })
+- **Database:**
+  - Use RPC functions for data validation
+  - Implement proper error messages
+  - Handle transactions appropriately
+  - Verify ownership before operations
+  - Maintain data consistency for environmental metadata
 
-  if (error) throw error
+- **Animation-Specific Error Handling:**
+  ```typescript
+  // Example error handling for animation playback
+  const handleAnimationError = (error: AnimationError) => {
+    switch (error.type) {
+      case 'lock_state':
+        if (error.requiresUnlock) {
+          toast.error('Please unlock the scene to play the animation', {
+            action: {
+              label: 'Unlock',
+              onClick: () => handleLockToggle()
+            }
+          });
+        }
+        break;
+      case 'position_validation':
+        toast.error('Invalid camera position. Please adjust the view.');
+        break;
+      case 'path_generation':
+        toast.error('Failed to generate animation path. Please try again.');
+        break;
+      case 'playback':
+        toast.error('Animation playback failed. Please try again.');
+        break;
+    }
+  };
 
-  // Success handling
-  toast.success('Model updated successfully')
-} catch (error) {
-  console.error('Operation failed:', error)
-  toast.error('Failed to update model')
-}
-```
+  // Example validation for animation state
+  const validateAnimationState = (state: AnimationState): ValidationResult => {
+    if (state.isLocked && !state.hasValidPosition) {
+      return {
+        isValid: false,
+        error: 'Please set a valid camera position before locking',
+        details: {
+          type: 'lock_state',
+          requiresUnlock: false
+        }
+      };
+    }
+    return { isValid: true };
+  };
+  ```
+
+- **UX Considerations:**
+  - Provide clear feedback about lock state requirements
+  - Offer contextual help for animation playback
+  - Implement graceful degradation for locked state
+  - Consider auto-unlock options for better UX
+  - Maintain state consistency across components
+  - Handle edge cases in animation transitions
 
 ### 1.7. 3D Rendering
 - **Library:** Three.js
@@ -527,6 +568,20 @@ interface P2PPipelineConfig {
   promptCompiler: PromptCompilerConfig;
   llmEngine: LLMEngineConfig;
   sceneInterpreter: SceneInterpreterConfig;
+  viewerIntegration: ViewerIntegrationConfig;
+}
+
+interface ViewerIntegrationConfig {
+  lockMechanism: {
+    enabled: boolean;
+    storePositionOnLock: boolean;
+    validatePosition: boolean;
+  };
+  animation: {
+    requireUnlock: boolean;
+    autoUnlock: boolean;
+    easingFunctions: boolean;
+  };
 }
 ```
 
@@ -647,7 +702,31 @@ interface EnvironmentalAnalysis {
     maxDistance: number;
     restrictedZones: Box3[];
   };
+  camera: {
+    position: Vector3;
+    target: Vector3;
+    fov: number;
+    isLocked: boolean;
+  };
   performance: PerformanceMetrics;
+}
+
+interface EnvironmentalMetadata {
+  camera: {
+    position: Vector3;
+    target: Vector3;
+    fov: number;
+  };
+  lighting: {
+    intensity: number;
+    color: string;
+  };
+  constraints: {
+    minDistance: number;
+    maxDistance: number;
+    minHeight: number;
+    maxHeight: number;
+  };
 }
 ```
 
@@ -676,6 +755,15 @@ interface PerformanceMetrics {
     error?: string;
   }[];
 }
+
+interface AnimationError extends P2PError {
+  type: 'lock_state' | 'position_validation' | 'path_generation' | 'playback';
+  requiresUnlock: boolean;
+  currentState: {
+    isLocked: boolean;
+    hasValidPosition: boolean;
+  };
+}
 ```
 
 ### 5.2. Camera Path
@@ -688,42 +776,55 @@ interface CameraPath {
   metadata: {
     generatedFromPrompt?: string;
     complexity?: 'simple' | 'medium' | 'high';
-    totalDuration: number; // Calculated or stored, ensure consistency
-    authorId: string; // User ID
-    createdAt: string; // ISO timestamp
-    updatedAt: string; // ISO timestamp
+    totalDuration: number;
+    authorId: string;
+    createdAt: string;
+    updatedAt: string;
     version?: string;
+    environmentalMetadata?: EnvironmentalMetadata;
   };
-  isPublic?: boolean; // For potential sharing
+  isPublic?: boolean;
 }
 
 interface CameraKeyframe {
-  position: { x: number; y: number; z: number }; // Camera position
-  target: { x: number; y: number; z: number };   // Look-at point
-  duration: number; // Duration from *previous* keyframe to this one in seconds
-  // Optional properties for finer control:
-  // easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'; // Applied for transition *to* this keyframe
-  // up?: { x: number; y: number; z: number }; // Camera up vector override
-  // fov?: number; // Field of view override
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  duration: number;
+  easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  up?: { x: number; y: number; z: number };
+  fov?: number;
 }
 
 interface PathGenerationParams {
   prompt: string;
-  duration: number; // Total desired animation duration
+  duration: number;
   complexity?: 'simple' | 'medium' | 'high';
-  // Context passed from frontend:
   sceneContext: {
-      modelCenter: { x: number; y: number; z: number };
-      modelBoundingBox: { min: {x,y,z}, max: {x,y,z} };
-      currentCameraPosition: { x: number; y: number; z: number };
-      currentCameraTarget: { x: number; y: number; z: number };
-      // ... other relevant scene info (floor height, etc.)
+    modelCenter: { x: number; y: number; z: number };
+    modelBoundingBox: { min: {x,y,z}, max: {x,y,z} };
+    environmentalMetadata: EnvironmentalMetadata;
+    currentCameraState: {
+      position: { x: number; y: number; z: number };
+      target: { x: number; y: number; z: number };
+      fov: number;
+      isLocked: boolean;
+    };
   };
-  constraints?: { // Optional override constraints
+  constraints?: {
     avoidClipping?: boolean;
     maintainHorizon?: boolean;
-    // ...
+    requireUnlock?: boolean;
+    autoUnlock?: boolean;
   };
+}
+
+interface AnimationState {
+  isPlaying: boolean;
+  isPaused: boolean;
+  currentProgress: number;
+  isLocked: boolean;
+  hasValidPosition: boolean;
+  error?: AnimationError;
 }
 ```
 *(See also: [Prompt Architecture Documentation](./docs/prompt-architecture/README.md))*
@@ -886,16 +987,75 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
   - Handle RPC errors with proper user feedback
   - Implement loading states and progress indicators
   - Use toast notifications for user feedback
+  - Handle animation state errors with clear user guidance
+  - Provide contextual help for lock state requirements
+  - Implement graceful fallbacks for animation playback
+
 - **Server-Side:**
   - Implement RPC functions with proper validation
   - Return appropriate HTTP status codes
   - Include CORS headers in all responses
   - Log errors with sufficient context
+  - Validate environmental metadata integrity
+  - Ensure proper lock state synchronization
+
 - **Database:**
   - Use RPC functions for data validation
   - Implement proper error messages
   - Handle transactions appropriately
   - Verify ownership before operations
+  - Maintain data consistency for environmental metadata
+
+- **Animation-Specific Error Handling:**
+  ```typescript
+  // Example error handling for animation playback
+  const handleAnimationError = (error: AnimationError) => {
+    switch (error.type) {
+      case 'lock_state':
+        if (error.requiresUnlock) {
+          toast.error('Please unlock the scene to play the animation', {
+            action: {
+              label: 'Unlock',
+              onClick: () => handleLockToggle()
+            }
+          });
+        }
+        break;
+      case 'position_validation':
+        toast.error('Invalid camera position. Please adjust the view.');
+        break;
+      case 'path_generation':
+        toast.error('Failed to generate animation path. Please try again.');
+        break;
+      case 'playback':
+        toast.error('Animation playback failed. Please try again.');
+        break;
+    }
+  };
+
+  // Example validation for animation state
+  const validateAnimationState = (state: AnimationState): ValidationResult => {
+    if (state.isLocked && !state.hasValidPosition) {
+      return {
+        isValid: false,
+        error: 'Please set a valid camera position before locking',
+        details: {
+          type: 'lock_state',
+          requiresUnlock: false
+        }
+      };
+    }
+    return { isValid: true };
+  };
+  ```
+
+- **UX Considerations:**
+  - Provide clear feedback about lock state requirements
+  - Offer contextual help for animation playback
+  - Implement graceful degradation for locked state
+  - Consider auto-unlock options for better UX
+  - Maintain state consistency across components
+  - Handle edge cases in animation transitions
 
 ## 8. Testing Strategy Implementation
 - **Unit Tests:** Jest + React Testing Library for individual components and utility functions. Mock dependencies (Supabase client, external APIs, Three.js specifics where needed).

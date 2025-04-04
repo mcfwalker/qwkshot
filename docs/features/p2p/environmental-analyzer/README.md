@@ -8,7 +8,7 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
 - Data persistence challenges with metadata storage
 - Complex nested structure handling needs optimization
 - Integration with metadata storage requires refinement
-- Camera start position validation implemented
+- Camera position validation through lock mechanism implemented
 - Animation path constraints integrated
 
 ## Features
@@ -18,7 +18,7 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
 - Object positioning and dimensions
 - Distance measurements from object to boundaries
 - Camera positioning constraints
-- Start position validation
+- Lock mechanism integration
 - Animation path constraints
 
 ### 2. Spatial Measurements
@@ -26,7 +26,7 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
 - Reference point calculations
 - Distance to boundary measurements
 - Height-based constraints
-- Start position optimization
+- Locked camera position validation
 - Animation path boundaries
 
 ### 3. Camera Constraints
@@ -34,7 +34,7 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
 - Safe distance calculations
 - Movement boundary validation
 - Position constraints
-- Start position validation
+- Lock mechanism validation
 - Animation path safety
 
 ## Known Issues
@@ -42,13 +42,14 @@ The Environmental Analyzer is a core component of the Prompt-to-Path (P2P) pipel
    - Environment data not consistently stored in database
    - Complex nested structure causing storage issues
    - Integration with metadata storage needs optimization
-   - Camera start position storage needs refinement
+   - Camera position storage through lock mechanism needs refinement
 
 2. **Integration Challenges**
    - Complex data structure handling
    - Database operation efficiency
    - Error handling enhancement needed
    - Animation path validation optimization required
+   - Lock mechanism coordination
 
 ## Usage
 

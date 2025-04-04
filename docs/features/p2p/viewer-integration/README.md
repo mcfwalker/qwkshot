@@ -1,14 +1,15 @@
 # Viewer Integration
 
 ## Overview
-The Viewer Integration component is responsible for executing and visualizing camera paths within the Three.js scene. It handles camera animation with ref-based progress tracking, smooth interpolation between keyframes, interactive start position system, and export capabilities.
+The Viewer Integration component is responsible for executing and visualizing camera paths within the Three.js scene. It handles camera animation with ref-based progress tracking, smooth interpolation between keyframes, lock mechanism for camera position capture, and export capabilities.
 
 ## Status
 ⚠️ **Current Status**: Partially Implemented
 - Core animation system implemented
-- Start position system completed
+- Lock mechanism for camera position capture implemented
 - UI feedback components added
 - Advanced features pending
+- Animation playback UX improvements needed
 
 ## Implemented Features
 
@@ -31,23 +32,23 @@ interface AnimationSystem {
 }
 ```
 
-### 2. Start Position System
+### 2. Lock Mechanism
 ```typescript
-interface StartPositionSystem {
+interface LockSystem {
   // State management
-  hasSetStartPosition: boolean;
-  onStartPositionSet: () => void;
+  isLocked: boolean;
+  onLockToggle: () => void;
   
   // Position handling
-  handleKeyPress: (event: KeyboardEvent) => void;
-  storeStartPosition: () => void;
+  storeCameraPosition: () => void;
+  retrieveCameraPosition: () => CameraPosition;
 }
 ```
 
 ### 3. UI Components
 ```typescript
-interface StartPositionHint {
-  visible: boolean;
+interface LockButton {
+  isLocked: boolean;
   // Framer-motion animations
   initial: MotionProps;
   animate: MotionProps;
@@ -77,7 +78,7 @@ interface StartPositionHint {
 ### 2. Current Features
 - Ref-based progress tracking
 - Animation frame management
-- Start position system
+- Lock mechanism for camera position
 - Visual feedback
 - Resource cleanup
 - Performance optimization
@@ -87,6 +88,7 @@ interface StartPositionHint {
 - Resource management
 - State synchronization
 - Performance monitoring
+- Lock state validation
 
 ## Integration
 
@@ -139,18 +141,20 @@ viewer.handleAnimationStop();
    - Custom animation curves
    - Advanced interpolation
    - Preview capabilities
+   - Lock state and animation coordination
 
 2. **Integration**
    - Enhanced error handling
    - Performance monitoring
    - Advanced export options
    - Path preview system
+   - Improved animation playback UX
 
 ## Testing
 Current test coverage includes:
 - Animation frame management
 - Progress tracking
-- Start position system
+- Lock mechanism
 - UI components
 - Resource cleanup
 - Integration testing
