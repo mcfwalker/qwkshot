@@ -6,9 +6,6 @@ import { createServerClient } from '@/lib/supabase-server'
 import { Model } from '@/lib/supabase'
 import { ModelGridSkeleton } from '@/components/library/ModelGridSkeleton'
 import { ModelGridClient } from '@/components/library/ModelGridClient'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
-import Link from 'next/link'
 
 // Separate data fetching logic
 async function getModels() {
@@ -56,14 +53,6 @@ export default async function LibraryPage() {
           <p className="library-subtitle">
             Manage and view your 3D models
           </p>
-        </div>
-        <div className="space-x-2">
-          <Link href="/library/upload">
-            <Button className="library-button">
-              <Plus className="library-button-icon" />
-              New Model
-            </Button>
-          </Link>
         </div>
       </div>
 
