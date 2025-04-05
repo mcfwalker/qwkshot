@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-05-1251 - Code Quality and Architecture Assessment
 - M3DV-SR-2025-04-04-2337 - Animation Playback UX Improvements
 - M3DV-SR-2025-04-03-1901 - Viewer Lock Mechanism and Start Position Refactor
 - M3DV-SR-2025-04-02-0935 - P2P Pipeline Integration and Branch Cleanup
