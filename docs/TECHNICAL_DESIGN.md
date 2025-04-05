@@ -8,50 +8,38 @@ This document details the technical architecture, implementation specifics, and 
 ## 1. Frontend Architecture
 
 ### 1.1. Framework & Language
-- **Framework:** Next.js (App Router)
+- **Framework:** Next.js 15.2.3 (App Router)
 - **Language:** TypeScript
+- **UI Libraries:**
+  - React 19
+  - Radix UI components
+  - Framer Motion for animations
+  - Sonner for toast notifications
+  - Tailwind CSS for styling
 
-### 1.2. Project Structure (Illustrative)
+### 1.2. Project Structure (Current)
 ```
 src/
 ├── app/
-│   ├── layout.tsx           # Main app layout (providers, base HTML structure)
-│   ├── page.tsx             # Landing page / Root route handler
-│   ├── (marketing)/         # Marketing pages (unauthenticated)
-│   ├── (auth)/              # Authentication routes (sign-in, callback)
-│   │   ├── layout.tsx       # Auth-specific layout
-│   │   └── ...
-│   ├── (protected)/         # Routes requiring authentication
-│   │   ├── viewer/          # Core viewer application routes
-│   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx     # Default viewer
-│   │   │   └── [modelId]/   # Dynamic route for specific models
-│   │   │       └── page.tsx
-│   │   ├── library/         # User model library
-│   │   │   └── page.tsx
-│   │   ├── generate/        # AI generation features (paths, models)
-│   │   └── ...
-│   └── api/                 # API Route handlers
-│       ├── auth/
-│       ├── camera-paths/
-│       └── ...
+│   ├── layout.tsx           # Main app layout
+│   ├── page.tsx            # Landing page
+│   ├── auth/               # Authentication routes
+│   │   ├── layout.tsx
+│   │   ├── sign-in/
+│   │   └── callback/
+│   ├── (protected)/        # Protected routes
+│   │   ├── viewer/
+│   │   ├── library/
+│   │   └── generate/
+│   └── api/                # API routes
 ├── components/
-│   ├── ui/                  # Reusable UI components (likely using shadcn/ui)
-│   ├── viewer/              # Components specific to the 3D viewer experience
-│   ├── layout/              # Layout-specific components (header, sidebar)
-│   └── ...
-├── lib/                     # Shared utilities, helpers, client libraries
-│   ├── supabase.ts          # Supabase client setup (client-side)
-│   ├── supabase-server.ts   # Supabase client setup (server-side)
-│   ├── three-utils.ts       # Three.js specific helpers
-│   └── ...
-├── hooks/                   # Custom React hooks
-├── store/                   # State management (e.g., Zustand store)
-├── styles/                  # Global styles, Tailwind config
-├── types/                   # TypeScript type definitions (e.g., supabase types)
-└── middleware.ts            # Next.js middleware (e.g., for auth checks)
+│   ├── ui/                 # Reusable UI components
+│   └── viewer/             # Viewer-specific components
+├── features/               # Feature-specific code
+├── lib/                    # Shared utilities
+├── store/                  # State management
+└── types/                  # TypeScript types
 ```
-*(See also: [Routing Documentation](./docs/routing/README.md))*
 
 ### 1.3. State Management
 - **Library:** Zustand (or similar lightweight global state manager)
@@ -871,72 +859,17 @@ interface GeneratedModel { // Our internal representation after generation
 
 ## 6. External Integrations
 
-### 6.1. LLM Service (e.g., OpenAI)
-- **Purpose:** Camera path generation from text, potentially scene analysis.
-- **Implementation:**
-    - Use official client libraries (`openai` npm package).
-    - Store API key securely (environment variable, `OPENAI_API_KEY`).
-    - Implement service layer (`src/lib/openai-service.ts` or similar) abstracting API calls.
-    - Centralize prompt construction logic.
-    - Handle API errors (rate limits, auth errors, timeouts).
-    - Implement response parsing and validation (ensure JSON format if requested).
+### 6.1. AI Services
+- **Google Generative AI:** Used for camera path generation and scene analysis
+  - Integration via `@google/generative-ai` package
+  - Handles prompt construction and response parsing
+  - Manages API errors and rate limits
 
-```typescript
-// Example service structure
-// src/lib/llm-service.ts
-import OpenAI from 'openai';
+- **OpenAI:** Used for specific AI features
+  - Integration via `openai` package
+  - Handles API authentication and error management
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export async function generateCameraPathFromLLM(params: PathGenerationParams): Promise<CameraKeyframe[]> {
-  // Get scene and environmental analysis
-  const sceneAnalysis = await analyzeScene(params.modelId);
-  const envAnalysis = await analyzeEnvironment(sceneAnalysis);
-
-  // Compile prompt with context
-  const compiledPrompt = await compilePrompt(
-    params.prompt,
-    sceneAnalysis,
-    envAnalysis
-  );
-
-  const systemPrompt = `You are a helpful assistant designing camera paths... Your output MUST be a JSON array of keyframes: [{ position: {x,y,z}, target: {x,y,z}, duration: number }]. Total duration must sum to ${params.duration}.`;
-  const userPrompt = `Generate keyframes for: "${params.prompt}". Scene context: ${JSON.stringify(params.sceneContext)}. Environmental constraints: ${JSON.stringify(envAnalysis.cameraConstraints)}. Total duration: ${params.duration}s.`;
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      response_format: { type: "json_object" },
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error("LLM returned empty content");
-    }
-
-    const parsed = JSON.parse(content);
-    if (!parsed.keyframes || !Array.isArray(parsed.keyframes)) {
-      throw new Error("LLM response missing keyframes array");
-    }
-
-    // Validate against environmental constraints
-    const validatedKeyframes = validateKeyframes(parsed.keyframes, envAnalysis.cameraConstraints);
-    return validatedKeyframes;
-
-  } catch (error) {
-    console.error("LLM service error:", error);
-    throw new Error("Failed to generate camera path from LLM");
-  }
-}
-```
-
-### 6.2. Model Generation Service (e.g., Meshy, Hypothetical)
+### 6.2. Model Generation Service
 - **Purpose:** Convert images to 3D models.
 - **Implementation:**
     - Use official SDK or standard HTTP requests.
@@ -1058,15 +991,18 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
   - Handle edge cases in animation transitions
 
 ## 8. Testing Strategy Implementation
-- **Unit Tests:** Jest + React Testing Library for individual components and utility functions. Mock dependencies (Supabase client, external APIs, Three.js specifics where needed).
-- **Integration Tests:** Test interactions between components, state management, and API mocks (using MSW - Mock Service Worker).
-- **End-to-End (E2E) Tests:** Cypress or Playwright to simulate full user workflows (sign-in, upload model, generate path, view animation).
-- **Visual Regression Tests:** Percy or similar tools integrated into CI to catch unintended UI changes.
-- **Code Coverage:** Aim for >80% coverage on critical paths, tracked via tools like `istanbul` or built-in Jest coverage.
+- **Framework:** Vitest with React Testing Library
+- **Environment:** JSDOM for browser environment simulation
+- **Coverage:** Using `@vitest/coverage-v8` for code coverage reporting
+- **Component Testing:** `@testing-library/react` for component testing
+- **Test Organization:** Tests are located in `__tests__` directory with a global setup file
+- **Configuration:** Vitest config includes path aliases and JSDOM environment setup
 
-### 8.1 P2P Pipeline Testing
 ```typescript
 // Example test structure for P2P components
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+
 describe('P2P Pipeline Integration', () => {
   let pipeline: P2PPipeline;
   let sceneAnalyzer: SceneAnalyzer;
@@ -1097,32 +1033,47 @@ describe('P2P Pipeline Integration', () => {
     });
   });
 
-  describe('Environmental Analysis', () => {
-    it('should calculate correct environment bounds', async () => {
-      const sceneAnalysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
-      const envAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
-      expect(envAnalysis.environment.bounds).toBeDefined();
-      expect(envAnalysis.cameraConstraints).toBeDefined();
-    });
-  });
-
-  describe('Prompt Compilation', () => {
-    it('should compile prompt with scene context', async () => {
-      const sceneAnalysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
-      const envAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
-      const compiledPrompt = await promptCompiler.compilePrompt(
-        'Show me the front of the model',
-        sceneAnalysis,
-        mockModelMetadata
-      );
-      expect(compiledPrompt.systemMessage).toContain('camera path');
-      expect(compiledPrompt.constraints).toBeDefined();
-    });
-  });
+  // ... rest of test examples ...
 });
 ```
 
-*(See the [Test Suite Plan](./docs/testing/README.md) for detailed structure and goals)*
+### 8.1 Test Configuration
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+import path from 'path';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['__tests__/setup.ts'],
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  }
+});
+```
+
+### 8.2 Test Setup
+```typescript
+// __tests__/setup.ts
+import { expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
+// Extend matchers
+expect.extend({});
+
+// Cleanup after each test
+afterEach(() => {
+  cleanup();
+});
+```
 
 ## 9. Deployment & Infrastructure
 - **Platform:** Vercel (preferred for Next.js) or other suitable cloud provider (AWS Amplify, Netlify, etc.).

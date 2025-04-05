@@ -1,41 +1,55 @@
-# Project Documentation Hub
+# Modern 3D Viewer Documentation Hub
 
-This directory contains the detailed documentation for the Modern 3D Viewer project.
-The main project [README](../README.md) provides the primary index and links to essential workflow guides.
+This directory contains the comprehensive documentation for the Modern 3D Viewer project, a web-based 3D model viewer with advanced camera animation capabilities.
+
+## Quick Links
+* **[Getting Started](./GET_STARTED.md)**: Start here for new development sessions
+* **[Technical Design](./TECHNICAL_DESIGN.md)**: Core architecture and implementation details
+* **[Development Roadmap](./DEVELOPMENT_ROADMAP.md)**: Current development priorities and timeline
+* **[Critical Paths](./CRITICAL_PATHS.md)**: Key features and components requiring special attention
 
 ## Core Documentation
-*   **[Product Requirements (PRD)](./PRD.md)**: High-level goals, target users, core features, and requirements.
-*   **[Technical Design Document](./TECHNICAL_DESIGN.md)**: Detailed architecture, state management, API structure, integration specs, and implementation details.
-*   **[Development Roadmap](./DEVELOPMENT_ROADMAP.md)**: Prioritized development plan and timeline.
-*   **[Critical Paths](./CRITICAL_PATHS.md)**: Critical components and features that require special attention.
-*   **[Technical Debt](./TECHNICAL_DEBT.md)**: Tracking known issues, areas for improvement, and workarounds. ([Archived Debt](./TECHNICAL_DEBT_ARCHIVE.md) - *Optional*)
+### Product & Planning
+* **[Product Requirements (PRD)](./PRD.md)**: Product goals, user stories, and feature requirements
+* **[Technical Debt](./TECHNICAL_DEBT.md)**: Active technical debt and improvements ([Archive](./TECHNICAL_DEBT_ARCHIVE.md))
 
-## Feature Documentation
-*   **[Camera Animation](./features/camera-animation/)**: Documentation for the camera animation system.
-*   **[Model Viewing](./features/model-viewing/)**: Documentation for the model viewing functionality.
-*   **[Authentication](./features/authentication/)**: Documentation for user authentication.
-*   **[Storage](./features/storage/)**: Documentation for data storage.
-*   **[Export](./features/export/)**: Documentation for export functionality.
+### Feature Documentation
+* **[Camera Animation](./features/camera-animation/)**: 
+  - Camera path generation and animation
+  - Lock mechanism and control systems
+  - Animation playback and control
+* **[Model Viewing](./features/model-viewing/)**: 
+  - Model loading and rendering
+  - Viewport controls and interactions
+* **[Authentication](./features/authentication/)**: User authentication and authorization
+* **[Storage](./features/storage/)**: Data persistence and management
+* **[Export](./features/export/)**: Model and animation export capabilities
 
-## Development Process
-*   **[Contributing Guidelines](./development/contributing.md)**: Code contribution standards and documentation patterns/templates.
-*   **[Branch Strategy](./development/branch-strategy.md)**: Git branch management strategy.
-*   **[Development Setup](./development/)**: Setup instructions for development.
-*   **[Testing Strategy](./development/testing-strategy/)**: Plan and infrastructure for testing.
-*   **[Troubleshooting Guide](./development/troubleshooting/)**: Common issues and solutions encountered during development.
-*   **[Routing](./development/routing/)**: Routing patterns, including dynamic parameter handling.
+## Development Guidelines
+### Process & Standards
+* **[Contributing Guidelines](./development/contributing.md)**: Code standards and documentation patterns
+* **[Branch Strategy](./development/branch-strategy.md)**: Git workflow and branch management
+* **[Testing Strategy](./development/testing-strategy/)**: Testing approach and infrastructure
 
-## AI/LLM Documentation
-*   **[Prompt Architecture](./ai/prompt-architecture/)**: Design for LLM prompts used in AI features.
-*   **[LLM Integration](./ai/llm-integration/)**: Documentation for LLM integration.
-*   **[Context Management](./ai/context-management/)**: Documentation for maintaining context across sessions.
+### Setup & Maintenance
+* **[Development Environment](./development/)**: Local setup and configuration
+* **[Troubleshooting Guide](./development/troubleshooting/)**: Common issues and solutions
+* **[Routing](./development/routing/)**: Application routing patterns
 
-## Progress Tracking
-*   **[Status Reports](./status-reports/)**: Chronological progress updates, decisions, and challenges.
+## AI/LLM Integration
+* **[Prompt Architecture](./ai/prompt-architecture/)**: LLM prompt design and patterns
+* **[LLM Integration](./ai/llm-integration/)**: AI feature implementation details
+* **[Context Management](./ai/context-management/)**: Session context handling
 
-## Workflow Guides
-*   **[Session Initialization Guide](./GET_STARTED.md)**: Guide for starting a new development session.
-*   **[End of Session Checklist](./END_SESSION.md)**: Checklist for ending a development session.
+## Project Management
+* **[Status Reports](./status-reports/)**: Development progress and decisions
+* **[Session Management](./END_SESSION.md)**: End-of-session procedures
+
+## Documentation Maintenance
+* Keep this index updated as documentation evolves
+* Follow the established documentation patterns
+* Update status reports regularly
+* Archive resolved technical debt
 
 ---
-*Please keep this index updated as the documentation evolves.*
+*For the latest updates and active development, check the [status reports](./status-reports/) directory.*

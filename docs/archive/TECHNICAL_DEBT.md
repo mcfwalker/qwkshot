@@ -1,9 +1,11 @@
 # Technical Debt & Future Improvements
 
+> **NOTE**: This document has been migrated to Asana. All active issues have been moved to the project management system. This document is kept for reference only and will be archived.
+
 ## Camera Path Recording
 
 ### MediaRecorder Implementation
-**Status**: Working with Timer-Based Solution
+**Status**: ~~Working with Timer-Based Solution~~ MOVED TO ASANA
 **Priority**: Low
 **Impact**: Functional but not optimal
 **Description**: Current implementation uses a timer-based approach instead of responding to actual animation state
@@ -57,6 +59,7 @@
   - Consider implementing a more robust development server script
   - Add process management for background services
   - Improve terminal handling in AI assistant context
+- **Status**: MOVED TO ASANA
 
 ### Environment Variable Validation
 - **Status**: Implemented and working
@@ -68,16 +71,17 @@
   - Add more comprehensive validation
   - Implement structured logging
   - Add environment setup verification tools
+- **Status**: MOVED TO ASANA
 
 ## Current Workarounds
-- ~~Using synchronous cookie access in server components~~
+- ~~Using synchronous cookie access in server components~~ (RESOLVED)
 - Running development server in background mode
 - Manual monitoring of health checks
-- ~~Warning appears in console but doesn't affect functionality~~
+- ~~Warning appears in console but doesn't affect functionality~~ (RESOLVED)
 - Authentication and session management still working as expected
 
 ## Future Improvements
-1. ~~Implement proper async cookie handling~~
+1. ~~Implement proper async cookie handling~~ (RESOLVED)
 2. Update server component data fetching patterns
 3. Consider implementing a more robust error boundary system
 4. Add proper loading states for authentication transitions
@@ -89,19 +93,21 @@
    - Document common styling solutions and best practices
    - Establish pattern for handling component-specific styles
    - Create reference for ghost-like UI aesthetic implementation
+- **Status**: MOVED TO ASANA
 
 ## Branch Management
 - Current stable branch established from commit `2b45a92`
 - Need to plan migration strategy for feature branches
 - Consider making `stable` the default branch
 - Document process for handling legacy code
+- **Status**: MOVED TO ASANA
 
 ## Notes
 - Document created: March 24, 2025
 - Last updated: March 29, 2025
 - Related issues:
-  - Cookie warning in library page
-  - Server component async patterns
+  - Cookie warning in library page (RESOLVED)
+  - Server component async patterns (RESOLVED)
   - Session management optimization
   - Terminal interaction handling
   - Branch strategy evolution
@@ -123,7 +129,7 @@
 **Related Documentation**: [Authentication Documentation](./features/auth/README.md), [Troubleshooting Guide](./troubleshooting/README.md)
 
 ### Performance Optimization: OrbitControls Event Listeners
-**Status**: Open
+**Status**: ~~Open~~ MOVED TO ASANA
 **Priority**: Low
 **Impact**: Performance warning in console, potential scroll responsiveness
 **Description**: Non-passive event listeners on wheel events in OrbitControls
@@ -141,6 +147,7 @@
 - **Impact**: Better documentation will help maintain consistency in prompt engineering and make it easier for new team members to understand the system
 - **Proposed Solution**: Create additional documentation sections for patterns, examples, and testing procedures
 - **Notes**: This is a new area that will evolve as we gather more experience with different prompt patterns and their effectiveness
+- **Status**: MOVED TO ASANA
 
 ## CSS and UI Component Styling
 **Status**: Needs Review
@@ -175,11 +182,12 @@
 - Current solution works but needs better organization
 - Consider creating a UI component library
 - Need better documentation for styling patterns
+- **Status**: MOVED TO ASANA
 
 ## Vercel Deployment
 
 ### Linting and Type Checking During Build
-**Status**: Temporarily Disabled
+**Status**: ~~Temporarily Disabled~~ MOVED TO ASANA
 **Priority**: High
 **Impact**: Technical debt, potential issues in production
 **Description**: ESLint and TypeScript validation had to be disabled during the build process to successfully deploy to Vercel
@@ -203,7 +211,7 @@ typescript: {
 **Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
 
 ### Synchronous Cookie Access in API Routes
-**Status**: Open
+**Status**: ~~Open~~ MOVED TO ASANA
 **Priority**: Medium
 **Impact**: Warnings, potential issues in production
 **Description**: Multiple API routes still use synchronous cookie access despite the fix in server components
@@ -220,7 +228,7 @@ typescript: {
 **Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
 
 ### Static vs. Dynamic Route Rendering
-**Status**: Using Workarounds
+**Status**: ~~Using Workarounds~~ MOVED TO ASANA
 **Priority**: Medium
 **Impact**: Affects maintainability and performance
 **Description**: Several routes need to be marked as `force-dynamic` to prevent static rendering errors with cookies
@@ -238,7 +246,7 @@ export const dynamic = 'force-dynamic'; // Added to routes using cookies
 **Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
 
 ### Suspense Boundaries for useSearchParams
-**Status**: Implemented but needs review
+**Status**: ~~Implemented but needs review~~ MOVED TO ASANA
 **Priority**: Medium
 **Impact**: Required for build, potential UX issues
 **Description**: Components using `useSearchParams` needed Suspense boundaries to prevent hydration errors
@@ -257,7 +265,7 @@ export const dynamic = 'force-dynamic'; // Added to routes using cookies
 **Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
 
 ### Serverless Function Timeouts
-**Status**: Increased but requires review
+**Status**: ~~Increased but requires review~~ MOVED TO ASANA
 **Priority**: High
 **Impact**: Affects reliability of LLM API calls
 **Description**: LLM API routes exceed default 10-second Vercel timeout
@@ -274,7 +282,7 @@ export const dynamic = 'force-dynamic'; // Added to routes using cookies
 **Reference**: See [Status Report M3DV-SR-2025-03-28-1623](./status-reports/M3DV-SR-2025-03-28-1623.md)
 
 ### Force Reload After Provider Switching
-**Status**: Working but not optimal
+**Status**: ~~Working but not optimal~~ MOVED TO ASANA
 **Priority**: Low
 **Impact**: Affects user experience
 **Description**: Provider switching requires a full page reload to ensure state consistency
@@ -291,11 +299,11 @@ export const dynamic = 'force-dynamic'; // Added to routes using cookies
 
 ## Notes
 - Document created: March 24, 2025
-- Last updated: March 29, 2025
+- Last updated: April 5, 2025
 - Related issues:
-  - Cookie warning in API routes
-  - Build-time linting errors
-  - Static vs. dynamic rendering conflicts
-  - Suspense boundary implementation
-  - Serverless function timeouts
-  - State management across server/client boundary
+  - Cookie warning in API routes (MOVED TO ASANA)
+  - Build-time linting errors (MOVED TO ASANA)
+  - Static vs. dynamic rendering conflicts (MOVED TO ASANA)
+  - Suspense boundary implementation (MOVED TO ASANA)
+  - Serverless function timeouts (MOVED TO ASANA)
+  - State management across server/client boundary (MOVED TO ASANA)
