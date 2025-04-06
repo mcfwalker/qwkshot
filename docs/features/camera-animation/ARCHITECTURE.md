@@ -61,42 +61,38 @@ Current implementation status and detailed flow diagrams are maintained in P2P_O
 - **Status**: ✅ Fully functional
 - **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
 
-### 5. LLM Engine
+### 5. LLM Engine ✅ (Substantially Complete)
 - **Purpose**: Manage interaction with external LLM services
 - **Key Features**:
-  - LLM provider selection and management
-  - API request formatting and transmission
-  - Response validation and parsing
-  - Error handling and recovery
-- **Status**: 🚧 Planned Refactor
-- **Current Implementation**:
-  - Provider communication handled directly in API routes
-  - Response processing in UI components
-- **Target Implementation**:
-  - Centralized provider management
-  - Standardized response handling
-  - Robust error management
-- **Interface**: See [LLM Engine Documentation](./llm-engine/README.md)
+  - Provider communication abstraction (`ThinLLMEngine`)
+  - Standardized API request/response handling (`LLMResponse`)
+  - Centralized error management
+- **Status**: ✅ Substantially Complete (Refactor done, provider selection deferred)
+- **Current Implementation**: 
+    - `ThinLLMEngine` class encapsulates provider calls.
+    - Takes `CompiledPrompt`.
+    - Uses helpers from `lib/llm/providers`.
+    - Returns `LLMResponse<CameraPath>`.
+    - Integrated into API route.
+- **Interface**: See [LLM Engine Documentation](./llm-engine/README.md) (Needs Update)
 
-### 6. Scene Interpreter
-- **Purpose**: Convert LLM output into executable camera paths
+### 6. Scene Interpreter ✅ (Substantially Complete)
+- **Purpose**: Convert LLM output (`CameraPath`) into executable camera commands
 - **Key Features**:
-  - Path processing and validation
-  - Animation logic and computation
-  - Safety constraint enforcement
-  - Viewer integration
-- **Status**: 🚧 Planned Implementation
-- **Current Implementation**:
-  - Animation logic in UI components (CameraAnimationSystem)
-  - Basic path validation
-- **Target Implementation**:
-  - Centralized animation logic
-  - Comprehensive path validation
-  - Clean viewer interface
-- **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md)
+  - Path processing (smoothing/easing structure added)
+  - Detailed input path validation (incl. speed, bounds, etc.)
+  - Basic output command validation structure
+  - Safety constraint enforcement (partially implemented via validation)
+- **Status**: ✅ Substantially Complete (Core structure done, refinement TODOs remain)
+- **Current Implementation**: 
+    - `CoreSceneInterpreter` class.
+    - `interpretPath` method processes `CameraPath` into `CameraCommand[]`.
+    - `validateInputPath` performs detailed checks.
+    - Integrated into API route after LLM Engine.
+- **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md) (Needs Update)
 
-### 7. Viewer Integration
-- **Purpose**: Execute and visualize camera paths
+### 7. Viewer Integration ⚠️ (Partially Implemented)
+- **Purpose**: Execute and visualize camera paths (`CameraCommand[]`)
 - **Key Features**:
   - Camera animation with ref-based progress tracking
   - Smooth interpolation between keyframes
@@ -134,19 +130,29 @@ Current implementation status and detailed flow diagrams are maintained in P2P_O
 
 ```mermaid
 graph TD
-    subgraph Current Implementation
-        A1[User Input] --> B1[Scene Analyzer]
-        B1 --> C1[Environmental Analyzer]
-        C1 --> D1[Metadata Manager]
-        A1 --> E1[Prompt Compiler]
-        E1 --> F1[API Routes]
-        F1 --> G1[LLM Provider]
-        G1 --> H1[UI Components]
+    subgraph Current Refactored State (API Level)
+        A1[User Input] --> R1[API Route /api/camera-path]
+        R1 -- modelId --> F1[MetadataManager]
+        R1 -- instruction, context --> C1[PromptCompiler]
+        C1 --> R1
+        R1 -- CompiledPrompt --> E1[LLM Engine]
+        E1 --> P1[LLM Provider]
+        P1 --> E1
+        E1 -- CameraPath --> R1
+        R1 -- CameraPath --> G1[Scene Interpreter]
+        G1 -- CameraCommand[] --> R1
+        R1 --> Client[UI / Caller]
+        
+        subgraph Placeholders/Deferred
+            X1(SceneAnalyzer Integration)
+            X2(EnvAnalyzer Integration / Refinement)
+            X3(API Authentication / RLS)
+        end
     end
 
     subgraph Target Architecture
         A2[User Input] --> B2[Pipeline Controller]
-        B2 --> C2[Scene Analysis Layer]
+        B2 --> C2[Scene Analysis Layer] 
         C2 --> D2[Metadata Manager]
         D2 --> E2[Prompt Compiler]
         E2 --> F2[LLM Engine]
@@ -155,62 +161,38 @@ graph TD
     end
 ```
 
-## Data Flow
+## Data Flow (Updated)
 
-1. **Scene Analysis**
-   - GLB file is parsed and analyzed
-   - Spatial relationships are extracted
-   - Safety boundaries are calculated
+1.  **Scene/Env/Metadata Analysis** (Partially Integrated / Placeholder)
+    - GLB potentially analyzed by `SceneAnalyzer` (Placeholder in current API flow).
+    - Environmental factors potentially analyzed by `EnvironmentalAnalyzer` (Called in API flow, input is placeholder).
+    - Context data fetched via `MetadataManager`.
 
-2. **Environmental Analysis**
-   - Lighting conditions are analyzed
-   - Material properties are extracted
-   - Environmental constraints are identified
-   - Performance optimizations are applied
-   - ⚠️ Data persistence challenges
+2.  **Input Processing**
+    - User provides natural language instruction.
 
-3. **Metadata Processing**
-   - User metadata is retrieved
-   - Model information is processed
-   - Feature points are identified
-   - ⚠️ Complex structure handling
-   - ⚠️ Database integration optimization
+3.  **Prompt Generation** (Integrated Structurally)
+    - API Route calls `PromptCompiler`.
+    - Compiler uses fetched/placeholder context to create `CompiledPrompt`.
 
-4. **Input Processing**
-   - User provides natural language instruction
-   - Scene context is gathered
-   - Duration and constraints are specified
+4.  **LLM Interaction & Path Generation** (Integrated)
+    - API Route calls `LLM Engine` with `CompiledPrompt`.
+    - Engine uses configured provider helper to call external LLM.
+    - Engine receives response, standardizes into `CameraPath`.
 
-5. **Prompt Generation**
-   - Prompt Compiler processes input
-   - Optimizes for LLM consumption
-   - Adds necessary context
+5.  **Path Interpretation & Validation** (Integrated)
+    - API Route calls `Scene Interpreter` with `CameraPath`.
+    - Interpreter validates input path (speed, bounds, etc.).
+    - Interpreter processes path (smoothing/easing structure added).
+    - Interpreter validates output commands (basic structure added).
+    - Interpreter returns `CameraCommand[]`.
 
-6. **LLM Interaction & Path Generation**
-   - LLM Engine selects provider
-   - Sends compiled prompt to external LLM service
-   - External LLM generates motion segments (keyframes)
-   - LLM Engine receives response, validates, and parses keyframes
+6.  **Execution** (Viewer - Not yet refactored)
+    - API Route returns `CameraCommand[]` to client.
+    *   Viewer Integration needs update to receive `CameraCommand[]`.
+    *   Viewer executes commands (interpolation, animation loop).
 
-7. **Path Interpretation & Validation**
-   - Scene Interpreter processes keyframes
-   - Interpolates motion, applies easing
-   - Performs detailed safety checks
-
-8. **Execution**
-   - Viewer Integration executes path
-   - Implements ref-based progress tracking
-   - Manages animation frame lifecycle
-   - Provides interactive start position system
-   - Handles proper resource cleanup
-   - Enables smooth transitions between keyframes
-   - Provides visual feedback through UI components
-   - Enables export options
-
-9. **Feedback Loop**
-   - System collects performance data
-   - User feedback is gathered
-   - Improvements are identified
+7.  **Feedback Loop** (Planned)
 
 ## Error Handling
 
