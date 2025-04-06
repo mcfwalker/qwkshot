@@ -190,20 +190,46 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
   }
 
   private extractObjectMeasurements(sceneAnalysis: SceneAnalysis): ObjectMeasurements {
+    this.logger.debug('[extractObjectMeasurements] Received sceneAnalysis.glb.geometry:', sceneAnalysis?.glb?.geometry);
+    if (!sceneAnalysis?.glb?.geometry) {
+      throw new MeasurementError('Missing glb.geometry in sceneAnalysis');
+    }
+    
     const { boundingBox, center, dimensions } = sceneAnalysis.glb.geometry;
+    if (!boundingBox || !center || !dimensions) {
+        throw new MeasurementError('Missing boundingBox, center, or dimensions in sceneAnalysis.glb.geometry');
+    }
+
+    this.logger.debug('[extractObjectMeasurements] Extracted geometry parts:', { boundingBox, center, dimensions });
+
+    const geo = sceneAnalysis.glb.geometry;
+    
+    // Cast source properties to 'any' to bypass incorrect 'never' inference
+    const sourceMin = geo.boundingBox?.min as any;
+    const sourceMax = geo.boundingBox?.max as any;
+    const sourceCenter = geo.center as any;
+    const sourceDims = geo.dimensions as any;
+
+    // Ensure values are Vector3 instances, using the casted sources
+    const boxMin = sourceMin instanceof Vector3 ? sourceMin : new Vector3(sourceMin?.x ?? 0, sourceMin?.y ?? 0, sourceMin?.z ?? 0);
+    const boxMax = sourceMax instanceof Vector3 ? sourceMax : new Vector3(sourceMax?.x ?? 0, sourceMax?.y ?? 0, sourceMax?.z ?? 0);
+    const centerVec = sourceCenter instanceof Vector3 ? sourceCenter : new Vector3(sourceCenter?.x ?? 0, sourceCenter?.y ?? 0, sourceCenter?.z ?? 0);
+    const dimVec = sourceDims instanceof Vector3 ? sourceDims : new Vector3(sourceDims?.x ?? 0, sourceDims?.y ?? 0, sourceDims?.z ?? 0);
+    
+    this.logger.debug('[extractObjectMeasurements] Converted geometry parts:', { boxMin, boxMax, centerVec, dimVec });
 
     return {
       bounds: {
-        min: boundingBox.min.clone(),
-        max: boundingBox.max.clone(),
-        center: center.clone(),
+        min: boxMin.clone(),
+        max: boxMax.clone(),
+        center: centerVec.clone(),
       },
       dimensions: {
-        width: dimensions.x,
-        height: dimensions.y,
-        depth: dimensions.z,
+        width: dimVec.x,
+        height: dimVec.y,
+        depth: dimVec.z,
       },
-      floorOffset: boundingBox.min.y,  // Use the bottom of the bounding box as the floor offset
+      floorOffset: typeof boxMin.y === 'number' ? boxMin.y : 0, 
     };
   }
 
@@ -308,16 +334,25 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
     const { floorOffset } = object;
 
     // Base camera constraints on object height and floor offset
-    const minHeight = floorOffset + height * 0.5;  // Minimum height is half the object height above floor
-    const maxHeight = floorOffset + height * 3;    // Maximum height is 3x the object height above floor
-    const minDistance = height * 0.8;              // Minimum distance is 0.8x the object height
-    const maxDistance = height * 5;                // Maximum distance is 5x the object height
+    const minHeight = floorOffset + height * 0.5;  
+    const maxHeight = floorOffset + height * 3;    
+    const minDistance = height * 0.8;              
+    const maxDistance = height * 5;                
+
+    // Add missing properties required by CameraConstraints type
+    const maxSpeed = 2.0; // Default value
+    const maxAngleChange = 45; // Default value (degrees)
+    const minFramingMargin = 0.1; // Default value
 
     return {
       minHeight,
       maxHeight,
       minDistance,
       maxDistance,
+      // Include the missing properties
+      maxSpeed,
+      maxAngleChange,
+      minFramingMargin
     };
   }
 
