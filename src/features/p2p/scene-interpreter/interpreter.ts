@@ -100,18 +100,28 @@ class CoreSceneInterpreter implements SceneInterpreter {
         }
 
         // --- Basic Safety Checks (Using path.metadata.safetyConstraints) ---
+        // Log the metadata and constraints before accessing them
+        logger.debug('[validateInputPath] Checking constraints. Path metadata:', path.metadata);
         const constraints = path.metadata?.safetyConstraints;
+        logger.debug('[validateInputPath] Safety constraints object:', constraints);
+
         if (!constraints) {
-            // Warning logged once outside the loop if needed
+            // Warning logged once outside the loop
         } else {
             // Check height bounds
-            if (kf.position.y < constraints.minHeight || kf.position.y > constraints.maxHeight) {
-                errors.push(`Keyframe ${index}: Position y (${kf.position.y.toFixed(2)}) outside height bounds [${constraints.minHeight}, ${constraints.maxHeight}].`);
+            // Add safe access check for property existence before calling .toFixed()
+            if (typeof constraints.minHeight !== 'number' || typeof constraints.maxHeight !== 'number') {
+                errors.push('Invalid min/max height constraints');
+            } else if (kf.position.y < constraints.minHeight || kf.position.y > constraints.maxHeight) {
+                errors.push(`Keyframe ${index}: Position y (${kf.position.y.toFixed(2)}) outside height bounds [${constraints.minHeight.toFixed(2)}, ${constraints.maxHeight.toFixed(2)}].`);
             }
             // Check distance from origin
             const distanceFromOrigin = kf.position.length();
-            if (distanceFromOrigin < constraints.minDistance || distanceFromOrigin > constraints.maxDistance) {
-                errors.push(`Keyframe ${index}: Position distance (${distanceFromOrigin.toFixed(2)}) outside bounds [${constraints.minDistance}, ${constraints.maxDistance}].`);
+            // Add safe access check
+            if (typeof constraints.minDistance !== 'number' || typeof constraints.maxDistance !== 'number') {
+                 errors.push('Invalid min/max distance constraints');
+            } else if (distanceFromOrigin < constraints.minDistance || distanceFromOrigin > constraints.maxDistance) {
+                errors.push(`Keyframe ${index}: Position distance (${distanceFromOrigin.toFixed(2)}) outside bounds [${constraints.minDistance.toFixed(2)}, ${constraints.maxDistance.toFixed(2)}].`);
             }
             // Check restrictedZones
             if (constraints.restrictedZones && Array.isArray(constraints.restrictedZones)) {
