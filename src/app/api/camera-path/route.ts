@@ -11,6 +11,10 @@ import { LLMEngineConfig } from '@/types/p2p/llm-engine';
 import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/MetadataManagerFactory';
 import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { Logger } from '@/types/p2p/shared';
+import { getSceneInterpreter } from '@/features/p2p/scene-interpreter/interpreter';
+import { SceneInterpreterConfig } from '@/types/p2p/scene-interpreter';
+import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler/PromptCompilerFactory';
+import { PromptCompilerConfig } from '@/types/p2p/prompt-compiler';
 
 // Mark as dynamic route with increased timeout
 export const dynamic = 'force-dynamic';
@@ -29,6 +33,9 @@ const logger: Logger = {
 // Create MetadataManagerFactory
 const metadataManagerFactory = new MetadataManagerFactory(logger);
 
+// Create PromptCompilerFactory
+const promptCompilerFactory = new PromptCompilerFactory(logger);
+
 export async function POST(request: Request) {
   try {
     logger.info('Starting camera path generation request');
@@ -41,9 +48,25 @@ export async function POST(request: Request) {
     const engine = getLLMEngine();
     logger.debug('Got LLM Engine instance');
 
+    // Get Scene Interpreter instance
+    const interpreter = getSceneInterpreter();
+    logger.debug('Got Scene Interpreter instance');
+
+    // Get Prompt Compiler instance
+    // TODO: Configure PromptCompiler properly
+    const promptCompiler = promptCompilerFactory.create({ 
+        maxTokens: 2048, // Placeholder config
+        temperature: 0.7   // Placeholder config
+    });
+    await promptCompiler.initialize({ /* Use same config? */ maxTokens: 2048, temperature: 0.7 }); // Placeholder init
+    logger.debug('Got and initialized Prompt Compiler instance');
+
     const body = await request.json();
     logger.debug('Request body:', body);
 
+    // TODO: The request body structure needs review. 
+    // It provides sceneGeometry (analysis result) but compilePrompt expects SceneAnalysis component/result type.
+    // It lacks envAnalysis and modelMetadata.
     const { instruction, sceneGeometry, duration, modelId } = body;
 
     if (!instruction || !sceneGeometry || !duration || !modelId) {
@@ -85,6 +108,18 @@ export async function POST(request: Request) {
     await engine.initialize(engineConfig);
     logger.info('LLM Engine initialized with config:', engineConfig);
 
+    // Configure and initialize the Scene Interpreter
+    // TODO: Source these config values properly (env vars, request body?)
+    const interpreterConfig: SceneInterpreterConfig = {
+      smoothingFactor: 0.5, // Default smoothing
+      maxKeyframes: 100,   // Default max keyframes from LLM
+      interpolationMethod: 'smooth', // Default to smooth
+      // Inherit debug/performance flags from engine/request if needed
+      debug: engineConfig.debug, 
+    };
+    await interpreter.initialize(interpreterConfig);
+    logger.info('Scene Interpreter initialized with config:', interpreterConfig);
+
     // Convert camera state to Vector3
     const currentCameraState = {
       position: new Vector3(
@@ -111,79 +146,38 @@ export async function POST(request: Request) {
       duration
     });
 
-    // TODO: Replace manual prompt construction with a call to PromptCompiler service
-    // For now, construct it here based on request body
-    const compiledPrompt: CompiledPrompt = {
-      systemMessage: `You are an expert virtual cinematographer generating camera paths for a 3D model viewer. Your response MUST be ONLY a valid JSON object matching the specified format.
+    // --- Compile Prompt using the PromptCompiler --- 
+    logger.info('Compiling prompt via PromptCompiler...');
+    let compiledPrompt: CompiledPrompt;
+    try {
+      // TODO: Fetch actual SceneAnalysis, EnvAnalysis, ModelMetadata using modelId
+      // Using placeholders/incorrect types for now to establish flow
+      const placeholderSceneAnalysis: any = sceneGeometry; // Incorrect type, using existing data
+      const placeholderEnvAnalysis: any = null; // Placeholder
+      const placeholderModelMetadata: any = null; // Placeholder
 
-IMPORTANT: You MUST respond with a JSON object. No other text or explanations.
+      compiledPrompt = await promptCompiler.compilePrompt(
+        instruction, // userInput
+        placeholderSceneAnalysis, 
+        placeholderEnvAnalysis, 
+        placeholderModelMetadata, 
+        currentCameraState
+      );
+      logger.debug('Prompt compiled successfully:', compiledPrompt);
 
-JSON OUTPUT FORMAT:
-\`\`\`json
-{
-  "keyframes": [
-    {
-      "position": {"x": number, "y": number, "z": number},
-      "target": {"x": number, "y": number, "z": number},
-      "duration": number // Duration > 0
+    } catch (error) {
+        logger.error('Error during prompt compilation:', error);
+        // Handle unknown error type
+        const errorMessage = error instanceof Error ? error.message : 'Unknown prompt compilation error';
+        return NextResponse.json(
+            { error: `Prompt compilation failed: ${errorMessage}` },
+            { status: 500 }
+        );
     }
-    // ... more keyframes
-  ]
-}
-\`\`\`
 
-RULES:
-1. Respond ONLY with the JSON object described above. No explanations, apologies, or extra text.
-2. The sum of all keyframe durations MUST match the requested total duration of ${duration} seconds.
-3. Each keyframe MUST have a duration greater than 0.
-4. Start the camera path from the current camera state provided.
-5. Generate smooth, natural, and visually appealing camera movements.`,
-      userMessage: `CURRENT CAMERA STATE:
-- Position: (${currentCameraState.position.x.toFixed(2)}, ${currentCameraState.position.y.toFixed(2)}, ${currentCameraState.position.z.toFixed(2)})
-- Target: (${currentCameraState.target.x.toFixed(2)}, ${currentCameraState.target.y.toFixed(2)}, ${currentCameraState.target.z.toFixed(2)})
-
-SCENE & ENVIRONMENT CONTEXT:
-- Model Center: (${sceneGeometry.boundingBox.center.x.toFixed(2)}, ${sceneGeometry.boundingBox.center.y.toFixed(2)}, ${sceneGeometry.boundingBox.center.z.toFixed(2)})
-- Model Bounds: min: (${sceneGeometry.boundingBox.min.x.toFixed(2)}, ${sceneGeometry.boundingBox.min.y.toFixed(2)}, ${sceneGeometry.boundingBox.min.z.toFixed(2)}), max: (${sceneGeometry.boundingBox.max.x.toFixed(2)}, ${sceneGeometry.boundingBox.max.y.toFixed(2)}, ${sceneGeometry.boundingBox.max.z.toFixed(2)})
-- Model Size: (${sceneGeometry.boundingBox.size.x.toFixed(2)}, ${sceneGeometry.boundingBox.size.y.toFixed(2)}, ${sceneGeometry.boundingBox.size.z.toFixed(2)})
-- Bounding Sphere Radius: ${sceneGeometry.boundingSphere.radius.toFixed(2)}
-- Floor Height: ${sceneGeometry.floor.height.toFixed(2)}
-- Safe Distance Range: ${sceneGeometry.safeDistance.min.toFixed(2)} to ${sceneGeometry.safeDistance.max.toFixed(2)}
-
-USER INSTRUCTION:
-${instruction}`,
-      constraints: {
-        minDistance: sceneGeometry.safeDistance.min,
-        maxDistance: sceneGeometry.safeDistance.max,
-        minHeight: sceneGeometry.floor.height,
-        maxHeight: sceneGeometry.boundingBox.max.y,
-        maxSpeed: 2.0, // Maximum camera movement speed
-        maxAngleChange: 45, // Maximum angle change between keyframes
-        minFramingMargin: 0.1 // Minimum margin from model bounds
-      },
-      metadata: {
-        timestamp: new Date(),
-        version: '1.0',
-        optimizationHistory: [],
-        performanceMetrics: {
-          startTime: Date.now(),
-          endTime: 0,
-          duration: 0,
-          operations: [],
-          cacheHits: 0,
-          cacheMisses: 0,
-          databaseQueries: 0,
-          averageResponseTime: 0
-        },
-        requestId: modelId
-      }
-    };
-
-    // Generate the path using the LLM Engine
+    // Generate the path using the LLM Engine (using the compiledPrompt)
     logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model);
     try {
-      // Replace provider.generateCameraPath with engine.generatePath
-      // const result = await provider.generateCameraPath(prompt, duration);
       const response = await engine.generatePath(compiledPrompt);
 
       logger.debug('LLM Engine response:', response);
@@ -207,16 +201,30 @@ ${instruction}`,
       }
 
       // Use the data from the engine response
-      const result = response.data; // result is now type CameraPath
+      const cameraPath = response.data; // cameraPath is type CameraPath
+      logger.info(`Path received from LLM Engine with ${cameraPath.keyframes.length} keyframes.`);
 
-      const totalDuration = result.keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      logger.info('Path generated successfully via LLM Engine', {
-        keyframeCount: result.keyframes.length,
-        totalDuration,
-        requestedDuration: duration
-      });
+      // --- Interpret the Path --- 
+      logger.info('Interpreting camera path...');
+      const commands = interpreter.interpretPath(cameraPath);
+      logger.info(`Interpretation resulted in ${commands.length} commands.`);
 
-      // Store environmental metadata
+      // --- Validate Commands --- 
+      const commandValidation = interpreter.validateCommands(commands);
+      if (!commandValidation.isValid) {
+          // Handle invalid commands - log, potentially throw or return error
+          logger.error('Generated commands failed validation:', commandValidation.errors);
+          // Decide on error response - returning 500 for now
+          return NextResponse.json(
+              { error: 'Generated commands failed validation', details: commandValidation.errors },
+              { status: 500 }
+          );
+      }
+      logger.info('Generated commands passed validation.');
+
+      // --- Metadata Storage --- 
+      // TODO: Review if EnvironmentalMetadata needs adjustment
+      // Make sure metadata creation uses the *actual* compiledPrompt data if needed
       const environmentalMetadata: EnvironmentalMetadata = {
         lighting: {
           intensity: 1.0,
@@ -246,34 +254,27 @@ ${instruction}`,
           atmosphere: '#87CEEB'
         },
         shot: {
-          type: 'cinematic',
-          duration: duration,
-          keyframes: result.keyframes.map(kf => ({
-            position: {
-              x: kf.position.x,
-              y: kf.position.y,
-              z: kf.position.z
-            },
-            target: {
-              x: kf.target.x,
-              y: kf.target.y,
-              z: kf.target.z
-            },
+          type: 'cinematic', // TODO: Derive from somewhere?
+          duration: cameraPath.duration, // Use original total duration
+          keyframes: cameraPath.keyframes.map(kf => ({ // Still map original keyframes for storage?
+            position: { x: kf.position.x, y: kf.position.y, z: kf.position.z },
+            target: { x: kf.target.x, y: kf.target.y, z: kf.target.z },
             duration: kf.duration
           }))
         },
-        constraints: {
-          minDistance: sceneGeometry.safeDistance.min,
-          maxDistance: sceneGeometry.safeDistance.max,
-          minHeight: sceneGeometry.floor.height,
-          maxHeight: sceneGeometry.boundingBox.max.y,
-          maxSpeed: 2.0,
-          maxAngleChange: 45,
-          minFramingMargin: 0.1
+        constraints: { // Use constraints from compiled prompt?
+          minDistance: compiledPrompt.constraints.minDistance,
+          maxDistance: compiledPrompt.constraints.maxDistance,
+          minHeight: compiledPrompt.constraints.minHeight ?? 0,
+          maxHeight: compiledPrompt.constraints.maxHeight ?? 100,
+          maxSpeed: compiledPrompt.constraints.maxSpeed ?? 2.0, // Default to 2.0 if undefined
+          // Add defaults for other required fields if missing from prompt constraints
+          maxAngleChange: compiledPrompt.constraints.maxAngleChange ?? 45, // Default to 45 if undefined
+          minFramingMargin: compiledPrompt.constraints.minFramingMargin ?? 0.1 // Default to 0.1 if undefined
         },
-        performance: {
-          startTime: Date.now(),
-          endTime: Date.now(),
+        performance: { // Use performance from compiled prompt?
+          startTime: compiledPrompt.metadata.performanceMetrics.startTime,
+          endTime: Date.now(), // Or get from interpreter/engine?
           duration: Date.now() - compiledPrompt.metadata.performanceMetrics.startTime,
           operations: compiledPrompt.metadata.performanceMetrics.operations
         }
@@ -301,8 +302,9 @@ ${instruction}`,
       // Store the environmental metadata
       await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
 
-      // Return the standardized CameraPath data from the engine
-      return NextResponse.json(result);
+      // Return the FINAL validated CameraCommand array
+      logger.info('Sending generated commands to client.');
+      return NextResponse.json(commands); // Return commands, not cameraPath
     } catch (error) {
       // This top-level catch block in the route might still be useful for
       // catching errors *outside* the engine call (e.g., engine initialization,
