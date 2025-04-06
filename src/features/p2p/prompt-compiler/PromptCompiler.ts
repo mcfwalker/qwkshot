@@ -219,6 +219,8 @@ Please generate a camera path JSON that:
     currentCameraState: { position: Vector3; target: Vector3; fov: number }
   ): Promise<CompiledPrompt> {
     const startTime = performance.now();
+    this.logger.debug('[compilePrompt] Received envAnalysis:', envAnalysis);
+    this.logger.debug('[compilePrompt] envAnalysis.cameraConstraints:', envAnalysis?.cameraConstraints);
     
     const llmFriendlyCameraState = this.transformCameraState(
       currentCameraState.position,
@@ -248,19 +250,27 @@ Please generate a camera path JSON that:
       ]
     };
 
-    return {
+    // Construct the object to be returned
+    const promptToReturn: CompiledPrompt = {
       systemMessage,
       userMessage: userInput,
-      constraints: envAnalysis.cameraConstraints,
+      // Log the value just before assignment
+      constraints: envAnalysis?.cameraConstraints, 
       metadata: {
         timestamp: new Date(),
         version: '1.0',
         optimizationHistory: [],
         performanceMetrics: this.metrics,
-        requestId: crypto.randomUUID(),
-        userId: modelMetadata.userId
+        requestId: crypto.randomUUID(), // Ensure crypto is available
+        userId: modelMetadata?.userId // Use optional chaining
       }
     };
+
+    // Log the final object and its constraints just before returning
+    this.logger.debug('[compilePrompt] Returning prompt object:', promptToReturn);
+    this.logger.debug('[compilePrompt] Returning prompt.constraints:', promptToReturn.constraints);
+
+    return promptToReturn;
   }
 
   validatePrompt(prompt: CompiledPrompt): ValidationResult {

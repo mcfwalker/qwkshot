@@ -3,7 +3,7 @@ import { DatabaseAdapter } from './DatabaseAdapter';
 import { ModelMetadata, ModelFeaturePoint, UserPreferences, DatabaseError, NotFoundError } from '../../../../types/p2p/metadata-manager';
 import { Orientation, BaseMetadata } from '../../../../types/p2p/shared';
 import { Logger } from '../../../../types/p2p/shared';
-import { getSupabaseClient } from '../../../../lib/supabase';
+import { getSupabaseServiceRoleClient } from '../../../../lib/supabase';
 import { EnvironmentalMetadata } from '../../../../types/p2p/environmental-metadata';
 
 /**
@@ -22,8 +22,9 @@ export class SupabaseAdapter implements DatabaseAdapter {
   private logger: Logger;
 
   constructor(config: SupabaseAdapterConfig, logger: Logger) {
-    this.client = getSupabaseClient();
+    this.client = getSupabaseServiceRoleClient();
     this.logger = logger;
+    this.logger.warn('SupabaseAdapter is using SERVICE ROLE client!');
   }
 
   /**

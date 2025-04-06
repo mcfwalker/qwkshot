@@ -84,8 +84,11 @@ class ThinLLMEngine implements LLMEngine {
 
       // 4. Call the provider's generation method
       logger.info(`Calling ${providerType} provider to generate path...`);
+      // Log constraints being passed to provider
+      logger.debug('[LLMEngine] Passing constraints to provider:', prompt.constraints);
       const providerResult = await provider.generateCameraPath(prompt, requestedDuration);
-      logger.debug('Provider result:', providerResult);
+      // Log the raw result from the provider
+      logger.debug('[LLMEngine] Provider raw result:', providerResult);
 
       // 5. Basic Validation (using provider's helper or simple check)
       // Example: Check if keyframes array exists and is not empty
@@ -109,6 +112,10 @@ class ThinLLMEngine implements LLMEngine {
               duration: kf.duration
           };
       });
+
+      // *** Add final check before accessing prompt.constraints ***
+      logger.debug('[LLMEngine] Preparing finalPath. Logging prompt object:', prompt);
+      logger.debug('[LLMEngine] Preparing finalPath. Logging prompt.constraints:', prompt?.constraints);
 
       const finalPath: CameraPath = {
         keyframes: mappedKeyframes,
