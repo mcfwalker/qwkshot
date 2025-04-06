@@ -32,7 +32,7 @@ const easingFunctions = {
   // Add more easing functions as needed from libraries like tween.js or implement custom ones
 };
 
-type EasingFunctionName = keyof typeof easingFunctions;
+export type EasingFunctionName = keyof typeof easingFunctions;
 
 class CoreSceneInterpreter implements SceneInterpreter {
   private config: SceneInterpreterConfig | null = null;
@@ -217,7 +217,7 @@ class CoreSceneInterpreter implements SceneInterpreter {
                      position: kf.position,
                      target: kf.target,
                      duration: kf.duration,
-                     easing: easingFunctions.linear
+                     easing: 'linear'
                  });
              }
              return commands;
@@ -259,21 +259,22 @@ class CoreSceneInterpreter implements SceneInterpreter {
             const interpolatedTarget = new THREE.Vector3().lerpVectors(kf1.target, kf2.target, localProgressStart);
 
             // Determine easing for this small segment
-            let segmentEasing = easingFunctions.linear; // Default to linear between curve points
+            let segmentEasingName: EasingFunctionName = 'linear'; // Use name
             if (i === 0) {
                 // Ease out for the very first segment of the smoothed path
-                segmentEasing = easingFunctions.easeOutQuad;
+                segmentEasingName = 'easeOutQuad';
                 logger.debug('Applying easeOutQuad to first smoothed segment');
             }
             // Note: Easing for the *last* segment needs to be applied when creating the final command below
 
             if (segmentDuration > 1e-6) { 
-                commands.push({
+                const command: CameraCommand = {
                     position: curvePoints[i],
                     target: interpolatedTarget, 
                     duration: segmentDuration,
-                    easing: segmentEasing // Use calculated easing
-                });
+                    easing: segmentEasingName // Assign name
+                };
+                commands.push(command);
             }
         }
 
@@ -283,51 +284,53 @@ class CoreSceneInterpreter implements SceneInterpreter {
          const finalSegmentDuration = path.duration - secondLastSegmentEndTime;
 
          if (finalSegmentDuration > 1e-6) { 
-             commands.push({
+             const finalCommand: CameraCommand = {
                  position: lastCurvePoint, 
                  target: lastKf.target,   
                  duration: finalSegmentDuration,
-                 // Ease in for the very last segment of the smoothed path
-                 easing: easingFunctions.easeInQuad
-             });
-             logger.debug('Applying easeInQuad to final smoothed segment');
+                 easing: 'easeInQuad' // Assign name
+             };
+             commands.push(finalCommand);
+             logger.debug('Assigning easeInQuad to final smoothed segment');
          } else if (commands.length === 0 && keyframes.length === 1) {
-             commands.push({
+             const singleCommand: CameraCommand = {
                   position: keyframes[0].position,
                   target: keyframes[0].target,
                   duration: keyframes[0].duration,
-                  easing: easingFunctions.linear
-             });
+                  easing: 'linear' // Assign name
+             };
+             commands.push(singleCommand);
          }
 
     } else {
       // --- Linear or Ease Interpolation (Original Logic) ---
       for (let i = 0; i < keyframes.length; i++) {
           const kf = keyframes[i];
-          let easingFunction: ((t: number) => number) | undefined = undefined;
+          let easingName: EasingFunctionName | undefined = undefined;
 
           if (interpolationMethod === 'ease') {
              // Apply easing based on position in sequence for non-smoothed paths too?
              if (i === 0 && keyframes.length > 1) {
-                 easingFunction = easingFunctions.easeOutQuad;
+                 easingName = 'easeOutQuad';
              } else if (i === keyframes.length - 1 && keyframes.length > 1) {
-                 easingFunction = easingFunctions.easeInQuad;
+                 easingName = 'easeInQuad';
              } else if (keyframes.length === 1) {
-                  easingFunction = easingFunctions.linear; // Single keyframe, just linear?
+                  easingName = 'linear'; // Single keyframe, just linear?
              } else {
-                 easingFunction = easingFunctions.easeInOutQuad; // Default for middle segments
+                 easingName = 'easeInOutQuad'; // Default for middle segments
              }
-              logger.debug(`Applying ${easingFunction.name} easing for keyframe ${i}`);
+              logger.debug(`Assigning ${easingName} easing for keyframe ${i}`);
           } else { // linear
-              easingFunction = easingFunctions.linear;
+              easingName = 'linear';
           }
 
-          commands.push({
+          const command: CameraCommand = {
               position: kf.position,
               target: kf.target,
               duration: kf.duration,
-              easing: easingFunction
-          });
+              easing: easingName // Assign name
+          };
+          commands.push(command);
       }
     }
 

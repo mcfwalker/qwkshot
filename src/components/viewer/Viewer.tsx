@@ -271,7 +271,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
       </div>
 
       {/* Camera Animation System */}
-      <div className="absolute right-4 top-4 w-80 z-10">
+      <div className="absolute top-16 right-4 z-10">
         <CameraAnimationSystem
           onAnimationUpdate={handleAnimationUpdate}
           onAnimationStop={handleAnimationStop}

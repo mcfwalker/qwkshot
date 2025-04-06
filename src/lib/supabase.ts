@@ -61,7 +61,8 @@ export function getSupabaseServiceRoleClient(): SupabaseClient {
 }
 
 // Export the component client as default?
-// export const supabase = getSupabaseClient();
+// Re-enable direct export if needed by components
+export const supabase = getSupabaseClient();
 
 // Direct client for specific use cases (like SSR)
 export const supabaseAdmin = createClientComponentClient<Database>({

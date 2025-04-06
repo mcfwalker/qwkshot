@@ -21,12 +21,25 @@ import { useViewerStore } from '@/store/viewerStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import * as TabsPrimitive from "@radix-ui/react-tabs";
 
-interface CameraKeyframe {
-  position: Vector3;
-  target: Vector3;
-  duration: number;
-}
+// Import the extracted components
+import { ShotCallerPanel } from './ShotCallerPanel'; 
+import { PlaybackPanel } from './PlaybackPanel';
+
+// Import the actual easing functions map
+// We need access to the functions themselves on the client-side
+// TODO: Define this map in a shared utility file?
+const easingFunctions = {
+  linear: (t: number) => t,
+  easeInQuad: (t: number) => t * t,
+  easeOutQuad: (t: number) => t * (2 - t),
+  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+};
+
+// Import the name type if needed for casting/checking
+import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
 
 interface CameraAnimationSystemProps {
   onAnimationUpdate: (progress: number) => void;
@@ -136,6 +149,9 @@ const generatePathStates: Record<GeneratePathState, { text: string; icon: React.
   }
 };
 
+// Define Tab values
+type TabValue = 'shotCaller' | 'playback';
+
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   onAnimationUpdate,
   onAnimationStop,
@@ -155,7 +171,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
+  const [commands, setCommands] = useState<CameraCommand[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
@@ -171,6 +187,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const [takeCount, setTakeCount] = useState(0);
   const [modelName, setModelName] = useState<string | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabValue>('shotCaller');
 
   // Debug logging for button state
   useEffect(() => {
@@ -301,9 +318,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // Call the API to generate camera path
       const pathResponse = await fetch('/api/camera-path', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction,
           sceneGeometry,
@@ -317,47 +332,71 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         throw new Error(error.error || 'Failed to generate camera path');
       }
 
-      const data = await pathResponse.json();
+      // Process the response - expecting CameraCommand[]
+      const receivedCommands: any[] = await pathResponse.json(); 
       
-      // Validate and parse keyframes
-      if (!data.keyframes) {
-        throw new Error('Missing keyframes in API response');
+      // Validate and parse commands
+      if (!Array.isArray(receivedCommands)) {
+        throw new Error('Invalid command data received from API');
       }
       
-      const keyframesArray = Array.isArray(data.keyframes) ? data.keyframes : [];
-      if (keyframesArray.length === 0) {
-        throw new Error('No keyframes returned from API');
+      if (receivedCommands.length === 0) {
+        // Handle empty path case - maybe show a specific message?
+        toast.info('Generated path has no commands.');
+        setCommands([]); // Set empty commands
+        setGeneratePathState('initial'); // Reset state?
+        // Maybe don't automatically start animation?
+        // onAnimationStop(); 
+        return; // Stop further processing
       }
       
-      // Parse keyframes into Vector3 objects
-      const newKeyframes = [];
-      for (let i = 0; i < keyframesArray.length; i++) {
-        const kf = keyframesArray[i];
+      // Parse commands and convert to Vector3 instances
+      const newCommands: CameraCommand[] = receivedCommands.map((cmd, index) => {
         try {
-          const keyframe = {
-            position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
-            target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
-            duration: kf.duration
+          if (!cmd.position || !cmd.target || typeof cmd.duration !== 'number' || cmd.duration <= 0) {
+              throw new Error(`Command ${index} missing required fields or has invalid duration.`);
+          }
+          const command: CameraCommand = {
+            position: new Vector3(cmd.position.x, cmd.position.y, cmd.position.z),
+            target: new Vector3(cmd.target.x, cmd.target.y, cmd.target.z),
+            duration: cmd.duration,
+            // Easing function will likely not be transmitted via JSON, 
+            // It might need to be re-applied here based on index or config?
+            // easing: undefined // For now
           };
-          newKeyframes.push(keyframe);
+          return command;
         } catch (err) {
-          console.error(`Error parsing keyframe ${i}:`, kf, err);
+          console.error(`Error parsing command ${index}:`, cmd, err);
+          // Handle unknown error type
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error during command parsing';
+          throw new Error(`Error processing command ${index}: ${errorMsg}`); // Re-throw to stop processing
         }
-      }
+      });
 
-      setKeyframes(newKeyframes);
-      const totalDuration = newKeyframes.reduce((sum, kf) => sum + kf.duration, 0);
+      // Set the new commands state
+      setCommands(newCommands);
+      // Comment out old keyframe state update
+      // setKeyframes(newKeyframes);
+
+      // Calculate total duration from commands
+      const totalDuration = newCommands.reduce((sum, cmd) => sum + cmd.duration, 0);
       setDuration(totalDuration);
-      setProgress(0);
+      setProgress(0); // Reset progress
       setGeneratePathState('ready');
-      onAnimationStart();
-      onPathGenerated?.();
       
+      // Decide whether to auto-start or wait for user
+      // onAnimationStart(); // Maybe don't auto-start?
+      
+      onPathGenerated?.();
       toast.success('Camera path generated successfully');
+      // Switch to playback tab on success
+      setActiveTab('playback'); 
+
     } catch (error) {
       console.error('Error generating camera path:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate camera path');
       setGeneratePathState('initial');
+      setCommands([]); // Clear commands on error
     } finally {
       setIsGenerating(false);
     }
@@ -365,8 +404,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   const handleAnimationStart = () => {
     console.log('Animation starting...', {
-      keyframesCount: keyframes.length,
-      totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
+      keyframesCount: commands.length,
+      totalDuration: commands.reduce((sum, kf) => sum + kf.duration, 0),
       hasCamera: !!cameraRef.current,
       hasControls: !!controlsRef.current
     });
@@ -374,152 +413,186 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   };
 
   const handleProgressChange = (values: number[]) => {
-    const value = values[0];
-    console.log('Progress update:', {
-      value,
-      isPlaying,
-      keyframesPresent: keyframes.length > 0
-    });
+    const value = values[0]; // Overall progress percentage (0-100)
+    console.log('Progress update from slider:', { value, isPlaying });
     
-    if (!isPlaying && keyframes.length > 0) {
-      setProgress(value);
+    // Update only if not playing and commands exist
+    if (!isPlaying && commands.length > 0) {
+      setProgress(value); // Update the visual state of the slider
+      progressRef.current = value / 100; // Update progress ref
+
       const normalizedProgress = value / 100;
-      const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      let currentTime = normalizedProgress * totalDuration;
+      const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
+      if (totalDuration <= 0) return;
+
+      let targetTime = normalizedProgress * totalDuration;
       
-      let currentKeyframeIndex = 0;
+      // Find the command segment corresponding to the target time
+      let currentCommandIndex = 0;
       let accumulatedDuration = 0;
-      
-      while (currentKeyframeIndex < keyframes.length - 1 && 
-             accumulatedDuration + keyframes[currentKeyframeIndex].duration < currentTime) {
-        accumulatedDuration += keyframes[currentKeyframeIndex].duration;
-        currentKeyframeIndex++;
+      while (currentCommandIndex < commands.length - 1 && 
+             accumulatedDuration + commands[currentCommandIndex].duration < targetTime) {
+        accumulatedDuration += commands[currentCommandIndex].duration;
+        currentCommandIndex++;
       }
       
-      const k1 = keyframes[currentKeyframeIndex];
-      const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
-      
-      const localProgress = (currentTime - accumulatedDuration) / k1.duration;
-      
-      const position = new Vector3().lerpVectors(
-        k1.position,
-        k2.position,
-        Math.min(localProgress, 1)
-      );
-      const target = new Vector3().lerpVectors(
-        k1.target,
-        k2.target,
-        Math.min(localProgress, 1)
-      );
+      const command = commands[currentCommandIndex];
+      if (!command) return; // Should not happen
 
-      console.log('Camera update:', {
-        position: position.toArray(),
-        target: target.toArray(),
-        currentKeyframeIndex,
-        localProgress,
-        currentTime,
-        totalDuration
-      });
-      
+      // Determine the start state for interpolation
+      const startPos = (currentCommandIndex === 0) ? 
+          (commands[0].position) : 
+          commands[currentCommandIndex - 1].position;
+      const startTarget = (currentCommandIndex === 0) ? 
+          (commands[0].target) : 
+          commands[currentCommandIndex - 1].target; 
+
+      // Calculate progress within the current command segment
+      const timeElapsedInCommand = targetTime - accumulatedDuration;
+      let t = command.duration > 0 ? Math.min(1.0, Math.max(0.0, timeElapsedInCommand / command.duration)) : 1.0; 
+
+      // Apply easing by looking up the function using the name
+      const easingName = command.easing || 'linear';
+      const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
+      const easedT = easingFunction(t);
+
+      // Interpolate position and target using easedT
+      const position = new Vector3().lerpVectors(startPos, command.position, easedT);
+      const target = new Vector3().lerpVectors(startTarget, command.target, easedT);
+
+      // Update camera and controls directly
       if (cameraRef.current && controlsRef.current) {
         cameraRef.current.position.copy(position);
         controlsRef.current.target.copy(target);
+        controlsRef.current.update(); // Ensure controls target is updated
       }
     }
   };
 
   // Add animation frame effect
   useEffect(() => {
-    if (isPlaying && keyframes.length > 0) {
+    // Reset progress ref when not playing or commands change
+    if (!isPlaying || commands.length === 0) {
+        progressRef.current = 0;
+    }
+
+    if (isPlaying && commands.length > 0) {
+      const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
+      if (totalDuration <= 0) return; // Avoid division by zero
+
       console.log('Starting animation with state:', {
-        keyframeCount: keyframes.length,
-        totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
-        currentProgress: progress
+        commandCount: commands.length,
+        totalDuration: totalDuration,
+        currentProgress: progress // Uses the state progress as starting point
       });
 
-      let animationStartTime = performance.now();
-      let lastProgressUpdate = 0;
+      let startTime = performance.now() - (progress / 100) * totalDuration * 1000; // Adjust start time based on current progress
+      let currentCommandIndex = 0;
+      let accumulatedDuration = 0;
+      let timeElapsedInCommand = 0;
+
+      // Find the starting command index and time offset based on initial progress
+      let initialTargetTime = (progress / 100) * totalDuration;
+      while (currentCommandIndex < commands.length - 1 && 
+             accumulatedDuration + commands[currentCommandIndex].duration < initialTargetTime) {
+        accumulatedDuration += commands[currentCommandIndex].duration;
+        currentCommandIndex++;
+      }
+      timeElapsedInCommand = initialTargetTime - accumulatedDuration;
       
-      const animate = () => {
+      // Get the very initial state (either camera's current or command 0 if progress is 0)
+      let prevPosition = progress === 0 ? commands[0].position : cameraRef.current?.position.clone() ?? commands[0].position;
+      let prevTarget = progress === 0 ? commands[0].target : controlsRef.current?.target.clone() ?? commands[0].target;
+      // If starting mid-animation, the first lerp should be from current cam state to target of the command we are starting in.
+      // For simplicity, let's ensure progress reset makes it start from command 0.
+      // It might be better to have handlePlayPause set progressRef and then calculate from there.
+      if (progress !== progressRef.current * 100) {
+        // This detects slider changes - recalculate initial state?
+        // Let handleProgressChange deal with setting the initial camera state for scrubbing.
+        // Here, assume playback starts from current camera or command 0.
+      }
+      
+
+      const animate = (time: number) => {
+        if (!isPlaying) return; // Stop if isPlaying becomes false
+
         const currentTime = performance.now();
-        const elapsedTime = (currentTime - animationStartTime) / 1000; // Convert to seconds
-        const currentProgress = Math.min((elapsedTime / duration) * 100, 100);
+        const elapsedTimeSinceStart = (currentTime - startTime) / 1000; // Overall elapsed time in seconds
+        const currentOverallProgress = Math.min(100, (elapsedTimeSinceStart / totalDuration) * 100);
         
-        // Only update progress state when it changes by at least 1%
-        if (Math.floor(currentProgress) > Math.floor(lastProgressUpdate)) {
-          lastProgressUpdate = currentProgress;
-          setProgress(currentProgress);
-          onAnimationUpdate(currentProgress);
-        }
-
-        // Calculate camera position based on current progress
-        const normalizedProgress = currentProgress / 100;
-        const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-        let animationTime = normalizedProgress * totalDuration;
-        
-        let currentKeyframeIndex = 0;
-        let accumulatedDuration = 0;
-        
-        // Find current keyframe pair
-        while (currentKeyframeIndex < keyframes.length - 1 && 
-               accumulatedDuration + keyframes[currentKeyframeIndex].duration < animationTime) {
-          accumulatedDuration += keyframes[currentKeyframeIndex].duration;
-          currentKeyframeIndex++;
+        // Find the current command segment based on overall elapsed time
+        currentCommandIndex = 0;
+        accumulatedDuration = 0;
+        while (currentCommandIndex < commands.length - 1 && 
+               accumulatedDuration + commands[currentCommandIndex].duration < elapsedTimeSinceStart) {
+          accumulatedDuration += commands[currentCommandIndex].duration;
+          currentCommandIndex++;
         }
         
-        const k1 = keyframes[currentKeyframeIndex];
-        const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
-        
-        const localProgress = (animationTime - accumulatedDuration) / k1.duration;
-
-        // Log detailed interpolation state every 500ms
-        if (Math.floor(currentTime / 500) > Math.floor(animationStartTime / 500)) {
-          console.log('Animation interpolation:', {
-            progress: currentProgress,
-            keyframe: {
-              current: currentKeyframeIndex,
-              localProgress,
-              time: animationTime
-            }
-          });
+        const command = commands[currentCommandIndex];
+        if (!command) { // Should not happen if commands.length > 0
+            onAnimationStop();
+            return;
         }
-        
-        const position = new Vector3().lerpVectors(
-          k1.position,
-          k2.position,
-          Math.min(localProgress, 1)
-        );
-        const target = new Vector3().lerpVectors(
-          k1.target,
-          k2.target,
-          Math.min(localProgress, 1)
-        );
 
-        // Update camera position
+        // Determine the start position/target for this interpolation segment
+        // It's the end state of the *previous* command (or initial state for index 0)
+        const startPos = (currentCommandIndex === 0) ? 
+            (commands[0].position) : // Assuming initial jump to command 0 pos is acceptable
+            commands[currentCommandIndex - 1].position;
+        const startTarget = (currentCommandIndex === 0) ? 
+            (commands[0].target) : 
+            commands[currentCommandIndex - 1].target; 
+
+        // Calculate progress within the current command segment
+        timeElapsedInCommand = elapsedTimeSinceStart - accumulatedDuration;
+        let t = command.duration > 0 ? Math.min(1.0, Math.max(0.0, timeElapsedInCommand / command.duration)) : 1.0; 
+
+        // Apply easing by looking up the function using the name
+        const easingName = command.easing || 'linear';
+        const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
+        const easedT = easingFunction(t);
+        
+        // Interpolate between the start state and the current command's target state using easedT
+        const currentPosition = new Vector3().lerpVectors(startPos, command.position, easedT);
+        const currentTarget = new Vector3().lerpVectors(startTarget, command.target, easedT);
+
+        // Update camera
         if (cameraRef.current && controlsRef.current) {
-          cameraRef.current.position.copy(position);
-          controlsRef.current.target.copy(target);
-          controlsRef.current.update();
+          cameraRef.current.position.copy(currentPosition);
+          controlsRef.current.target.copy(currentTarget);
+          controlsRef.current.update(); // Important for OrbitControls
         }
+
+        // Update progress state (throttled slightly maybe?)
+        // Using progressRef might be better for smoother animation updates
+        progressRef.current = elapsedTimeSinceStart / totalDuration;
+        setProgress(currentOverallProgress);
+        onAnimationUpdate(currentOverallProgress);
         
-        if (currentProgress < 100) {
+        // Continue or stop
+        if (currentOverallProgress < 100) {
           animationFrameRef.current = requestAnimationFrame(animate);
         } else {
-          console.log('Animation complete:', {
-            finalPosition: position.toArray(),
-            finalTarget: target.toArray()
-          });
+          // Ensure final state is set exactly
+          if (cameraRef.current && controlsRef.current) {
+             const finalCommand = commands[commands.length-1];
+             cameraRef.current.position.copy(finalCommand.position);
+             controlsRef.current.target.copy(finalCommand.target);
+             controlsRef.current.update();
+          }
+          console.log('Animation complete');
           animationFrameRef.current = undefined;
+          setProgress(100);
           onAnimationStop();
         }
       };
       
-      // Cancel any existing animation frame before starting new one
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      // Start the animation loop
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = requestAnimationFrame(animate);
       
+      // Cleanup function
       return () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
@@ -527,7 +600,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }
       };
     }
-  }, [isPlaying, keyframes, duration]); // Removed progress from dependencies
+  }, [isPlaying, commands, duration, cameraRef, controlsRef, onAnimationUpdate, onAnimationStop]); // Dependencies updated
 
   const handleDownload = async () => {
     if (!canvasRef?.current) {
@@ -713,7 +786,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
     // Reset all states
     setProgress(0);
-    setKeyframes([]);
+    setCommands([]);
     setInstruction('');
     setGeneratePathState('initial');
     setTakeCount(0);
@@ -761,217 +834,102 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   // Add handler for creating a new shot
   const handleCreateNewShot = () => {
-    // Reset only the states needed for a new shot
+    // Reset relevant state
     setInstruction('');
+    setCommands([]);
+    setProgress(0);
     setGeneratePathState('initial');
-    setIsConfirmingClear(false);
-    
-    // Unlock the scene if it's locked
-    if (isLocked) {
-      toggleLock();
-    }
-
-    toast.success('Ready for a new shot');
+    // Unlock? Depends on desired flow
+    // if (isLocked) toggleLock(); 
+    setActiveTab('shotCaller'); // Switch back to shot caller tab
+    toast.info('Ready for new shot');
   };
 
   return (
     <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
-      <Card className="viewer-card border-[#444444]">
-        <CardHeader className="viewer-panel-header">
-          <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-6 space-y-4">
-          <LockButton isLocked={isLocked} onToggle={handleLockToggle} />
+      <TabsPrimitive.Root 
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as TabValue)}
+          className="flex flex-col w-[288px] gap-4"
+      >
+        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-lg bg-[#121212] text-muted-foreground w-full">
+          <TabsPrimitive.Trigger 
+            value="shotCaller" 
+            className={cn(
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-50",
+                activeTab === 'shotCaller' ? "bg-[#2a2a2a] text-foreground shadow-sm rounded-lg" : "hover:text-foreground/80"
+            )}
+          >
+            SHOT CALLER
+          </TabsPrimitive.Trigger>
+          <TabsPrimitive.Trigger 
+            value="playback" 
+            className={cn(
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-50",
+                activeTab === 'playback' ? "bg-[#2a2a2a] text-foreground shadow-sm rounded-lg" : "hover:text-foreground/80"
+            )}
+            disabled={commands.length === 0}
+          >
+            PLAYBACK
+          </TabsPrimitive.Trigger>
+        </TabsPrimitive.List>
 
-          <div className="camera-path-fields space-y-4">
-            <div className="space-y-4">
-              <Textarea
-                placeholder="Describe the camera movement you want..."
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                disabled={!isLocked}
-                className="min-h-[100px] resize-none"
-              />
+        <Card className="viewer-card bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col flex-1">
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {activeTab === 'shotCaller' && (
+                  <ShotCallerPanel 
+                    isLocked={isLocked}
+                    isGenerating={isGenerating}
+                    generatePathState={generatePathState}
+                    instruction={instruction}
+                    inputDuration={inputDuration}
+                    generatingMessage={generatingMessages[messageIndex]}
+                    messageIndex={messageIndex}
+                    onLockToggle={handleLockToggle}
+                    onInstructionChange={setInstruction}
+                    onDurationChange={handleDurationChange}
+                    onDurationBlur={handleDurationBlur}
+                    onGeneratePath={handleGeneratePath}
+                  />
+                )}
+                {activeTab === 'playback' && (
+                  <PlaybackPanel 
+                    commands={commands}
+                    isPlaying={isPlaying}
+                    isRecording={isRecording}
+                    playbackSpeed={playbackSpeed}
+                    duration={duration}
+                    takeCount={takeCount}
+                    modelName={modelName}
+                    isConfirmingClear={isConfirmingClear}
+                    isGenerating={isGenerating}
+                    onPlayPause={handlePlayPause}
+                    onDownload={handleDownload}
+                    onSpeedChange={handleSpeedChange}
+                    onProgressChange={handleProgressChange}
+                    onCreateNewShot={handleCreateNewShot}
+                    onClearScene={handleClearScene}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </CardContent>
+        </Card>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
-                  <div className="w-20">
-                    <Input
-                      id="duration-input"
-                      type="number"
-                      value={inputDuration}
-                      onChange={handleDurationChange}
-                      onBlur={handleDurationBlur}
-                      min={1}
-                      max={20}
-                      step={0.5}
-                      className="text-right"
-                      disabled={!isLocked || isGenerating}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
-              </div>
-
-              <div className="mt-8">
-                <motion.button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleGeneratePath();
-                  }}
-                  disabled={!isLocked || generatePathState === 'ready'}
-                  className={cn(
-                    buttonVariants({ variant: "primary", size: "lg" }),
-                    "w-full",
-                    isGenerating && "opacity-100 cursor-not-allowed",
-                    generatePathState === 'ready' && 
-                    "bg-[#1a1a1a] border border-[#444444] text-white hover:bg-[#1a1a1a] cursor-not-allowed"
-                  )}
-                  whileHover={isGenerating || generatePathState === 'ready' ? undefined : { scale: 1.02 }}
-                  whileTap={isGenerating || generatePathState === 'ready' ? undefined : { scale: 0.98 }}
-                >
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={generatePathState === 'generating' ? messageIndex : generatePathState}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3 }}
-                      className="flex items-center justify-center gap-2 w-full"
-                    >
-                      {generatePathState === 'generating' 
-                        ? <Loader2 className="h-6 w-6 animate-spin" />
-                        : generatePathStates[generatePathState].icon
-                      }
-                      <span className="font-medium">
-                        {generatePathState === 'generating' 
-                          ? generatingMessages[messageIndex]
-                          : generatePathStates[generatePathState].text
-                        }
-                      </span>
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.button>
-              </div>
-
-              {/* Status Message Pill */}
-              <div className="mt-4 bg-[#2a2a2a] rounded-full px-4 py-2 text-sm text-center">
-                {keyframes.length > 0 
-                  ? `Take ${takeCount}: ${modelName || 'Untitled'}`
-                  : "No shot available"
-                }
-              </div>
-
-              {/* Playback Controls */}
-              <div className="mt-6 space-y-6">
-                <div className="flex justify-between gap-2">
-                  <Button
-                    onClick={handlePlayPause}
-                    variant="secondary"
-                    size="icon"
-                    className={cn(
-                      "flex-1 border border-[#444444] hover:bg-secondary/20",
-                      keyframes.length > 0 && "bg-[#bef264] text-black hover:bg-[#bef264]/90"
-                    )}
-                    disabled={!keyframes.length || isGenerating}
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    onClick={handleDownload}
-                    variant="secondary"
-                    size="default"
-                    disabled={!keyframes.length || isPlaying || isRecording}
-                    className="flex-1 border border-[#444444] hover:bg-secondary/20"
-                  >
-                    {isRecording ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Recording...
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4 mr-2" />
-                        Download
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="viewer-label">Playback Speed</Label>
-                    <span className="text-sm text-muted-foreground">
-                      {(duration / playbackSpeed).toFixed(1)}s
-                    </span>
-                  </div>
-                  <div className="playback-speed-slider">
-                    <div className="mark-container">
-                      {SPEED_OPTIONS.map((option) => (
-                        <div
-                          key={option.value}
-                          className={`mark ${option.value === 1 ? 'normal' : ''}`}
-                          style={{
-                            left: `${((option.value - 0.25) / (2 - 0.25)) * 100}%`
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <Slider
-                      value={[playbackSpeed]}
-                      onValueChange={handleSpeedChange}
-                      min={0.25}
-                      max={2}
-                      step={0.25}
-                      className="viewer-slider"
-                      disabled={isPlaying || !keyframes.length || isRecording}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-7">
-                      <span>0.25x</span>
-                      <span>2.0x</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clear Scene Button */}
-                <div className="flex justify-between mt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCreateNewShot}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Create new shot
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearScene}
-                    className={cn(
-                      "text-muted-foreground hover:text-destructive",
-                      isConfirmingClear && "text-destructive"
-                    )}
-                  >
-                    {isConfirmingClear ? (
-                      <>
-                        <X className="h-4 w-4 mr-2" />
-                        Confirm Clear
-                      </>
-                    ) : (
-                      "Clear Scene"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      </TabsPrimitive.Root>
     </ErrorBoundary>
   );
 }; 

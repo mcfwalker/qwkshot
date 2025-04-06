@@ -68,11 +68,20 @@ export async function POST(request: Request) {
     const interpreter = getSceneInterpreter();
     const promptCompiler = promptCompilerFactory.create({ maxTokens: 2048, temperature: 0.7 });
     await promptCompiler.initialize({ maxTokens: 2048, temperature: 0.7 });
-    const metadataManager = metadataManagerFactory.create({ 
-        database: { type: 'supabase', url: process.env.NEXT_PUBLIC_SUPABASE_URL || '', key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
-        caching: { enabled: true, ttl: 300000 }, validation: { strict: false, maxFeaturePoints: 100 }
-     });
+    const metadataManager = metadataManagerFactory.create(
+      { // Config object
+        database: { 
+            type: 'supabase', 
+            url: process.env.NEXT_PUBLIC_SUPABASE_URL || '', 
+            key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' 
+        },
+        caching: { enabled: true, ttl: 300000 }, 
+        validation: { strict: false, maxFeaturePoints: 100 }
+      }, 
+      'serviceRole' // Explicitly request the service role client
+    );
     await metadataManager.initialize();
+    logger.debug('Got and initialized Metadata Manager instance (Service Role)');
     
     // Use default config for Env Analyzer
     const environmentalAnalyzer = environmentalAnalyzerFactory.create(defaultEnvAnalyzerConfig);
