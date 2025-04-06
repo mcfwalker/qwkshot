@@ -15,6 +15,8 @@ import { getSceneInterpreter } from '@/features/p2p/scene-interpreter/interprete
 import { SceneInterpreterConfig } from '@/types/p2p/scene-interpreter';
 import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler/PromptCompilerFactory';
 import { PromptCompilerConfig } from '@/types/p2p/prompt-compiler';
+import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
+import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
 
 // Mark as dynamic route with increased timeout
 export const dynamic = 'force-dynamic';
@@ -30,11 +32,11 @@ const logger: Logger = {
   performance: (...args) => console.debug('[Camera Path Performance]', ...args)
 };
 
-// Create MetadataManagerFactory
+// Instantiate Factories
 const metadataManagerFactory = new MetadataManagerFactory(logger);
-
-// Create PromptCompilerFactory
 const promptCompilerFactory = new PromptCompilerFactory(logger);
+const sceneAnalyzerFactory = new SceneAnalyzerFactory(logger);
+const environmentalAnalyzerFactory = new EnvironmentalAnalyzerFactory(logger);
 
 export async function POST(request: Request) {
   try {
@@ -61,13 +63,125 @@ export async function POST(request: Request) {
     await promptCompiler.initialize({ /* Use same config? */ maxTokens: 2048, temperature: 0.7 }); // Placeholder init
     logger.debug('Got and initialized Prompt Compiler instance');
 
-    const body = await request.json();
-    logger.debug('Request body:', body);
+    // Get MetadataManager instance
+    const metadataManager = metadataManagerFactory.create({ 
+        database: { 
+            type: 'supabase', 
+            url: process.env.NEXT_PUBLIC_SUPABASE_URL || '', 
+            key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' 
+        },
+        // Provide default caching/validation config
+        caching: { enabled: true, ttl: 300000 }, // Default 5 mins
+        validation: { strict: false, maxFeaturePoints: 100 } // Default validation
+     });
+    await metadataManager.initialize();
+    logger.debug('Got and initialized Metadata Manager instance');
 
-    // TODO: The request body structure needs review. 
-    // It provides sceneGeometry (analysis result) but compilePrompt expects SceneAnalysis component/result type.
-    // It lacks envAnalysis and modelMetadata.
+    // TODO: Instantiate/Initialize SceneAnalyzer & EnvironmentalAnalyzer if needed directly
+    // const sceneAnalyzer = sceneAnalyzerFactory.create(...);
+    // await sceneAnalyzer.initialize(...);
+    // const environmentalAnalyzer = environmentalAnalyzerFactory.create(...);
+    // await environmentalAnalyzer.initialize(...);
+
+    const body = await request.json();
     const { instruction, sceneGeometry, duration, modelId } = body;
+
+    // Declare context variables in outer scope
+    let modelMetadata: any; 
+    let environmentalMetadata: any; 
+    let sceneAnalysis: any; 
+
+    // --- Use Mock Context Data (Temporary for Testing) ---
+    logger.warn('!!! Using Mock Context Data for Testing !!!');
+    try {
+      // Define Mock Data based on user provided JSON
+      const mockEnvironmentalMetadata_RAW = {
+        "scene": { "ground": "#808080", "atmosphere": "#87CEEB", "background": "#000000" },
+        "camera": { "fov": 40, "target": { "x": 0, "y": 0.67, "z": 0 }, "position": { "x": 4.107510040102229, "y": 23.36899690648503, "z": -18.255019326079434 } },
+        "lighting": { "color": "#ffffff", "position": { "x": 0, "y": 10, "z": 0 }, "intensity": 1 },
+        "constraints": { "maxSpeed": 2, "maxHeight": 1.6375020265579223, "minHeight": -0.3002529621124268, "maxDistance": 9.688774943351746, "minDistance": 2.9066324830055237, "maxAngleChange": 45, "minFramingMargin": 0.1 }
+      };
+
+      const mockModelMetadata_RAW = {
+        "size": 1388296, "format": "glb", 
+        "spatial": { "bounds": { "max": { "x": 0.459, "y": 0.937, "z": 0.458 }, "min": { "x": -0.461, "y": -1.000, "z": -0.460 }, "center": { "x": -0.001, "y": -0.031, "z": -0.001 }, "dimensions": { "x": 0.920, "y": 1.937, "z": 0.919 } }, "symmetry": { "hasSymmetry": true, "symmetryPlanes": [ /* ... */ ] }, "complexity": "high" }, 
+        "version": 1, 
+        "geometry": { "center": { "x": -0.001, "y": -0.031, "z": -0.001 }, "faceCount": 19136, "dimensions": { "x": 0.920, "y": 1.937, "z": 0.919 }, "boundingBox": { "max": { "x": 0.459, "y": 0.937, "z": 0.458 }, "min": { "x": -0.461, "y": -1.000, "z": -0.460 } }, "vertexCount": 10494 }, 
+        "createdAt": "2025-04-05T20:10:57.160Z", "updatedAt": "2025-04-05T20:10:57.160Z", 
+        "environment": {}, // Keep nested structure consistent with type if needed
+        "orientation": { /* ... */ }, "preferences": { /* ... */ }, "performance_metrics": { /* ... */ }
+        // Include other necessary fields expected by ModelMetadata type
+      };
+
+      // Assign mock ModelMetadata first to use its values
+      modelMetadata = { ...mockModelMetadata_RAW, id: modelId, userId: 'mock-user', file: 'mock.glb' }; 
+
+      // Create mock EnvironmentalAnalysis (including object.dimensions)
+      environmentalMetadata = {
+        ...mockEnvironmentalMetadata_RAW, // Spread the base mock
+        // Add the object structure expected by PromptCompiler
+        object: {
+          dimensions: modelMetadata.geometry.dimensions, // Use dimensions from modelMetadata
+          floorOffset: 0, // Placeholder
+          // Add other properties if needed by generateSystemMessage
+        },
+        environment: { /* Placeholder */ }, // Add if needed
+        distances: { fromObjectToBoundary: { front: 10, back: 10 } }, // Placeholder
+        cameraConstraints: mockEnvironmentalMetadata_RAW.constraints // Use existing constraints
+      };
+      
+      // Create mock SceneAnalysis using the assigned modelMetadata
+      sceneAnalysis = {
+        glb: {
+          fileInfo: { name: 'mock.glb', size: modelMetadata.size, format: 'glb', version: '1' },
+          geometry: modelMetadata.geometry, 
+          materials: [], performance: { /* ... */ }
+        },
+        spatial: { 
+          bounds: modelMetadata.spatial?.bounds,
+          symmetry: modelMetadata.spatial?.symmetry,
+          complexity: modelMetadata.spatial?.complexity ?? 'moderate', 
+          referencePoints: { /* ... */ }, performance: { /* ... */ }
+        },
+        featureAnalysis: { features: [], landmarks: [], constraints: [], performance: {} },
+        safetyConstraints: { 
+            minHeight: environmentalMetadata.cameraConstraints.minHeight, // Use constraints from the final env meta
+            maxHeight: environmentalMetadata.cameraConstraints.maxHeight,
+            minDistance: environmentalMetadata.cameraConstraints.minDistance,
+            maxDistance: environmentalMetadata.cameraConstraints.maxDistance,
+            restrictedZones: [] 
+        },
+        orientation: modelMetadata.orientation,
+        features: [], 
+        performance: { /* Placeholder performance */ }
+      };
+
+      logger.debug('Using mock context data');
+
+    } catch (error) {
+       logger.error('Error preparing mock data (should not happen):', error);
+       throw error; // Re-throw if mock data setup fails
+    }
+
+    /* --- Commented out Actual Data Fetching ---
+    logger.info(`Fetching context data for modelId: ${modelId}`);
+    try {
+        modelMetadata = await metadataManager.getModelMetadata(modelId);
+        environmentalMetadata = await metadataManager.getEnvironmentalMetadata(modelId);
+        sceneAnalysis = modelMetadata?.geometry; 
+        if (!sceneAnalysis) {
+            throw new Error('Failed to retrieve scene analysis data from model metadata.');
+        }
+        logger.debug('Successfully fetched context data');
+    } catch (error) {
+        logger.error('Error fetching context data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error fetching context';
+        return NextResponse.json(
+            { error: `Failed to fetch context data: ${errorMessage}` },
+            { status: 500 }
+        );
+    }
+    */
 
     if (!instruction || !sceneGeometry || !duration || !modelId) {
       const missing = {
@@ -147,20 +261,15 @@ export async function POST(request: Request) {
     });
 
     // --- Compile Prompt using the PromptCompiler --- 
-    logger.info('Compiling prompt via PromptCompiler...');
+    logger.info('Compiling prompt via PromptCompiler with mock context...');
     let compiledPrompt: CompiledPrompt;
     try {
-      // TODO: Fetch actual SceneAnalysis, EnvAnalysis, ModelMetadata using modelId
-      // Using placeholders/incorrect types for now to establish flow
-      const placeholderSceneAnalysis: any = sceneGeometry; // Incorrect type, using existing data
-      const placeholderEnvAnalysis: any = null; // Placeholder
-      const placeholderModelMetadata: any = null; // Placeholder
-
+      // Now uses variables from the outer scope
       compiledPrompt = await promptCompiler.compilePrompt(
-        instruction, // userInput
-        placeholderSceneAnalysis, 
-        placeholderEnvAnalysis, 
-        placeholderModelMetadata, 
+        instruction, 
+        sceneAnalysis, 
+        environmentalMetadata, 
+        modelMetadata, 
         currentCameraState
       );
       logger.debug('Prompt compiled successfully:', compiledPrompt);
@@ -279,25 +388,6 @@ export async function POST(request: Request) {
           operations: compiledPrompt.metadata.performanceMetrics.operations
         }
       };
-
-      // Create and initialize MetadataManager
-      const metadataManager = metadataManagerFactory.create({
-        database: {
-          type: 'supabase',
-          url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-          key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-        },
-        caching: {
-          enabled: true,
-          ttl: 5 * 60 * 1000 // 5 minutes
-        },
-        validation: {
-          strict: false,
-          maxFeaturePoints: 100
-        }
-      });
-
-      await metadataManager.initialize();
 
       // Store the environmental metadata
       await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
