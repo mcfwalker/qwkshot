@@ -110,41 +110,105 @@ export class PromptCompilerImpl implements PromptCompiler {
     modelMetadata: ModelMetadata,
     currentCameraState: LLMFriendlyCameraState
   ): string {
-    const { environment, object, distances, cameraConstraints } = envAnalysis;
-    const { lighting, scene } = modelMetadata.environment || {};
+    this.logger.debug('[generateSystemMessage] Inputs:', { sceneAnalysis, envAnalysis, modelMetadata, currentCameraState });
+    
+    // Safely destructure envAnalysis, providing defaults for nested objects
+    const { 
+        environment = {}, 
+        object = { dimensions: { width: 0, height: 0, depth: 0 }, floorOffset: 0 }, 
+        distances = { fromObjectToBoundary: { front: 0, back: 0 } }, 
+        cameraConstraints = { minHeight: 0, maxHeight: 0, minDistance: 0, maxDistance: 0 } 
+    } = envAnalysis || {}; // Handle null envAnalysis
+
+    // Safely destructure modelMetadata.environment
+    const { 
+        lighting = { intensity: 1, color: '#ffffff' }, 
+        scene = { background: '#000000', ground: '#808080', atmosphere: '#87CEEB' } 
+    } = modelMetadata?.environment || {}; // Handle null/undefined environment
+
+    // Add detailed logging before accessing potentially problematic properties
+    this.logger.debug('[generateSystemMessage] Accessing object.dimensions', object?.dimensions);
+    const dimString = object?.dimensions ? `${object.dimensions.width?.toFixed(2)}x${object.dimensions.height?.toFixed(2)}x${object.dimensions.depth?.toFixed(2)} units` : 'unknown dimensions';
+    
+    this.logger.debug('[generateSystemMessage] Accessing object.floorOffset', object?.floorOffset);
+    const floorOffsetString = typeof object?.floorOffset === 'number' ? object.floorOffset.toFixed(2) : 'unknown';
+    
+    this.logger.debug('[generateSystemMessage] Accessing sceneAnalysis.spatial.complexity', sceneAnalysis?.spatial?.complexity);
+    const complexityString = sceneAnalysis?.spatial?.complexity ?? 'unknown';
+
+    this.logger.debug('[generateSystemMessage] Accessing distances.fromObjectToBoundary', distances?.fromObjectToBoundary);
+    const distFrontString = typeof distances?.fromObjectToBoundary?.front === 'number' ? distances.fromObjectToBoundary.front.toFixed(2) : 'unknown';
+    const distBackString = typeof distances?.fromObjectToBoundary?.back === 'number' ? distances.fromObjectToBoundary.back.toFixed(2) : 'unknown';
+
+    this.logger.debug('[generateSystemMessage] Accessing cameraConstraints', cameraConstraints);
+    const heightMinString = typeof cameraConstraints?.minHeight === 'number' ? cameraConstraints.minHeight.toFixed(2) : 'unknown';
+    const heightMaxString = typeof cameraConstraints?.maxHeight === 'number' ? cameraConstraints.maxHeight.toFixed(2) : 'unknown';
+    const distMinString = typeof cameraConstraints?.minDistance === 'number' ? cameraConstraints.minDistance.toFixed(2) : 'unknown';
+    const distMaxString = typeof cameraConstraints?.maxDistance === 'number' ? cameraConstraints.maxDistance.toFixed(2) : 'unknown';
+
+    this.logger.debug('[generateSystemMessage] Accessing currentCameraState', currentCameraState);
+    const camDistString = typeof currentCameraState?.distance === 'number' ? currentCameraState.distance.toFixed(2) : 'unknown';
+    const camHeightString = typeof currentCameraState?.height === 'number' ? currentCameraState.height.toFixed(2) : 'unknown';
+    const camAngleString = typeof currentCameraState?.angle === 'number' ? currentCameraState.angle.toFixed(2) : 'unknown';
+    const camTiltString = typeof currentCameraState?.tilt === 'number' ? currentCameraState.tilt.toFixed(2) : 'unknown';
+    const camFovString = typeof currentCameraState?.fov === 'number' ? currentCameraState.fov.toFixed(2) : 'unknown';
+
+    this.logger.debug('[generateSystemMessage] Accessing lighting', lighting);
+    const lightingString = lighting ? `- Lighting: ${lighting.intensity} intensity, ${lighting.color} color` : '';
+    
+    this.logger.debug('[generateSystemMessage] Accessing scene', scene);
+    const sceneString = scene ? `- Background: ${scene.background}\n- Ground: ${scene.ground}\n- Atmosphere: ${scene.atmosphere}` : '';
+
+    // Define the required JSON output format explicitly
+    const jsonOutputFormat = `\`\`\`json
+{
+  "keyframes": [
+    {
+      "position": {"x": number, "y": number, "z": number},
+      "target": {"x": number, "y": number, "z": number},
+      "duration": number // Duration > 0
+    }
+    // ... more keyframes ...
+  ]
+}
+\`\`\`
+`;
 
     return `You are a professional cinematographer tasked with creating a camera path for a 3D scene.
+IMPORTANT: You MUST respond ONLY with a valid JSON object matching the specified format. No other text, explanations, apologies, or introductory phrases.
+
+JSON OUTPUT FORMAT:
+${jsonOutputFormat}
 
 Scene Information:
-- Object dimensions: ${object.dimensions.width.toFixed(2)}x${object.dimensions.height.toFixed(2)}x${object.dimensions.depth.toFixed(2)} units
-- Floor offset: ${object.floorOffset.toFixed(2)} units
-- Scene complexity: ${sceneAnalysis.spatial.complexity}
-- Available space: ${distances.fromObjectToBoundary.front.toFixed(2)} units front, ${distances.fromObjectToBoundary.back.toFixed(2)} units back
+- Object dimensions: ${dimString}
+- Floor offset: ${floorOffsetString} units
+- Scene complexity: ${complexityString}
+- Available space: ${distFrontString} units front, ${distBackString} units back
 
 Camera Constraints:
-- Height range: ${cameraConstraints.minHeight.toFixed(2)} to ${cameraConstraints.maxHeight.toFixed(2)} units
-- Distance range: ${cameraConstraints.minDistance.toFixed(2)} to ${cameraConstraints.maxDistance.toFixed(2)} units
+- Height range: ${heightMinString} to ${heightMaxString} units
+- Distance range: ${distMinString} to ${distMaxString} units
 - Movement speed: Maintain smooth transitions between keyframes
 - Framing: Keep the object centered and well-framed
 
 Current Camera State:
-- Distance from object: ${currentCameraState.distance.toFixed(2)} units
-- Height above object: ${currentCameraState.height.toFixed(2)} units
-- Horizontal angle: ${currentCameraState.angle.toFixed(2)} degrees
-- Tilt angle: ${currentCameraState.tilt.toFixed(2)} degrees
-- Field of view: ${currentCameraState.fov.toFixed(2)} degrees
+- Distance from object: ${camDistString} units
+- Height above object: ${camHeightString} units
+- Horizontal angle: ${camAngleString} degrees
+- Tilt angle: ${camTiltString} degrees
+- Field of view: ${camFovString} degrees
 
 Environmental Conditions:
-${lighting ? `- Lighting: ${lighting.intensity} intensity, ${lighting.color} color` : ''}
-${scene ? `- Background: ${scene.background}
-- Ground: ${scene.ground}
-- Atmosphere: ${scene.atmosphere}` : ''}
+${lightingString}
+${sceneString}
 
-Please generate a camera path that:
-1. Maintains smooth transitions between keyframes
-2. Stays within the specified constraints
-3. Considers the environmental conditions
-4. Creates visually appealing shots that highlight the object's features`;
+Please generate a camera path JSON that:
+1. Adheres strictly to the JSON OUTPUT FORMAT.
+2. Creates smooth transitions between keyframes.
+3. Stays within the specified constraints.
+4. Considers the environmental conditions.
+5. Creates visually appealing shots that highlight the object's features.`;
   }
 
   async compilePrompt(

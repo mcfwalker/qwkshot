@@ -60,15 +60,25 @@
   - [x] Set up constraint system (Validation uses constraints from metadata) ✅
 - **Remaining TODOs:** Implement detailed smoothing algorithms, refine easing, implement `restrictedAngles` check, add command validation details.
 
-### Phase 2.5: Backend Integration & Validation (New) (0.5-1 week)
-- [ ] Integrate `SceneInterpreter` into `camera-path` API route
-  - [ ] Initialize `SceneInterpreter` in API route
-  - [ ] Pass `CameraPath` from `LLMEngine` to `SceneInterpreter.interpretPath`
-  - [ ] Call `SceneInterpreter.validateCommands`
-  - [ ] Return `CameraCommand[]` (or error) from API route
-- [ ] (Optional) Integrate `PromptCompiler` call into API route
-  - [ ] Replace manual `CompiledPrompt` construction
-- [ ] Perform basic end-to-end validation of the API route flow
+### Phase 2.5: Backend Integration & Validation (New) ✅ (Substantially Complete)
+- [x] Integrate `SceneInterpreter` into `camera-path` API route
+  - [x] Initialize `SceneInterpreter` in API route
+  - [x] Pass `CameraPath` from `LLMEngine` to `SceneInterpreter.interpretPath`
+  - [x] Call `SceneInterpreter.validateCommands`
+  - [x] Return `CameraCommand[]` (or error) from API route
+- [x] (Optional) Integrate `PromptCompiler` call into API route
+  - [x] Replace manual `CompiledPrompt` construction (structurally, uses mock context)
+- [x] Perform basic end-to-end validation of the API route flow (with mock context)
+- **Note:** Completed structurally, but relies on mock context data.
+
+### Phase 2.7: Real Context Integration (New) (1-2 weeks)
+- [ ] Remove mock data logic from `camera-path` API route
+- [ ] Implement real data fetching in API route:
+  - [ ] Instantiate `MetadataManager` (and potentially `SceneAnalyzer`, `EnvironmentalAnalyzer` if needed)
+  - [ ] Call manager/analyzers to fetch `ModelMetadata`, `EnvironmentalMetadata`, `SceneAnalysis` based on `modelId`
+  - [ ] Handle potential authentication/RLS issues for data fetching
+- [ ] Pass real context data to `PromptCompiler.compilePrompt`
+- [ ] Re-validate API route with real context data to ensure correct `CameraCommand[]` output.
 
 ### Phase 3: UI/UX Refactor (2-3 weeks)
 - [ ] Improve core interactions
@@ -103,10 +113,10 @@
   - [ ] Reduce resource usage
 
 ## Current Priorities (Updated)
-1.  Integrate `SceneInterpreter` into `camera-path` API route
-2.  Ensure API route returns `CameraCommand[]`
-3.  (Optional) Integrate `PromptCompiler` call in API route
-4.  Perform basic backend pipeline validation
+1.  Implement real context data fetching in `camera-path` API route (Phase 2.7).
+2.  Handle potential Auth/RLS issues for data fetching.
+3.  Validate API route output with real data.
+4.  Begin UI/UX Refactor (Phase 3) to consume `CameraCommand[]`.
 
 ## Implementation Strategy
 
@@ -170,12 +180,20 @@
 3. Regular merges to main
 4. Feature flag control for rollout
 
-### Phase 2.5 Implementation Plan (New)
+### Phase 2.5 Implementation Plan (Completed)
 1. Create `feature/backend-integration` branch (or similar) from `feature/thin-llm-engine`.
 2. Modify `src/app/api/camera-path/route.ts` to call `SceneInterpreter`.
 3. Test API route with sample requests.
 4. (Optional) Modify API route to call `PromptCompiler`.
 5. Merge back to main branch upon successful validation.
+
+### Phase 2.7 Implementation Plan (New)
+1. Create `feature/real-context-integration` branch (or similar) from `feature/thin-llm-engine`.
+2. Modify `src/app/api/camera-path/route.ts` to remove mocks and implement real data fetching.
+3. Investigate and resolve Auth/RLS issues if they block data fetching.
+4. Test API route with valid `modelId`s known to have data.
+5. Commit changes.
+6. Merge back to `feature/thin-llm-engine` upon successful validation.
 
 ## Architectural Decisions
 - Keep provider logic in API routes
@@ -184,12 +202,13 @@
 - Focus on clean interfaces
 
 ## Blockers and Issues
-- None currently identified, but careful coordination needed during refactor
+- Potential Auth/RLS issues when fetching data in API route context.
+- Ensuring correct data types/structures are passed between Manager/Analyzers and Compiler.
 
 ## Next Session Focus (Updated)
-1. Begin backend integration (Phase 2.5).
-2. Modify `camera-path` API route to use `SceneInterpreter`.
-3. Plan `SceneInterpreter` configuration within API route.
-4. Plan optional `PromptCompiler` integration.
+1. Begin Real Context Integration (Phase 2.7).
+2. Plan data fetching strategy using MetadataManager/Analyzers.
+3. Investigate potential Auth/RLS solutions for API route context.
+4. Implement data fetching calls in `camera-path/route.ts`.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 

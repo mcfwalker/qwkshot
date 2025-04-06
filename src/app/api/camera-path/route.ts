@@ -17,6 +17,7 @@ import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler/PromptComp
 import { PromptCompilerConfig } from '@/types/p2p/prompt-compiler';
 import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
 // Mark as dynamic route with increased timeout
 export const dynamic = 'force-dynamic';
@@ -310,26 +311,34 @@ export async function POST(request: Request) {
       }
 
       // Use the data from the engine response
-      const cameraPath = response.data; // cameraPath is type CameraPath
+      const cameraPath = response.data; 
       logger.info(`Path received from LLM Engine with ${cameraPath.keyframes.length} keyframes.`);
 
-      // --- Interpret the Path --- 
-      logger.info('Interpreting camera path...');
-      const commands = interpreter.interpretPath(cameraPath);
-      logger.info(`Interpretation resulted in ${commands.length} commands.`);
+      // --- Interpret and Validate Path --- 
+      let commands: CameraCommand[];
+      try {
+        // Interpret the path (Input validation happens inside interpretPath)
+        commands = interpreter.interpretPath(cameraPath);
+        logger.info(`Interpretation resulted in ${commands.length} commands.`);
 
-      // --- Validate Commands --- 
-      const commandValidation = interpreter.validateCommands(commands);
-      if (!commandValidation.isValid) {
-          // Handle invalid commands - log, potentially throw or return error
+        // Validate Generated Commands (Output validation)
+        const commandValidation = interpreter.validateCommands(commands);
+        if (!commandValidation.isValid) {
           logger.error('Generated commands failed validation:', commandValidation.errors);
-          // Decide on error response - returning 500 for now
+          throw new Error(`Generated commands failed validation: ${commandValidation.errors.join(', ')}`);
+        }
+        logger.info('Generated commands passed validation.');
+
+      } catch (interpretationError) {
+          logger.error('Error during path interpretation or command validation:', interpretationError);
+          const errorMessage = interpretationError instanceof Error ? interpretationError.message : 'Unknown interpretation error';
           return NextResponse.json(
-              { error: 'Generated commands failed validation', details: commandValidation.errors },
-              { status: 500 }
+              { error: `Path Interpretation Failed: ${errorMessage}` },
+              { status: 500 } // Or specific code like 422 Unprocessable Entity?
           );
       }
-      logger.info('Generated commands passed validation.');
+      
+      // --- If interpretation and validation succeeded, proceed --- 
 
       // --- Metadata Storage --- 
       // TODO: Review if EnvironmentalMetadata needs adjustment
@@ -394,7 +403,7 @@ export async function POST(request: Request) {
 
       // Return the FINAL validated CameraCommand array
       logger.info('Sending generated commands to client.');
-      return NextResponse.json(commands); // Return commands, not cameraPath
+      return NextResponse.json(commands); 
     } catch (error) {
       // This top-level catch block in the route might still be useful for
       // catching errors *outside* the engine call (e.g., engine initialization,

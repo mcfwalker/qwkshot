@@ -186,8 +186,9 @@ class CoreSceneInterpreter implements SceneInterpreter {
     const validation = this.validateInputPath(path);
     if (!validation.isValid) {
       logger.error('Path interpretation failed due to invalid input path:', validation.errors);
-      return [];
+      throw new Error(`Input path validation failed: ${validation.errors.join(', ')}`);
     }
+    logger.info('Input path passed validation.');
 
     const interpolationMethod = this.config.interpolationMethod;
     const smoothingFactor = this.config.smoothingFactor; // TODO: Use this factor
