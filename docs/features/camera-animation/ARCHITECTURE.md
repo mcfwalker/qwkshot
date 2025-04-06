@@ -3,7 +3,12 @@
 ## Overview
 The Path-to-Path (p2p) pipeline is a sophisticated system that translates natural language instructions into dynamic camera paths within a Three.js scene. This document outlines the overall architecture and component interactions.
 
+> 🔄 For current implementation details and status, see [P2P Pipeline Overview v2](./P2P_OVERVIEW_v2.md)
+
 ## Pipeline Components
+
+### Component Implementation Status
+Current implementation status and detailed flow diagrams are maintained in P2P_OVERVIEW_v2.md. This document focuses on architectural principles, requirements, and guidelines.
 
 ### 1. Scene Analyzer
 - **Purpose**: Analyze and understand 3D scene structure and spatial relationships
@@ -32,15 +37,18 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 ### 3. Metadata Manager
 - **Purpose**: Handle user-specified metadata and model information
 - **Key Features**:
-  - User metadata storage
+  - User metadata storage and retrieval
   - Model orientation handling
   - Feature point tracking
-  - Database integration
-- **Status**: ⚠️ Functional but needs refinement
+  - Database integration (Supabase)
+  - Scene analysis data persistence
+- **Status**: ✅ Core functionality complete
+- **Recent Improvements**:
+  - Enhanced data persistence reliability
+  - Optimized database integration
+  - Improved error handling
 - **Known Issues**:
-  - Complex data structure handling
-  - Database integration optimization
-  - Error handling enhancement
+  - Analysis data storage optimization needed
 - **Interface**: See [Metadata Manager Documentation](./metadata-manager/README.md)
 
 ### 4. Prompt Compiler
@@ -54,25 +62,37 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 - **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
 
 ### 5. LLM Engine
-- **Purpose**: Manage interaction with external LLM services to generate camera paths from compiled prompts.
+- **Purpose**: Manage interaction with external LLM services
 - **Key Features**:
-  - LLM provider selection (OpenAI, Gemini, etc.)
+  - LLM provider selection and management
   - API request formatting and transmission
-  - Handling of provider-specific requirements
-  - API response reception and initial validation/parsing
-  - Error handling for API communication
-  - (Future) Retry and fallback logic
-- **Status**: 🚧 In Development
+  - Response validation and parsing
+  - Error handling and recovery
+- **Status**: 🚧 Planned Refactor
+- **Current Implementation**:
+  - Provider communication handled directly in API routes
+  - Response processing in UI components
+- **Target Implementation**:
+  - Centralized provider management
+  - Standardized response handling
+  - Robust error management
 - **Interface**: See [LLM Engine Documentation](./llm-engine/README.md)
 
 ### 6. Scene Interpreter
 - **Purpose**: Convert LLM output into executable camera paths
 - **Key Features**:
-  - Motion segment parsing
-  - Advanced interpolation
-  - Safety validation
-  - Path preview
-- **Status**: 🚧 Planned
+  - Path processing and validation
+  - Animation logic and computation
+  - Safety constraint enforcement
+  - Viewer integration
+- **Status**: 🚧 Planned Implementation
+- **Current Implementation**:
+  - Animation logic in UI components (CameraAnimationSystem)
+  - Basic path validation
+- **Target Implementation**:
+  - Centralized animation logic
+  - Comprehensive path validation
+  - Clean viewer interface
 - **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md)
 
 ### 7. Viewer Integration
@@ -114,21 +134,25 @@ The Path-to-Path (p2p) pipeline is a sophisticated system that translates natura
 
 ```mermaid
 graph TD
-    A[User Input] --> B[Scene Analyzer]
-    B --> C[Environmental Analyzer]
-    C --> D[Metadata Manager]
-    D --> E[Prompt Compiler]
-    E --> F[LLM Engine]
-    F --> G[Scene Interpreter]
-    G --> H[Viewer Integration]
-    H --> I[Feedback System]
-    I --> E
-    
-    %% Current Focus Areas
-    style C fill:#ff9900
-    style D fill:#ff9900
-    style E fill:#00ff00
-    style H fill:#ffff00
+    subgraph Current Implementation
+        A1[User Input] --> B1[Scene Analyzer]
+        B1 --> C1[Environmental Analyzer]
+        C1 --> D1[Metadata Manager]
+        A1 --> E1[Prompt Compiler]
+        E1 --> F1[API Routes]
+        F1 --> G1[LLM Provider]
+        G1 --> H1[UI Components]
+    end
+
+    subgraph Target Architecture
+        A2[User Input] --> B2[Pipeline Controller]
+        B2 --> C2[Scene Analysis Layer]
+        C2 --> D2[Metadata Manager]
+        D2 --> E2[Prompt Compiler]
+        E2 --> F2[LLM Engine]
+        F2 --> G2[Scene Interpreter]
+        G2 --> H2[Viewer]
+    end
 ```
 
 ## Data Flow

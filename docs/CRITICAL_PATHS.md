@@ -74,42 +74,49 @@ Ask yourself:
 
 ### 3. P2P Pipeline Components (`src/features/p2p/*`)
 - **Core Components**:
-  - Scene Analyzer
+  - Scene Analyzer ✅
     - Spatial analysis
     - Safety zones calculation
     - Reference point extraction
-  - Environmental Analyzer
+  - Environmental Analyzer ⚠️
     - Environment bounds validation
     - Camera constraints definition
     - Movement boundaries
-    - Camera position validation through lock mechanism
-  - Metadata Manager
+    - Position validation through lock mechanism
+  - Metadata Manager ✅
     - User preferences and settings
     - Scene analysis data persistence
     - Feature point tracking
     - Environmental metadata storage and retrieval
-  - Prompt Compiler
+    - Supabase integration
+  - Prompt Compiler ✅
     - System and user prompt merging
     - Scene metadata integration
     - Safety constraint embedding
-  - LLM Engine
-    - Provider management and switching
-    - Response validation and parsing
-    - Error handling and retries
-  - Scene Interpreter (In Development)
-    - Camera segment parsing
-    - Motion interpolation
-    - Safety validation
-  - Three.js Viewer
+  - LLM Engine 🚧
+    - Currently in API routes:
+      - Provider management and switching
+      - Response validation and parsing
+      - Error handling and retries
+    - Planned centralization of:
+      - Provider abstraction
+      - Response standardization
+      - Error management
+  - Scene Interpreter 🚧
+    - Currently in UI:
+      - Camera segment parsing
+      - Motion interpolation
+      - Safety validation
+    - Planned separation:
+      - Path processing
+      - Animation logic
+      - Safety enforcement
+  - Three.js Viewer ⚠️
     - Camera animation execution
     - Scene visualization
     - Path preview and controls
-    - Lock mechanism for camera position capture
+    - Lock mechanism for camera position ✅
     - Animation playback with lock state coordination
-  - Feedback & Logging Layer
-    - Input/output logging
-    - Performance metrics
-    - User feedback collection
   - Changes here affect the entire pipeline flow
   - Must maintain data structure consistency between components
   - Requires thorough testing of component interactions
@@ -186,15 +193,15 @@ Ask yourself:
        - ✓ Sub-second access times
        - ✓ Maintains point relationships
        - ✓ Handles bulk operations
-     - [ ] Supabase integration
+     - [ ] Supabase integration ✅
        - ✓ Handles network interruptions
        - ✓ Maintains data consistency
        - ✓ Efficient batch operations
-     - [ ] Analysis data persistence
+     - [ ] Analysis data persistence ✅
        - ✓ Complete data recovery
        - ✓ Version control for updates
        - ✓ Handles large datasets
-     - [ ] Environmental metadata handling
+     - [ ] Environmental metadata handling ✅
        - ✓ Stores camera position on lock
        - ✓ Retrieves metadata for path generation
        - ✓ Maintains metadata consistency
@@ -244,7 +251,7 @@ Ask yourself:
        - ✓ Handles complex paths
        - ✓ Efficient parsing of large responses
 
-   - Scene Interpreter Tests
+   - Scene Interpreter Tests (Currently in UI Layer)
      - [ ] Camera segment parsing
        - ✓ Supports all movement types
        - ✓ Validates segment connections
@@ -261,7 +268,7 @@ Ask yourself:
        - ✓ Natural acceleration/deceleration
        - ✓ Accurate timing control
        - ✓ Smooth speed transitions
-     - [ ] Lock mechanism validation
+     - [ ] Lock mechanism validation ✅
        - ✓ Validates camera position on lock
        - ✓ Handles lock state transitions
        - ✓ Coordinates with animation playback

@@ -3,48 +3,29 @@
 ## Overview
 This document outlines the prioritized development plan for the Modern 3D Viewer application, focusing on stability, user experience, and feature expansion. The priorities are structured to build upon each other, ensuring a solid foundation for future development.
 
-## Priority 1: Improve Application Robustness
-**Timeline: 3-5 days**
-
-### Error Handling & Recovery
-```typescript
-// Implementation of Error Boundaries
-class ViewerErrorBoundary extends React.Component {
-  state = { hasError: false }
-  
-  static getDerivedStateFromError(error) {
-    return { hasError: true }
-  }
-  
-  render() {
-    if (this.state.hasError) {
-      return <ErrorFallback />
-    }
-    return this.props.children
-  }
-}
-```
+## Sprint 1: Improve Application Robustness ✅
+**Timeline: 3-5 days** ✅ (Completed March 24, 2025)
 
 ### Key Improvements
-1. **Error Boundaries** ✅ (Completed March 24, 2025)
+1. **Error Boundaries** ✅
    - Implement component-level error catching
    - Create meaningful error recovery UIs
    - Add error reporting and logging
    - Preserve user state during errors
 
-2. **Loading States** ✅ (Completed March 24, 2025)
+2. **Loading States** ✅
    - Add loading indicators for async operations
    - Implement skeleton loading states
    - Create progress indicators for long operations
    - Handle timeout scenarios
 
-3. **Retry Mechanisms** ✅ (Completed March 24, 2025)
+3. **Retry Mechanisms** ✅
    - Add automatic retry for API calls
    - Implement exponential backoff
    - Create manual retry options
    - Preserve partial progress
 
-4. **State Management** ✅ (Completed March 24, 2025)
+4. **State Management** ✅
    - Add TypeScript types for all state
    - Implement state validation
    - Add state persistence where needed
@@ -56,8 +37,8 @@ class ViewerErrorBoundary extends React.Component {
 - [x] Failed operations have retry mechanisms
 - [x] All state changes are type-safe
 
-## Priority 2: UI/UX Improvements
-**Timeline: 7-10 days**
+## Sprint 2: UI/UX Improvements ✅
+**Timeline: 7-10 days** ✅ (Completed March 27, 2025)
 
 ### Server-Side Component Migration ✅ (Completed March 24, 2025)
 ```typescript
@@ -118,15 +99,8 @@ const Navigation = () => {
    - Enhanced state management
    - Proper event handling
    - Z-index layer management
-   - Mobile-friendly foundations
 
-### Camera Controls (2-3 days)
-1. **More intuitive orbit controls**
-2. **Better mobile touch support**
-3. **Visual feedback for actions**
-4. **Improved constraints**
-
-### User Feedback (1-2 days)
+### User Feedback ✅ (Completed March 27, 2025)
 1. **Enhanced toast notifications**
 2. **Clear success/error states**
 3. **Operation progress tracking**
@@ -136,20 +110,18 @@ const Navigation = () => {
 - [x] Server components properly handle dynamic routes
 - [x] No hydration mismatches or warnings
 - [x] Navigation feels smooth and reliable
-- [x] Camera controls are intuitive
 - [x] Users receive clear feedback
-- [x] Mobile experience is polished
 - [x] UI components are properly positioned and spaced
 - [x] Component interactions are intuitive and reliable
 
-## Priority 3: LLM Provider Switching
-**Timeline: 5-7 days**
+## Sprint 3: LLM Provider Switching ✅
+**Timeline: 5-7 days** ✅ (Completed April 10, 2025)
 
 ### Feature Overview
 Implement an admin interface to switch between different LLM providers (OpenAI and Google Gemini) for camera path generation, with proper authentication and configuration management.
 
 ### Implementation Phases
-1. **Core Infrastructure (2-3 days)**
+1. **Core Infrastructure (2-3 days)** ✅
    ```typescript
    interface LLMProvider {
      generateCameraPath(params: PathGenerationParams): Promise<CameraPath>;
@@ -158,119 +130,29 @@ Implement an admin interface to switch between different LLM providers (OpenAI a
    }
    ```
 
-2. **Admin Interface (2 days)**
+2. **Admin Interface (2 days)** ✅
    - Create protected admin routes
    - Build provider configuration UI
    - Implement provider switching logic
    - Add monitoring and logging
 
-3. **Integration & Testing (1-2 days)**
+3. **Integration & Testing (1-2 days)** ✅
    - Update camera path generation
    - Add error handling and fallbacks
    - Implement monitoring
    - Add documentation
 
 ### Success Criteria
-- [ ] Admin interface is secure and accessible
-- [ ] Provider switching works seamlessly
-- [ ] Configuration management is robust
-- [ ] Error handling covers all scenarios
-- [ ] Monitoring provides clear insights
-- [ ] Documentation is comprehensive
+- [x] Admin interface is secure and accessible
+- [x] Provider switching works seamlessly
+- [x] Configuration management is robust
+- [x] Error handling covers all scenarios
+- [x] Monitoring provides clear insights
+- [x] Documentation is comprehensive
 
-## Priority 4: New Feature - Image to GLB
-**Timeline: 10-14 days**
+## Sprint 4: Path-to-Path (p2p) Pipeline Implementation 📦 (Archived)
+> ⚠️ **Note**: This sprint has been revised and migrated to Asana for active task tracking. The content below is preserved for historical reference only. For current implementation details and status, see [P2P Pipeline Overview v2](./features/camera-animation/P2P_OVERVIEW_v2.md).
 
-### System Components
-1. **Image Upload System**
-   ```typescript
-   interface UploadSystem {
-     validateFile: (file: File) => Promise<boolean>
-     uploadImage: (file: File) => Promise<string>
-     trackProgress: (id: string) => Observable<number>
-     handleErrors: (error: UploadError) => void
-   }
-   ```
-
-2. **GLB Generation**
-   ```typescript
-   interface GLBGenerator {
-     convertToGLB: (imageUrl: string) => Promise<string>
-     monitorProgress: (jobId: string) => Observable<Progress>
-     setQualityParams: (params: QualitySettings) => void
-     handleFailure: (error: GenerationError) => void
-   }
-   ```
-
-3. **Library Management**
-   ```typescript
-   interface LibrarySystem {
-     saveModel: (glb: GLBFile) => Promise<string>
-     listModels: () => Promise<Model[]>
-     searchModels: (query: string) => Promise<Model[]>
-     deleteModel: (id: string) => Promise<void>
-   }
-   ```
-
-### Implementation Phases
-1. **Phase 1: Upload System (4 days)**
-   - File validation
-   - Upload progress tracking
-   - Error handling
-   - Storage management
-
-2. **Phase 2: GLB Generation (5 days)**
-   - API integration
-   - Progress monitoring
-   - Quality controls
-   - Error recovery
-
-3. **Phase 3: Library Integration (5 days)**
-   - Storage system
-   - Metadata handling
-   - Search/filter capabilities
-   - Access controls
-
-### Success Criteria
-- [ ] Users can upload images successfully
-- [ ] GLB generation is reliable
-- [ ] Library system is functional
-- [ ] Integration with existing viewer works
-
-## Priority 5: Model Thumbnails
-**Timeline: 5-7 days**
-
-### Feature Overview
-Implement automatic thumbnail generation for 3D models in the library view, providing users with visual previews of their models. See detailed documentation in [Model Thumbnails](./features/UI/MODEL_THUMBNAILS.md).
-
-### Implementation Phases
-1. **Core Infrastructure (2-3 days)**
-   - Create thumbnail generation utility using Three.js
-   - Set up Supabase storage for thumbnails
-   - Add database schema updates
-   - Implement error handling
-
-2. **Integration (2 days)**
-   - Add thumbnail generation to upload flow
-   - Update ModelGrid component
-   - Add loading states
-   - Implement error recovery
-
-3. **Optimization (1-2 days)**
-   - Add caching layer
-   - Implement batch processing
-   - Add regeneration capabilities
-   - Performance optimization
-
-### Success Criteria
-- [ ] Automatic thumbnail generation for new uploads
-- [ ] Batch processing for existing models
-- [ ] Clear error handling and recovery
-- [ ] Responsive UI during generation
-- [ ] Proper storage management
-- [ ] Efficient caching implementation
-
-## Priority 6: Path-to-Path (p2p) Pipeline Implementation
 **Timeline: 14-21 days**
 
 ### Feature Overview
@@ -321,20 +203,7 @@ interface MotionSegment {
 }
 ```
 
-#### Phase 3: Scene Interpreter Enhancement (3-4 days)
-```typescript
-interface SceneInterpreter {
-  // Core functionality
-  parseSegments: (segments: MotionSegment[]) => Promise<Keyframe[]>;
-  interpolateMotion: (keyframes: Keyframe[], curve: 'linear' | 'catmullrom' | 'bezier') => Promise<Frame[]>;
-  
-  // Advanced features
-  validateSafety: (frames: Frame[], scene: SceneGeometry) => Promise<Frame[]>;
-  previewPath: (frames: Frame[], scene: THREE.Scene) => void;
-}
-```
-
-#### Phase 4: Viewer Integration Enhancement (2-3 days)
+#### Phase 3: Viewer Integration Enhancement (2-3 days)
 ```typescript
 interface ViewerIntegration {
   // Core functionality
@@ -344,19 +213,6 @@ interface ViewerIntegration {
   // Advanced features
   exportPath: (path: CameraPath, format: 'video' | 'gif' | 'json') => Promise<string>;
   editPath: (path: CameraPath) => Promise<CameraPath>;
-}
-```
-
-#### Phase 5: Feedback & Logging System (1-2 days)
-```typescript
-interface FeedbackSystem {
-  // Core functionality
-  logSession: (session: PathGenerationSession) => Promise<void>;
-  collectFeedback: (sessionId: string) => Promise<UserFeedback>;
-  
-  // Advanced features
-  monitorHealth: () => Promise<SystemHealth>;
-  prepareTrainingData: (sessions: PathGenerationSession[]) => Promise<TrainingData>;
 }
 ```
 
@@ -373,23 +229,11 @@ interface FeedbackSystem {
   - [ ] Camera framing
   - [ ] Response validation
 
-- [ ] Scene Interpreter
-  - [ ] Segment parsing
-  - [ ] Advanced interpolation
-  - [ ] Safety validation
-  - [ ] Path preview
-
 - [ ] Viewer Integration
   - [ ] Smooth animation
   - [ ] Preview rendering
   - [ ] Export capabilities
   - [ ] Path editing
-
-- [ ] Feedback System
-  - [ ] Session logging
-  - [ ] User feedback
-  - [ ] Health monitoring
-  - [ ] Training data
 
 ### Technical Considerations
 1. **Performance**
@@ -439,31 +283,23 @@ interface FeedbackSystem {
 ### Timeline Overview
 ```mermaid
 gantt
-    title P2P Pipeline Implementation
+    title Development Timeline
     dateFormat  YYYY-MM-DD
-    section Prompt Compiler
-    Core Implementation    :a1, 2024-03-30, 2d
-    Advanced Features     :a2, after a1, 2d
-    Testing & Refinement  :a3, after a2, 1d
+    section Robustness
+    Error Boundaries    :a1, 2024-03-25, 1d
+    Loading States     :a2, after a1, 2d
+    Retry Mechanisms   :a3, after a2, 1d
+    State Management   :a4, after a3, 1d
     
-    section LLM Engine
-    Core Implementation    :b1, after a3, 2d
-    Advanced Features     :b2, after b1, 2d
-    Testing & Refinement  :b3, after b2, 1d
+    section UI/UX
+    Server Components  :b0, after a4, 3d
+    Navigation        :b1, after b0, 3d
+    Camera Controls   :b2, after b1, 3d
+    User Feedback     :b3, after b2, 2d
     
-    section Scene Interpreter
-    Core Implementation    :c1, after b3, 2d
-    Advanced Features     :c2, after c1, 1d
-    Testing & Refinement  :c3, after c2, 1d
-    
-    section Viewer Integration
-    Core Implementation    :d1, after c3, 1d
-    Advanced Features     :d2, after d1, 1d
-    Testing & Refinement  :d3, after d2, 1d
-    
-    section Feedback System
-    Core Implementation    :e1, after d3, 1d
-    Testing & Refinement  :e2, after e1, 1d
+    section P2P Pipeline
+    Implementation    :c1, after b3, 4d
+    Note: Tasks migrated to Asana :milestone, after c1, 0d
 ```
 
 ## Timeline Overview
@@ -552,4 +388,22 @@ gantt
 4. Implement user suggestions
 
 ## Conclusion
-This roadmap provides a structured approach to improving and expanding the Modern 3D Viewer application. By prioritizing stability and user experience before adding new features, we ensure a solid foundation for future development. Regular reviews and adjustments to this plan will be necessary as development progresses. 
+This roadmap provides a structured approach to improving and expanding the Modern 3D Viewer application. By prioritizing stability and user experience before adding new features, we ensure a solid foundation for future development. Regular reviews and adjustments to this plan will be necessary as development progresses.
+
+## Parking Lot 📦 (Archived)
+> ⚠️ **Note**: All tasks from this section have been revised and migrated to Asana for active tracking. The content below is preserved for historical reference only.
+
+Items in this section were features or improvements that were identified but not initially prioritized in the main development roadmap. These have now been evaluated, refined, and moved to Asana for proper task management and tracking.
+
+**Migrated Features**:
+- Camera Controls Enhancement
+- User Feedback System Review
+- Scene Interpreter Enhancement
+- Feedback & Logging System
+- Model Thumbnails Feature
+
+For current task status and implementation details, please refer to Asana project board.
+
+---
+
+> 🔄 This document has been archived as task management has moved to Asana. Please refer to project documentation for current architectural decisions and implementation details. 

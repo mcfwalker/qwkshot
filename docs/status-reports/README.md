@@ -11,7 +11,7 @@ This directory contains periodic status reports and updates on the project's pro
 ## Structure
 Status reports should be named using the following format:
 ```
-M3DV-SR-YYYY-MM-DD-HHMM.md
+M3DV-SR-YYYY-MM-DD-HHMM-P2P.md
 ```
 Where:
 - M3DV: Modern 3D Viewer project abbreviation
@@ -39,7 +39,8 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
-- M3DV-SR-2025-04-05-1251 - Code Quality and Architecture Assessment
+- M3DV-SR-2025-04-05-2121-P2P - P2P Pipeline Architecture and Implementation Strategy
+- M3DV-SR-2025-04-05-1251-P2P - P2P Pipeline Architecture Investigation
 - M3DV-SR-2025-04-04-2337 - Animation Playback UX Improvements
 - M3DV-SR-2025-04-03-1901 - Viewer Lock Mechanism and Start Position Refactor
 - M3DV-SR-2025-04-02-0935 - P2P Pipeline Integration and Branch Cleanup
