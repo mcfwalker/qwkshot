@@ -25,7 +25,7 @@ export interface LLMEngineConfig extends P2PConfig {
 export interface CameraKeyframe {
   position: Vector3;
   target: Vector3;
-  timestamp: number;
+  duration: number;
 }
 
 /**
@@ -42,6 +42,16 @@ export interface CameraPath {
 }
 
 /**
+ * Standard response structure for LLM Engine operations.
+ * Contains either the successful data or an error.
+ */
+export interface LLMResponse<T> {
+  data: T | null;
+  error: LLMEngineError | null;
+  // We could add other metadata here later if needed, like performance metrics
+}
+
+/**
  * Main LLM Engine interface
  */
 export interface LLMEngine {
@@ -53,7 +63,7 @@ export interface LLMEngine {
   /**
    * Generate a camera path from a compiled prompt
    */
-  generatePath(prompt: CompiledPrompt): Promise<CameraPath>;
+  generatePath(prompt: CompiledPrompt): Promise<LLMResponse<CameraPath>>;
 
   /**
    * Validate a generated path

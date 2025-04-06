@@ -6,6 +6,8 @@ import { Vector3 } from 'three';
 import { LLMProvider } from '@/lib/llm/types';
 import { CameraKeyframe } from '@/types/camera';
 import { CompiledPrompt, CameraConstraints, PromptMetadata } from '@/types/p2p/prompt-compiler';
+import { getLLMEngine } from '@/features/p2p/llm-engine/engine';
+import { LLMEngineConfig } from '@/types/p2p/llm-engine';
 import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/MetadataManagerFactory';
 import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { Logger } from '@/types/p2p/shared';
@@ -34,6 +36,10 @@ export async function POST(request: Request) {
     // Ensure LLM system is initialized
     await ensureLLMSystemInitialized();
     logger.debug('LLM system initialized');
+
+    // Get LLM Engine instance
+    const engine = getLLMEngine();
+    logger.debug('Got LLM Engine instance');
 
     const body = await request.json();
     logger.debug('Request body:', body);
@@ -65,6 +71,20 @@ export async function POST(request: Request) {
     }
     logger.info('Using provider:', provider.getProviderType());
 
+    // Get provider capabilities for configuration
+    const capabilities = provider.getCapabilities();
+    logger.debug('Provider capabilities:', capabilities);
+
+    // Configure and initialize the LLM Engine
+    const engineConfig: LLMEngineConfig = {
+      model: provider.getProviderType(), // Or potentially capabilities.name/model identifier?
+      maxTokens: capabilities.maxTokens,
+      temperature: capabilities.temperature,
+      // Optionally add apiKey if available/needed, maybe from environment variables or a config service
+    };
+    await engine.initialize(engineConfig);
+    logger.info('LLM Engine initialized with config:', engineConfig);
+
     // Convert camera state to Vector3
     const currentCameraState = {
       position: new Vector3(
@@ -91,8 +111,9 @@ export async function POST(request: Request) {
       duration
     });
 
-    // Generate the prompt
-    const prompt: CompiledPrompt = {
+    // TODO: Replace manual prompt construction with a call to PromptCompiler service
+    // For now, construct it here based on request body
+    const compiledPrompt: CompiledPrompt = {
       systemMessage: `You are an expert virtual cinematographer generating camera paths for a 3D model viewer. Your response MUST be ONLY a valid JSON object matching the specified format.
 
 IMPORTANT: You MUST respond with a JSON object. No other text or explanations.
@@ -158,42 +179,38 @@ ${instruction}`,
       }
     };
 
-    // Log the full prompt
-    console.log('Generated prompt:', JSON.stringify(prompt, null, 2));
-
-    // Generate the path
-    logger.info('Generating camera path with provider:', provider.getProviderType());
+    // Generate the path using the LLM Engine
+    logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model);
     try {
-      const result = await provider.generateCameraPath(prompt, duration);
-      logger.debug('Generated animation result:', result);
-      
-      if (!result.keyframes || !Array.isArray(result.keyframes)) {
-        logger.error('Invalid keyframes in result:', result);
+      // Replace provider.generateCameraPath with engine.generatePath
+      // const result = await provider.generateCameraPath(prompt, duration);
+      const response = await engine.generatePath(compiledPrompt);
+
+      logger.debug('LLM Engine response:', response);
+
+      // Handle potential errors from the engine
+      if (response.error) {
+        logger.error('LLM Engine returned an error:', response.error);
         return NextResponse.json(
-          { error: 'Invalid keyframes returned from provider' },
+          { error: response.error.message, code: response.error.code },
+          { status: 500 } // Or map specific error codes to HTTP statuses
+        );
+      }
+
+      // Check if data is null (shouldn't happen if error is null, but good practice)
+      if (!response.data) {
+        logger.error('LLM Engine returned null data without an error.');
+        return NextResponse.json(
+          { error: 'LLM Engine failed without specific error details' },
           { status: 500 }
         );
       }
 
-      // Validate keyframes
-      const validationErrors = result.keyframes.map((kf, index) => {
-        const issues = [];
-        if (!kf.position || typeof kf.position.x !== 'number') issues.push('invalid position');
-        if (!kf.target || typeof kf.target.x !== 'number') issues.push('invalid target');
-        if (typeof kf.duration !== 'number' || kf.duration <= 0) issues.push('invalid duration');
-        return issues.length ? { index, issues } : null;
-      }).filter(Boolean);
-
-      if (validationErrors.length > 0) {
-        logger.error('Keyframe validation errors:', validationErrors);
-        return NextResponse.json(
-          { error: 'Invalid keyframes in response', details: validationErrors },
-          { status: 500 }
-        );
-      }
+      // Use the data from the engine response
+      const result = response.data; // result is now type CameraPath
 
       const totalDuration = result.keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      logger.info('Path generated successfully', {
+      logger.info('Path generated successfully via LLM Engine', {
         keyframeCount: result.keyframes.length,
         totalDuration,
         requestedDuration: duration
@@ -257,8 +274,8 @@ ${instruction}`,
         performance: {
           startTime: Date.now(),
           endTime: Date.now(),
-          duration: Date.now() - prompt.metadata.performanceMetrics.startTime,
-          operations: prompt.metadata.performanceMetrics.operations
+          duration: Date.now() - compiledPrompt.metadata.performanceMetrics.startTime,
+          operations: compiledPrompt.metadata.performanceMetrics.operations
         }
       };
 
@@ -284,12 +301,16 @@ ${instruction}`,
       // Store the environmental metadata
       await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
 
+      // Return the standardized CameraPath data from the engine
       return NextResponse.json(result);
     } catch (error) {
-      logger.error('Error generating camera path:', error);
+      // This top-level catch block in the route might still be useful for
+      // catching errors *outside* the engine call (e.g., engine initialization,
+      // metadata storage errors), but errors *from* the engine are handled above.
+      logger.error('Error during engine path generation or metadata storage:', error);
       return NextResponse.json(
         { 
-          error: error instanceof Error ? error.message : 'Failed to generate camera path',
+          error: error instanceof Error ? error.message : 'Internal server error',
           details: process.env.NODE_ENV === 'development' ? error : undefined
         },
         { status: 500 }

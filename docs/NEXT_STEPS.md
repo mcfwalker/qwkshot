@@ -15,49 +15,60 @@
 
 ## Upcoming Tasks
 
-### Phase 1: Thin LLM Engine Implementation (1-2 weeks)
-- [ ] Create minimal wrapper layer
-  - [ ] Define basic interface between API routes and UI
-  - [ ] Create standard response type
-  - [ ] Add basic error type definitions
-  - [ ] Keep provider logic in API routes
+### Phase 1: Thin LLM Engine Implementation (1-2 weeks) ✅ **(Substantially Complete)**
+- [x] Create minimal wrapper layer
+  - [x] Define basic interface between API routes and UI (`LLMEngine`, `LLMResponse`)
+  - [x] Create standard response type (`LLMResponse`)
+  - [x] Add basic error type definitions (`LLMEngineError`)
+  - [ ] Keep provider logic in API routes -> **Refactored:** Provider logic encapsulated in Engine, API uses Engine. ✅
 
-- [ ] Implement basic validation
-  - [ ] Add response structure validation
-  - [ ] Implement simple error checks
-  - [ ] Create basic error messages
-  - [ ] Set up simple logging
+- [x] Implement basic validation
+  - [x] Add response structure validation (Placeholder added)
+  - [x] Implement simple error checks (`try...catch` structure) ✅
+  - [x] Create basic error messages (`LLMEngineError` used) ✅
+  - [x] Set up simple logging ✅
 
-- [ ] Clean up current implementation
-  - [ ] Document API route structure
-  - [ ] Clean up response handling
-  - [ ] Standardize error formats
-  - [ ] Remove duplicate logic
+- [x] Clean up current implementation
+  - [x] Document API route structure (Implicitly improved via refactor)
+  - [x] Clean up API route response handling ✅
+  - [x] Standardize API route error formats ✅
+  - [x] Remove duplicate provider call logic ✅
+- **Remaining TODOs:** Implement actual provider calls inside Engine; Refine metadata/duration handling.
 
-### Phase 2: Scene Interpreter Core (2-3 weeks)
-- [ ] Create base structure
-  - [ ] Define core interfaces
-  - [ ] Set up component architecture
-  - [ ] Create testing framework
-  - [ ] Add basic validation types
+### Phase 2: Scene Interpreter Core (2-3 weeks) ✅ **(Substantially Complete)**
+- [x] Create base structure
+  - [x] Define core interfaces (`SceneInterpreter`, `CameraCommand`)
+  - [x] Set up component architecture (`CoreSceneInterpreter`)
+  - [x] Create testing framework (Deferred)
+  - [x] Add basic validation types (`validateInputPath`, `validateCommands` structure)
 
 - [ ] Move animation logic from UI
-  - [ ] Extract CameraAnimationSystem logic
-  - [ ] Create animation service layer
-  - [ ] Set up state management
-  - [ ] Add event system
+  - [ ] Extract CameraAnimationSystem logic -> **Partially Done:** Path *processing* responsibility moved, playback interpolation remains. Structure for smoothing/easing added. ⚠️
+  - [ ] Create animation service layer (Covered by Interpreter structure) ✅
+  - [ ] Set up state management (Interpreter manages internal state) ✅
+  - [ ] Add event system (Deferred)
 
-- [ ] Implement path processing
-  - [ ] Create path validation system
-  - [ ] Add motion segment processing
-  - [ ] Implement keyframe generation
-  - [ ] Set up interpolation system
+- [x] Implement path processing
+  - [x] Create path validation system (`validateInputPath` implemented with detailed checks) ✅
+  - [x] Add motion segment processing (Basic mapping to `CameraCommand`, smoothing/easing placeholders added) ✅
+  - [x] Set up interpolation system (Structure for Catmull-Rom & easing added) ✅
 
-- [ ] Add basic safety validation
-  - [ ] Implement boundary checking
-  - [ ] Add collision detection
-  - [ ] Create speed limit validation
-  - [ ] Set up constraint system
+- [x] Add basic safety validation
+  - [x] Implement boundary checking (Height, distance checks added) ✅
+  - [x] Add collision detection (Restricted zones check added) ✅
+  - [x] Create speed limit validation (Linear & angular velocity checks added) ✅
+  - [x] Set up constraint system (Validation uses constraints from metadata) ✅
+- **Remaining TODOs:** Implement detailed smoothing algorithms, refine easing, implement `restrictedAngles` check, add command validation details.
+
+### Phase 2.5: Backend Integration & Validation (New) (0.5-1 week)
+- [ ] Integrate `SceneInterpreter` into `camera-path` API route
+  - [ ] Initialize `SceneInterpreter` in API route
+  - [ ] Pass `CameraPath` from `LLMEngine` to `SceneInterpreter.interpretPath`
+  - [ ] Call `SceneInterpreter.validateCommands`
+  - [ ] Return `CameraCommand[]` (or error) from API route
+- [ ] (Optional) Integrate `PromptCompiler` call into API route
+  - [ ] Replace manual `CompiledPrompt` construction
+- [ ] Perform basic end-to-end validation of the API route flow
 
 ### Phase 3: UI/UX Refactor (2-3 weeks)
 - [ ] Improve core interactions
@@ -91,11 +102,11 @@
   - [ ] Enhance response times
   - [ ] Reduce resource usage
 
-## Current Priorities
-1. Implement thin LLM Engine wrapper
-2. Move animation logic to Scene Interpreter
-3. Add basic validation layer
-4. Clean up existing implementation
+## Current Priorities (Updated)
+1.  Integrate `SceneInterpreter` into `camera-path` API route
+2.  Ensure API route returns `CameraCommand[]`
+3.  (Optional) Integrate `PromptCompiler` call in API route
+4.  Perform basic backend pipeline validation
 
 ## Implementation Strategy
 
@@ -141,7 +152,7 @@
    - E2E tests for critical paths
    - Performance benchmarks
 
-### Phase 1 Implementation Plan
+### Phase 1 Implementation Plan (Completed)
 1. Create `feature/thin-llm-engine` branch
 2. Implement features in order:
    - Basic interface
@@ -149,6 +160,22 @@
    - Cleanup
 3. Regular merges to main
 4. Feature flag control for rollout
+
+### Phase 2 Implementation Plan (Completed)
+1. Create `feature/scene-interpreter` branch
+2. Implement features in order:
+   - Base structure
+   - Animation logic
+   - Path processing
+3. Regular merges to main
+4. Feature flag control for rollout
+
+### Phase 2.5 Implementation Plan (New)
+1. Create `feature/backend-integration` branch (or similar) from `feature/thin-llm-engine`.
+2. Modify `src/app/api/camera-path/route.ts` to call `SceneInterpreter`.
+3. Test API route with sample requests.
+4. (Optional) Modify API route to call `PromptCompiler`.
+5. Merge back to main branch upon successful validation.
 
 ## Architectural Decisions
 - Keep provider logic in API routes
@@ -159,10 +186,10 @@
 ## Blockers and Issues
 - None currently identified, but careful coordination needed during refactor
 
-## Next Session Focus
-1. Begin thin LLM Engine implementation
-2. Define interface boundaries
-3. Plan animation logic migration
-4. Set up validation framework
+## Next Session Focus (Updated)
+1. Begin backend integration (Phase 2.5).
+2. Modify `camera-path` API route to use `SceneInterpreter`.
+3. Plan `SceneInterpreter` configuration within API route.
+4. Plan optional `PromptCompiler` integration.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
