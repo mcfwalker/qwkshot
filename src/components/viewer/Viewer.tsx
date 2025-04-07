@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ModelSelectorTabs } from './ModelSelectorTabs';
+import { TextureLibraryModal } from './TextureLibraryModal';
+import { FloorTexture } from '@/lib/supabase';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -106,6 +108,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [isReady, setIsReady] = useState(false);
   const [isError, setIsError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showTextureModal, setShowTextureModal] = useState(false);
 
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
@@ -220,6 +223,26 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       // setFloorType(visible ? 'grid' : 'none'); // Example logic
   };
 
+  // Handler for texture button click
+  const handleAddTextureClick = () => {
+    if (isLocked) { // Prevent action if locked
+        toast.error("Cannot change texture while scene is locked.");
+        return;
+    }
+    setShowTextureModal(true);
+  };
+  
+  // Update handler to accept FloorTexture and use file_url
+  const handleTextureSelect = (texture: FloorTexture | null) => {
+    // Handle null case if user closes modal without selecting
+    if (texture) {
+        setFloorTexture(texture.file_url); 
+    } else {
+        setFloorTexture(null);
+    }
+    setShowTextureModal(false); // Close modal
+  };
+
   return (
     <div className={cn('relative w-full h-full', className)}>
       <Canvas
@@ -281,7 +304,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           onFovChange={setFov}
           gridVisible={gridVisible}
           onGridToggle={handleGridToggle}
-          onAddTextureClick={() => { console.log('Add Texture Clicked'); } }
+          onAddTextureClick={handleAddTextureClick}
         />
       </div>
 
@@ -312,6 +335,13 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           controlsRef={controlsRef}
         />
       </div>
+
+      {/* Texture Modal - onSelect prop matches now */}
+      <TextureLibraryModal 
+        isOpen={showTextureModal}
+        onClose={() => handleTextureSelect(null)} // Pass null on close
+        onSelect={handleTextureSelect}
+      />
     </div>
   );
 } 
