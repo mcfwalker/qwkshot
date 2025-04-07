@@ -872,7 +872,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 "disabled:pointer-events-none disabled:opacity-50",
                 activeTab === 'playback' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
             )}
-            disabled={commands.length === 0}
           >
             PLAYBACK
           </TabsPrimitive.Trigger>
@@ -914,14 +913,11 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                     duration={duration}
                     takeCount={takeCount}
                     modelName={modelName}
-                    isConfirmingClear={isConfirmingClear}
                     isGenerating={isGenerating}
                     onPlayPause={handlePlayPause}
                     onDownload={handleDownload}
                     onSpeedChange={handleSpeedChange}
-                    onProgressChange={handleProgressChange}
                     onCreateNewShot={handleCreateNewShot}
-                    onClearScene={handleClearScene}
                   />
                 )}
               </motion.div>
