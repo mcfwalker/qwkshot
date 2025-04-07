@@ -353,8 +353,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         />
       </div>
 
-      {/* Camera telemetry display */}
-      <div className="absolute right-4 bottom-4 w-80 z-10">
+      {/* Camera telemetry display - Restored */}
+      <div className="absolute right-8 bottom-16 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}
@@ -368,30 +368,31 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         onSelect={handleTextureSelect}
       />
 
-      {/* Clear Stage Button - Added */}
-      {/* TODO: Add visibility condition based on modelUrl/isModelLoaded */}
-      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
-        <Button
-          variant="ghost" // Keep ghost for base structure, override visuals
-          // Remove size="sm"
-          className={cn(
-            // Flex layout (already default for button)
-            // Size & Padding
-            "h-10 px-6 py-0",
-            // Appearance
-            "rounded-full border border-[#444] bg-[#121212]",
-            // Hover state
-            "hover:bg-[#1f1f1f]", 
-            // Text style
-            "text-foreground/80 hover:text-foreground",
-            // Remove backdrop blur if present
-            // Keep default focus/disabled states from variant if needed
-          )}
-          onClick={handleClearStageReset}
-        >
-          {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
-        </Button>
-      </div>
+      {/* Clear Stage Button - Conditionally Rendered */}
+      {modelUrl && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+          <Button
+            variant="ghost" // Keep ghost for base structure, override visuals
+            // Remove size="sm"
+            className={cn(
+              // Flex layout (already default for button)
+              // Size & Padding
+              "h-10 px-6 py-0",
+              // Appearance
+              "rounded-full border border-[#444] bg-[#121212]",
+              // Hover state
+              "hover:bg-[#1f1f1f]", 
+              // Text style
+              "text-foreground/80 hover:text-foreground",
+              // Remove backdrop blur if present
+              // Keep default focus/disabled states from variant if needed
+            )}
+            onClick={handleClearStageReset}
+          >
+            {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 } 

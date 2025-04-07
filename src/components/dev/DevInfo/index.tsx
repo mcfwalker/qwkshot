@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import type { HealthCheckResponse, SystemInfoResponse } from '@/lib/system/types'
 import type { Database } from '@/types/supabase'
 import { getSupabaseClient } from '@/lib/supabase'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface DevInfoState {
   health: HealthCheckResponse | null;
@@ -69,6 +71,7 @@ export function DevInfo() {
     error: false,
     isLoading: true
   })
+  const [isCollapsed, setIsCollapsed] = useState(false)
   
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
@@ -235,73 +238,86 @@ export function DevInfo() {
     }
   }, [])
 
-  // Basic panel when loading or error
+  // Basic panel when loading or error (also include toggle)
   if (state.isLoading || (!state.health && !state.info)) {
     return (
-      <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
-        <div className="flex flex-col gap-1">
+      <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono max-w-xs">
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <span className="text-yellow-400">●</span>
             <span>System Info Unavailable</span>
           </div>
-          <div className="text-gray-400">
-            {state.isLoading ? 'Loading...' : 'Unable to fetch system status'}
-          </div>
-          {state.error && (
-            <div className="flex items-center gap-2">
-              <span className="text-red-400">●</span>
-              <span>Error</span>
-            </div>
-          )}
-          <button 
-            onClick={fetchData}
-            className="mt-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
-          >
-            Retry
+          <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1 hover:bg-white/10 rounded">
+            {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
+        {!isCollapsed && (
+          <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-gray-700">
+            <div className="text-gray-400">
+              {state.isLoading ? 'Loading...' : 'Unable to fetch system status'}
+            </div>
+            {state.error && (
+              <div className="flex items-center gap-2">
+                <span className="text-red-400">●</span>
+                <span>Error</span>
+              </div>
+            )}
+            <button 
+              onClick={fetchData}
+              className="mt-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
     )
   }
 
   // Show health information
   return (
-    <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono">
-      <div className="flex flex-col gap-1">
-        {/* Version Info */}
+    <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white p-2 rounded-lg text-xs font-mono max-w-xs">
+      <div className="flex justify-between items-center">
         {state.health && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className={state.health.status === 'ok' ? 'text-green-400' : 'text-red-400'}>●</span>
-              <span>vdevelopment</span>
-            </div>
-            <div className="text-gray-400">{state.health.environment}</div>
-            
-            {/* Performance Metrics */}
-            {state.health.performance && (
-              <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-400">●</span>
-                  <span>Response: {formatResponseTime(state.health.performance.responseTime)}</span>
-                </div>
-                {state.health.performance.memory && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-purple-400">●</span>
-                    <span>Memory: {formatBytes(state.health.performance.memory.heapUsed)}</span>
-                  </div>
-                )}
-                {state.health.performance.requestRate && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-yellow-400">●</span>
-                    <span>Requests/min: {state.health.performance.requestRate.current}</span>
-                  </div>
-                )}
-              </div>
-            )}
+          <div className="flex items-center gap-2">
+            <span className={state.health.status === 'ok' ? 'text-green-400' : 'text-red-400'}>●</span>
+            <span>vdevelopment</span>
+          </div>
+        )}
+        {!state.health && <div className="flex items-center gap-2"><span className="text-gray-400">●</span><span>System Status</span></div>}
+        <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1 hover:bg-white/10 rounded">
+          {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
 
-            {/* Service Status */}
-            {state.health.services && (
-              <>
+      {!isCollapsed && state.health && (
+        <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-gray-700">
+          <div className="text-gray-400">{state.health.environment}</div>
+          
+          {state.health.performance && (
+            <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-400">●</span>
+                <span>Response: {formatResponseTime(state.health.performance.responseTime)}</span>
+              </div>
+              {state.health.performance.memory && (
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-400">●</span>
+                  <span>Memory: {formatBytes(state.health.performance.memory.heapUsed)}</span>
+                </div>
+              )}
+              {state.health.performance.requestRate && (
+                <div className="flex items-center gap-2">
+                  <span className="text-yellow-400">●</span>
+                  <span>Requests/min: {state.health.performance.requestRate.current}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {state.health.services && (
+            <>
+              <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
                 <div className="flex items-center gap-2">
                   <span className={
                     Object.values(state.health.services).every(val => 
@@ -319,35 +335,33 @@ export function DevInfo() {
                     }
                   </span>
                 </div>
+              </div>
 
-                {/* Detailed Service Status */}
-                <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className={state.health.services.db ? 'text-green-400' : 'text-red-400'}>●</span>
-                    <span>DB</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={state.health.services.env ? 'text-green-400' : 'text-red-400'}>●</span>
-                    <span>ENV</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={state.health.services.auth ? 'text-green-400' : 'text-red-400'}>●</span>
-                    <span>Auth</span>
-                  </div>
+              <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
+                <div className="flex items-center gap-2">
+                  <span className={state.health.services.db ? 'text-green-400' : 'text-red-400'}>●</span>
+                  <span>DB</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className={state.health.services.env ? 'text-green-400' : 'text-red-400'}>●</span>
+                  <span>ENV</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={state.health.services.auth ? 'text-green-400' : 'text-red-400'}>●</span>
+                  <span>Auth</span>
+                </div>
+              </div>
 
-                {/* LLM Provider */}
-                <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className={state.health.services.llm !== 'none' ? 'text-green-400' : 'text-yellow-400'}>●</span>
-                    <span>LLM: {state.health.services.llm}</span>
-                  </div>
+              <div className="text-gray-400 mt-1 border-t border-gray-700 pt-1">
+                <div className="flex items-center gap-2">
+                  <span className={state.health.services.llm !== 'none' ? 'text-green-400' : 'text-yellow-400'}>●</span>
+                  <span>LLM: {state.health.services.llm}</span>
                 </div>
-              </>
-            )}
-          </>
-        )}
-      </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 } 
