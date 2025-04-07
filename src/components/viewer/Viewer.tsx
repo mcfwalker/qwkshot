@@ -353,8 +353,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         />
       </div>
 
-      {/* Camera telemetry display - Restored */}
-      <div className="absolute right-8 bottom-16 z-10">
+      {/* Camera telemetry display - Align vertically with DevInfo */}
+      <div className="absolute right-8 bottom-4 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}

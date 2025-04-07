@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Vector3, Euler, PerspectiveCamera } from 'three';
 import { OrbitControls } from '@react-three/drei';
+import { cn } from '@/lib/utils';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface CameraTelemetryProps {
   cameraRef: React.RefObject<PerspectiveCamera | null>;
@@ -24,6 +25,7 @@ export default function CameraTelemetry({ cameraRef, controlsRef }: CameraTeleme
     distance: 0,
     fov: 0
   });
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   useEffect(() => {
     let frameId: number;
@@ -50,39 +52,38 @@ export default function CameraTelemetry({ cameraRef, controlsRef }: CameraTeleme
   const formatNumber = (num: number) => num.toFixed(2);
 
   return (
-    <Card className="bg-background/80 backdrop-blur-sm">
-      <CardContent className="p-4 space-y-2 text-xs font-mono">
-        <div className="grid grid-cols-2 gap-x-4">
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Position:</span>
-              <span>
-                {formatNumber(telemetry.position.x)},
-                {formatNumber(telemetry.position.y)},
-                {formatNumber(telemetry.position.z)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Rotation:</span>
-              <span>
-                {formatNumber(telemetry.rotation.x)},
-                {formatNumber(telemetry.rotation.y)},
-                {formatNumber(telemetry.rotation.z)}
-              </span>
-            </div>
+    <div className="text-xs text-foreground/80 font-mono p-2 bg-black/20 backdrop-blur-sm rounded-md">
+      <div className="flex justify-between items-center">
+        <span className="font-semibold">Camera Info</span>
+        <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1 hover:bg-white/10 rounded">
+          {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
+      </div>
+
+      {!isCollapsed && (
+        <div className="flex flex-col space-y-2 mt-1 pt-1 border-t border-gray-700/50">
+          <div className="flex items-center">
+            <span className="font-semibold mr-2 w-[60px] text-right">Position:</span>
+            <span>
+              {formatNumber(telemetry.position.x)},{formatNumber(telemetry.position.y)},{formatNumber(telemetry.position.z)}
+            </span>
           </div>
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Distance:</span>
-              <span>{formatNumber(telemetry.distance)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">FOV:</span>
-              <span>{formatNumber(telemetry.fov)}°</span>
-            </div>
+          <div className="flex items-center">
+            <span className="font-semibold mr-2 w-[60px] text-right">Rotation:</span>
+            <span>
+              {formatNumber(telemetry.rotation.x)},{formatNumber(telemetry.rotation.y)},{formatNumber(telemetry.rotation.z)}
+            </span>
+          </div>
+          <div className="flex items-center">
+            <span className="font-semibold mr-2 w-[60px] text-right">Distance:</span>
+            <span>{formatNumber(telemetry.distance)}</span>
+          </div>
+          <div className="flex items-center">
+            <span className="font-semibold mr-2 w-[60px] text-right">FOV:</span>
+            <span>{formatNumber(telemetry.fov)}°</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 } 
