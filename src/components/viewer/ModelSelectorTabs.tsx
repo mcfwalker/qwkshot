@@ -10,15 +10,13 @@ interface ModelSelectorTabsProps {
 
 export function ModelSelectorTabs({ onModelSelect }: ModelSelectorTabsProps) {
   return (
-    <Card className="viewer-panel">
-      <CardHeader className="viewer-panel-header px-2">
-        <CardTitle className="viewer-panel-title">Cast</CardTitle>
+    <Card className="bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col w-[200px] p-4 gap-6">
+      <CardHeader className="p-0">
+        <CardTitle className="text-sm font-medium text-muted-foreground uppercase">MODEL</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-6">
-        <ErrorBoundary name="ModelLoader">
-          <ModelLoader onModelLoad={onModelSelect} />
-        </ErrorBoundary>
-      </CardContent>
+      <ErrorBoundary name="ModelLoader">
+        <ModelLoader onModelLoad={onModelSelect} />
+      </ErrorBoundary>
     </Card>
   );
 } 

@@ -14,6 +14,8 @@ import { SceneControls } from './SceneControls';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { ModelSelectorTabs } from './ModelSelectorTabs';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -33,9 +35,10 @@ function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.Ref
 interface ViewerProps {
   className?: string;
   modelUrl: string;
+  onModelSelect: (url: string) => void;
 }
 
-export default function Viewer({ className, modelUrl }: ViewerProps) {
+export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(10);
@@ -43,6 +46,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
+  const [gridVisible, setGridVisible] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
@@ -209,6 +213,13 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     setIsPathGenerated(true);
   }, []);
 
+  // Handler for grid toggle
+  const handleGridToggle = (visible: boolean) => {
+      setGridVisible(visible);
+      // Optionally update floorType based on visibility?
+      // setFloorType(visible ? 'grid' : 'none'); // Example logic
+  };
+
   return (
     <div className={cn('relative w-full h-full', className)}>
       <Canvas
@@ -240,7 +251,7 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           />
 
           {/* Floor */}
-          <Floor type={floorType} texture={floorTexture} />
+          <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />
 
           {/* Model */}
           {modelUrl ? (
@@ -257,16 +268,20 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
         </Suspense>
       </Canvas>
 
-      {/* Scene Controls panel */}
-      <div className="absolute left-4 top-[calc(4rem+20rem+1rem)] w-80 z-10">
+      {/* This is the CORRECT container for BOTH left panels */}
+      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4">
+        <ErrorBoundary name="ModelSelectorTabs">
+           <ModelSelectorTabs onModelSelect={onModelSelect} />
+        </ErrorBoundary>
+        
         <SceneControls
           modelHeight={modelHeight}
           onModelHeightChange={handleModelHeightChange}
           fov={fov}
           onFovChange={setFov}
-          floorType={floorType}
-          onFloorTypeChange={setFloorType}
-          onFloorTextureChange={setFloorTexture}
+          gridVisible={gridVisible}
+          onGridToggle={handleGridToggle}
+          onAddTextureClick={() => { console.log('Add Texture Clicked'); } }
         />
       </div>
 
