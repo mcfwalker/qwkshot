@@ -18,6 +18,7 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ModelSelectorTabs } from './ModelSelectorTabs';
 import { TextureLibraryModal } from './TextureLibraryModal';
 import { FloorTexture } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -109,6 +110,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [isError, setIsError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showTextureModal, setShowTextureModal] = useState(false);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
 
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
@@ -243,6 +245,29 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     setShowTextureModal(false); // Close modal
   };
 
+  // Handler for the new reset button
+  const handleClearStageReset = () => {
+    if (!isConfirmingReset) {
+      setIsConfirmingReset(true);
+      // Optional: Add a timer to revert confirmation state
+      // setTimeout(() => setIsConfirmingReset(false), 3000);
+      toast.warning("Click again to confirm stage reset.");
+      return;
+    }
+
+    // --- Actual Reset Logic (Placeholder) ---
+    console.log("PERFORMING STAGE RESET");
+    // TODO: Implement the full reset logic:
+    // - Reset modelUrl (call onModelSelect with null/default?)
+    // - Reset camera position/target (use controlsRef)
+    // - Reset CameraAnimationSystem state (clear commands, instruction, etc. - need callback/store)
+    // - Reset local state (fov, modelHeight, etc.)
+    // - Reset viewerStore state (isLocked, etc.)
+
+    toast.success("Stage Reset Successfully");
+    setIsConfirmingReset(false); // Reset confirmation state
+  };
+
   return (
     <div className={cn('relative w-full h-full', className)}>
       <Canvas
@@ -342,6 +367,31 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         onClose={() => handleTextureSelect(null)} // Pass null on close
         onSelect={handleTextureSelect}
       />
+
+      {/* Clear Stage Button - Added */}
+      {/* TODO: Add visibility condition based on modelUrl/isModelLoaded */}
+      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+        <Button
+          variant="ghost" // Keep ghost for base structure, override visuals
+          // Remove size="sm"
+          className={cn(
+            // Flex layout (already default for button)
+            // Size & Padding
+            "h-10 px-6 py-0",
+            // Appearance
+            "rounded-full border border-[#444] bg-[#121212]",
+            // Hover state
+            "hover:bg-[#1f1f1f]", 
+            // Text style
+            "text-foreground/80 hover:text-foreground",
+            // Remove backdrop blur if present
+            // Keep default focus/disabled states from variant if needed
+          )}
+          onClick={handleClearStageReset}
+        >
+          {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
+        </Button>
+      </div>
     </div>
   );
 } 
