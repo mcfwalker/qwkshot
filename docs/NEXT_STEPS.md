@@ -101,6 +101,16 @@
   - [x] Enhance performance (Component extraction helps) ✅
 - **Note:** `CameraAnimationSystem` refactored to use new API contract (`CameraCommand[]`) and tabbed layout. Core playback logic adapted. Panel components extracted. Initial styling pass complete. Needs easing implementation, detailed styling match, testing.
 
+- [ ] **Functional Completion & Testing (New Subsection)**
+  - [ ] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected.
+  - [ ] Fix "Lock Composition" button functionality (`onLockToggle` interaction, state updates, potentially related `storeEnvironmentalMetadata` call).
+  - [ ] Implement/restore correct hover states for interactive UI elements.
+  - [ ] Implement rendering of controls within the "Playback" tab view.
+  - [ ] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions (even if underlying logic like SceneAnalyzer integration is pending).
+  - [ ] Address miscellaneous visual cleanup items.
+  - [ ] Implement refined easing logic in playback.
+  - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
+
 ### Phase 4: Pipeline Optimization (Ongoing)
 - [ ] Enhance validation systems
   - [ ] Improve path validation
@@ -115,10 +125,13 @@
   - [ ] Reduce resource usage
 
 ## Current Priorities (Updated)
-1.  Complete UI/UX Refactor (Phase 3):
-    *   Finalize styling.
-    *   Implement easing logic in playback.
-    *   Test UI flow thoroughly.
+1.  Complete UI Functional Completion & Testing (Phase 3 Subsection):
+    *   Implement Playback tab UI rendering.
+    *   Fix Lock Composition functionality.
+    *   Test UI triggers and basic end-to-end flow.
+    *   Implement/restore correct hover states.
+    *   Implement refined easing logic in playback.
+    *   Address miscellaneous visual cleanup.
 2.  Implement proper Authentication/Authorization for API route data fetching.
 3.  Integrate real `SceneAnalyzer` component.
 4.  Address remaining TODOs in Engine/Interpreter.
@@ -211,9 +224,10 @@
 - `SceneAnalysis` placeholder limits accuracy of `PromptCompiler` and `EnvironmentalAnalyzer` output.
 
 ## Next Session Focus (Updated)
-1. Continue UI/UX Refactor (Phase 3).
-2. Finalize panel styling against Figma.
-3. Implement easing function application in playback.
-4. Test UI interactions and playback.
+1. Implement Playback tab UI rendering (`PlaybackPanel`).
+2. Fix Lock Composition functionality (`ShotCallerPanel` / `CameraAnimationSystem`).
+3. Test basic UI interactions (Lock, Generate -> Tab Switch).
+4. Implement/restore hover states.
+5. Implement easing logic.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
