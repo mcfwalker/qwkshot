@@ -37,16 +37,17 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
   <div>
     <div className="mb-6">
       <div>
-        <div className="flex items-center mb-4">
-          <div className="flex h-4 w-10 items-center justify-center rounded-[4px] bg-[#353535] text-[#CFD0D0] text-[10px] font-bold">1</div>
+        <div className="mb-4 flex w-8 h-8 px-2 py-0 flex-col justify-center items-center gap-2.5 aspect-square rounded-[20px] border border-[#444444] bg-[#1D1D1D] text-[#CFD0D0] text-xs font-normal">
+          1
         </div>
         <Button 
           variant="secondary"
           className={cn(
             "w-full h-10 px-6 py-0 inline-flex items-center justify-center gap-2.5",
-            "rounded-lg border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
+            "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
             "hover:bg-[#404040]",
-            "disabled:opacity-70 disabled:pointer-events-none"
+            "disabled:opacity-70 disabled:pointer-events-none",
+            "text-sm"
           )}
           onClick={props.onLockToggle}
           disabled={props.isGenerating || props.generatePathState === 'ready'} 
@@ -57,8 +58,8 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
     </div>
     <div className="space-y-4 mb-6">
       <div className="space-y-1">
-        <div className="flex items-center mb-4">
-          <div className="flex h-4 w-10 items-center justify-center rounded-[4px] bg-[#353535] text-[#CFD0D0] text-[10px] font-bold">2</div>
+        <div className="mb-4 flex w-8 h-8 px-2 py-0 flex-col justify-center items-center gap-2.5 aspect-square rounded-[20px] border border-[#444444] bg-[#1D1D1D] text-[#CFD0D0] text-xs font-normal">
+          2
         </div>
         <div className="space-y-4">
           <Textarea
@@ -66,7 +67,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
             value={props.instruction}
             onChange={(e) => props.onInstructionChange(e.target.value)}
             disabled={!props.isLocked || props.isGenerating} 
-            className="min-h-[128px] resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/70 rounded-lg"
+            className="min-h-[128px] p-4 resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/70 placeholder:text-sm rounded-xl"
           />
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -76,7 +77,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
                   id="duration-input" type="number" value={props.inputDuration} 
                   onChange={props.onDurationChange} onBlur={props.onDurationBlur} 
                   min={1} max={20} step={0.5} 
-                  className="text-right h-9 bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 text-sm rounded-md"
+                  className="text-right h-9 bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 text-sm rounded-lg"
                   disabled={!props.isLocked || props.isGenerating}
                 />
               </div>
@@ -91,7 +92,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         disabled={!props.isLocked || props.isGenerating || props.generatePathState === 'ready'}
         className={cn(
             "w-full h-14 px-6 py-0 inline-flex items-center justify-center gap-2.5",
-            "rounded-lg border border-[#444444] bg-[#C2F751] text-black font-semibold",
+            "rounded-2xl border border-[#444444] bg-[#C2F751] text-black font-semibold text-sm",
             "shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
             "hover:bg-[#C2F751]/90",
             (props.isGenerating || !props.isLocked || props.generatePathState === 'ready') && 

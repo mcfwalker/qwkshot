@@ -852,14 +852,14 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           onValueChange={(value) => setActiveTab(value as TabValue)}
           className="flex flex-col w-[288px] gap-4"
       >
-        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-lg bg-[#121212] text-muted-foreground w-full">
+        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
           <TabsPrimitive.Trigger 
             value="shotCaller" 
             className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10",
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'shotCaller' ? "bg-[#2a2a2a] text-foreground shadow-sm rounded-lg" : "hover:text-foreground/80"
+                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
             )}
           >
             SHOT CALLER
@@ -867,10 +867,10 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           <TabsPrimitive.Trigger 
             value="playback" 
             className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10",
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'playback' ? "bg-[#2a2a2a] text-foreground shadow-sm rounded-lg" : "hover:text-foreground/80"
+                activeTab === 'playback' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
             )}
             disabled={commands.length === 0}
           >
