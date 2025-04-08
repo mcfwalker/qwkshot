@@ -102,12 +102,13 @@
 - **Note:** `CameraAnimationSystem` refactored to use new API contract (`CameraCommand[]`) and tabbed layout. Core playback logic adapted. Panel components extracted. Initial styling pass complete. Needs easing implementation, detailed styling match, testing.
 
 - [ ] **Functional Completion & Testing (New Subsection)**
-  - [ ] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected.
-  - [ ] Fix "Lock Composition" button functionality (`onLockToggle` interaction, state updates, potentially related `storeEnvironmentalMetadata` call).
+  - [ ] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
+  - [~] Fix "Lock Composition" button functionality (`onLockToggle` interaction, state updates, potentially related `storeEnvironmentalMetadata` call). (Disabled when no model, but underlying validation conflict remains) ⚠️
   - [ ] Implement/restore correct hover states for interactive UI elements.
-  - [ ] Implement rendering of controls within the "Playback" tab view.
+  - [x] Implement rendering of controls within the "Playback" tab view. ✅
   - [ ] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions (even if underlying logic like SceneAnalyzer integration is pending).
   - [ ] Address miscellaneous visual cleanup items.
+  - [-] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ⚠️
   - [ ] Implement refined easing logic in playback.
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
 
@@ -125,16 +126,19 @@
   - [ ] Reduce resource usage
 
 ## Current Priorities (Updated)
-1.  Complete UI Functional Completion & Testing (Phase 3 Subsection):
-    *   Implement Playback tab UI rendering.
-    *   Fix Lock Composition functionality.
-    *   Test UI triggers and basic end-to-end flow.
+1.  **Debug Animation Playback:** (Phase 3 Subsection)
+    *   Diagnose and resolve stuttering/incorrect motion in `CameraAnimationSystem`.
+2.  **Resolve Lock/Validation Conflict:** (Phase 3 Subsection)
+    *   Decide strategy (e.g., pre-validation, constrain lock) for handling locking in invalid positions.
+    *   Implement chosen solution.
+3.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
+    *   Test UI triggers and basic end-to-end flow (once playback works).
     *   Implement/restore correct hover states.
     *   Implement refined easing logic in playback.
     *   Address miscellaneous visual cleanup.
-2.  Implement proper Authentication/Authorization for API route data fetching.
-3.  Integrate real `SceneAnalyzer` component.
-4.  Address remaining TODOs in Engine/Interpreter.
+4.  Implement proper Authentication/Authorization for API route data fetching.
+5.  Integrate real `SceneAnalyzer` component.
+6.  Address remaining TODOs in Engine/Interpreter.
 
 ## Implementation Strategy
 
@@ -222,12 +226,14 @@
 ## Blockers and Issues
 - API route requires proper Auth strategy to work with RLS enabled.
 - `SceneAnalysis` placeholder limits accuracy of `PromptCompiler` and `EnvironmentalAnalyzer` output.
+- LLM not consistently following prompt instructions regarding target coordinates.
+- Client-side animation playback exhibits stuttering/incorrect motion despite recent fixes.
+- Conflict exists between allowing lock in invalid positions and subsequent path validation.
 
 ## Next Session Focus (Updated)
-1. Implement Playback tab UI rendering (`PlaybackPanel`).
-2. Fix Lock Composition functionality (`ShotCallerPanel` / `CameraAnimationSystem`).
-3. Test basic UI interactions (Lock, Generate -> Tab Switch).
-4. Implement/restore hover states.
-5. Implement easing logic.
+1. Add detailed logging to `CameraAnimationSystem`'s `animate` function.
+2. Analyze logs to pinpoint cause of playback stuttering/incorrect motion.
+3. Implement fix for playback logic.
+4. Re-evaluate strategy for handling invalid locked camera positions.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
