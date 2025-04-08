@@ -44,6 +44,8 @@ import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter
 // Define the props interface
 interface CameraAnimationSystemProps {
   isPlaying: boolean;
+  isRecording: boolean;
+  setIsRecording: React.Dispatch<React.SetStateAction<boolean>>;
   progress: number;
   duration: number;
   playbackSpeed: number;
@@ -157,6 +159,8 @@ type TabValue = 'shotCaller' | 'playback';
 
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   isPlaying,
+  isRecording,
+  setIsRecording,
   progress,
   duration,
   playbackSpeed,
@@ -177,7 +181,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [commands, setCommands] = useState<CameraCommand[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
@@ -411,135 +414,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     onPlayPause();
   };
 
-  // Restore the original useEffect animation loop
-  useEffect(() => {
-    let animationFrameId: number | undefined = undefined;
-    let initialCameraPosition: Vector3 | undefined = undefined;
-    let initialControlsTarget: Vector3 | undefined = undefined;
-
-    if (isPlaying && commands.length > 0 && cameraRef.current && controlsRef.current) {
-      const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
-      if (totalDuration <= 0) return; 
-
-      initialCameraPosition = cameraRef.current.position.clone();
-      initialControlsTarget = controlsRef.current.target.clone();
-
-      if (progressRef.current < 0.01) { 
-        startTimeRef.current = performance.now();
-        onProgressChange(0); 
-      } else if (startTimeRef.current === null) {
-        startTimeRef.current = performance.now() - (progressRef.current * totalDuration * 1000);
-      }
-      
-      if (startTimeRef.current === null) {
-        console.error("Animation start time could not be determined.");
-        return; 
-      }
-      const capturedStartTime = startTimeRef.current;
-
-      // --- Disable Controls --- 
-      // controlsRef.current.enabled = false; // Keep controls enabled for now
-
-      const animate = (time: number) => {
-        const currentTime = performance.now();
-        const elapsedTimeSinceStart = Math.max(0, Math.min(totalDuration, (currentTime - capturedStartTime) / 1000));
-        const currentOverallProgress = Math.min(1.0, elapsedTimeSinceStart / totalDuration);
-        progressRef.current = currentOverallProgress;
-        const clampedProgressPercent = Math.min(100, currentOverallProgress * 100); 
-
-        if (!isPlaying) {
-          if (animationFrameId) cancelAnimationFrame(animationFrameId);
-          animationFrameId = undefined;
-          // Re-enable controls when paused mid-animation
-          // if (controlsRef.current) controlsRef.current.enabled = true; // Keep enabled
-          return; 
-        }
-        
-        let accumulatedDuration = 0;
-        let currentCommandIndex = 0;
-        while (currentCommandIndex < commands.length - 1 && 
-               accumulatedDuration + commands[currentCommandIndex].duration < elapsedTimeSinceStart) {
-          accumulatedDuration += commands[currentCommandIndex].duration;
-          currentCommandIndex++;
-        }
-        
-        const command = commands[currentCommandIndex];
-        if (!command) {
-            console.error('Animate Error: Could not find command for interpolation.');
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            animationFrameId = undefined;
-            onProgressChange(100); 
-            onStop();
-            // if (controlsRef.current) controlsRef.current.enabled = true;
-            return;
-        }
-
-        const segmentStartPos = (currentCommandIndex === 0)
-            ? initialCameraPosition!
-            : commands[currentCommandIndex - 1].position;
-        const segmentStartTarget = (currentCommandIndex === 0)
-            ? initialControlsTarget!
-            : commands[currentCommandIndex - 1].target;
-
-        const segmentEndPos = command.position;
-        const segmentEndTarget = command.target;
-
-        const timeElapsedInSegment = elapsedTimeSinceStart - accumulatedDuration;
-        const t = command.duration > 0 
-            ? Math.min(1.0, Math.max(0.0, timeElapsedInSegment / command.duration)) 
-            : 1.0; 
-
-        const easingName = command.easing || 'linear';
-        const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
-        const easedT = easingFunction(t);
-
-        const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
-        const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
-
-        // --- Update camera AND controls --- 
-        if (cameraRef.current && controlsRef.current) {
-            cameraRef.current.position.copy(currentPosition);
-            controlsRef.current.target.copy(currentTarget);
-            controlsRef.current.update(); 
-        }
-        
-        // Update UI progress
-        onProgressChange(clampedProgressPercent);
-        
-        if (currentOverallProgress < 1.0) { 
-          animationFrameId = requestAnimationFrame(animate);
-        } else {
-          // Animation ended
-          if (cameraRef.current && controlsRef.current) {
-             const finalCommand = commands[commands.length-1];
-             cameraRef.current.position.copy(finalCommand.position);
-             controlsRef.current.target.copy(finalCommand.target);
-             controlsRef.current.update();
-          }
-          animationFrameId = undefined;
-          progressRef.current = 1;
-          onProgressChange(100);
-          onStop();
-          // if (controlsRef.current) controlsRef.current.enabled = true; // Keep enabled
-        }
-      };
-      
-      animationFrameId = requestAnimationFrame(animate);
-    } else {
-       startTimeRef.current = null; 
-    }
-      
-    // Cleanup function
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = undefined;
-      }
-      // Ensure controls are enabled on cleanup (if they were disabled)
-      // if (controlsRef.current) controlsRef.current.enabled = true; 
-    };
-  }, [isPlaying, commands, duration, cameraRef, controlsRef, onProgressChange, onStop]);
-
   const handleDownload = async () => {
     if (!canvasRef?.current) {
       toast.error('Canvas not available for recording');
@@ -569,6 +443,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         mimeType: supportedType,
         videoBitsPerSecond: 8000000
       });
+      mediaRecorderRef.current = mediaRecorder; // Store ref
+      chunksRef.current = []; // Resetting chunks
+
+      // Add error handler
+      mediaRecorder.onerror = (event: Event) => {
+        console.error('MediaRecorder error:', event);
+        toast.error('Recording error occurred. See console for details.');
+        setIsRecording(false); // Ensure loading state stops on error
+      };
 
       // Collect data chunks during recording
       mediaRecorder.ondataavailable = (event) => {
@@ -579,6 +462,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
       // Handle recording completion
       mediaRecorder.onstop = () => {
+        console.log('>>> MediaRecorder.onstop triggered'); // Log start of handler
         if (chunksRef.current.length === 0) {
           toast.error('No video data was recorded');
           setIsRecording(false);
@@ -600,6 +484,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }
         
         setIsRecording(false);
+        console.log('>>> MediaRecorder.onstop finished'); // Log end of handler
       };
 
       // Start recording
@@ -609,11 +494,12 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // Start the animation
       onPlayPause();
 
-      // Stop recording after duration + small buffer
-      const recordingDuration = (duration * 1000) + 100;
+      // Stop recording after duration + small buffer, adjusted for playback speed
+      const recordingDuration = (duration / playbackSpeed * 1000) + 100;
       setTimeout(() => {
-        if (mediaRecorder.state === 'recording') {
-          mediaRecorder.stop();
+        console.log('>>> setTimeout: Attempting to stop recording...', { state: mediaRecorderRef.current?.state }); // Log before stop
+        if (mediaRecorderRef.current?.state === 'recording') { // Check ref before stopping
+          mediaRecorderRef.current.stop();
         }
       }, recordingDuration);
 

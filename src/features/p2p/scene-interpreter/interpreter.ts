@@ -24,7 +24,7 @@ function isFiniteVector(v: any): boolean {
 }
 
 // Placeholder Easing Function Map (replace with actual implementations)
-const easingFunctions = {
+export const easingFunctions = {
   linear: (t: number) => t,
   easeInQuad: (t: number) => t * t,
   easeOutQuad: (t: number) => t * (2 - t),

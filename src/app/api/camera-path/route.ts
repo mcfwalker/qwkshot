@@ -251,22 +251,22 @@ export async function POST(request: Request) {
     };
 
     // *** ADD LOGGING: Received Camera State ***
-    logger.info('>>> Received Camera State:', JSON.stringify(currentCameraState));
+    // logger.info('>>> Received Camera State:', JSON.stringify(currentCameraState));
 
-    logger.debug('Camera state:', {
-      position: currentCameraState.position.toArray(),
-      target: currentCameraState.target.toArray()
-    });
+    // logger.debug('Camera state:', { // Keep debug log?
+    //   position: currentCameraState.position.toArray(),
+    //   target: currentCameraState.target.toArray()
+    // });
 
-    console.log('Generating path with:', {
-      modelId,
-      instruction,
-      currentCameraState,
-      duration
-    });
+    // console.log('Generating path with:', { // Keep basic log?
+    //   modelId,
+    //   instruction,
+    //   currentCameraState,
+    //   duration
+    // });
 
     // --- Compile Prompt --- 
-    logger.info('Compiling prompt...');
+    // logger.info('Compiling prompt...'); // Keep info log?
     let compiledPrompt: CompiledPrompt;
     try {
       compiledPrompt = await promptCompiler.compilePrompt(
@@ -276,9 +276,9 @@ export async function POST(request: Request) {
         modelMetadata, 
         currentCameraState
       );
-      // *** ADD LOGGING: Compiled System Message ***
-      logger.info('>>> Compiled System Message:', compiledPrompt.systemMessage);
-      logger.debug('Prompt compiled successfully');
+      // *** REMOVE LOG ***
+      // logger.info('>>> Compiled System Message:', compiledPrompt.systemMessage);
+      // logger.debug('Prompt compiled successfully'); // Keep debug log?
     } catch (error) {
         logger.error('Error during prompt compilation:', error);
         // Handle unknown error type
@@ -290,14 +290,14 @@ export async function POST(request: Request) {
     }
 
     // Generate the path using the LLM Engine (using the compiledPrompt)
-    logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model);
+    // logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model); // Keep info log?
     try {
       const response = await engine.generatePath(compiledPrompt);
 
-      // *** ADD LOGGING: Raw LLM Response Data ***
-      logger.info('>>> Raw LLM Response Data:', JSON.stringify(response.data, null, 2));
+      // *** REMOVE LOG ***
+      // logger.info('>>> Raw LLM Response Data:', JSON.stringify(response.data, null, 2)); // Stringify for full detail
 
-      logger.debug('LLM Engine response:', response);
+      // logger.debug('LLM Engine response:', response); // Keep debug log?
 
       // Handle potential errors from the engine
       if (response.error) {

@@ -326,6 +326,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             onProgressUpdate={setProgress} // Pass setProgress directly
             onComplete={handleAnimationStop}
             currentProgress={progress} // Pass current progress for pause/resume
+            isRecording={isRecording}
           />
 
         </Suspense>
@@ -371,6 +372,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           // Other props
           disabled={!modelRef.current}
           isModelLoaded={!!modelUrl}
+          isRecording={isRecording}
+          setIsRecording={setIsRecording}
         />
       </div>
 

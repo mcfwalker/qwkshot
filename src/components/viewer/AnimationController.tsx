@@ -8,23 +8,18 @@ import { Vector3, PerspectiveCamera } from 'three';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
 // Import easing functions (assuming a shared utility path)
-// Adjust path if necessary - this might need to be copied or imported differently
-// depending on where easing functions are defined. Let's assume a placeholder path for now.
-// import { easingFunctions, EasingFunctionName } from '@/lib/easing'; // Placeholder path
+// Adjust path if necessary
+import { easingFunctions, EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter'; 
 
-// Placeholder for easing functions - replace with actual import/definition
-const easingFunctions: Record<string, (t: number) => number> = {
-  linear: (t: number) => t,
-  easeInQuad: (t: number) => t * t,
-  easeOutQuad: (t: number) => t * (2 - t),
-  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-};
-type EasingFunctionName = keyof typeof easingFunctions;
+// Remove placeholder easing functions
+// const easingFunctions: Record<string, (t: number) => number> = { ... };
+// type EasingFunctionName = keyof typeof easingFunctions;
 
 
 interface AnimationControllerProps {
   commands: CameraCommand[];
   isPlaying: boolean;
+  isRecording: boolean;
   playbackSpeed: number;
   cameraRef: React.RefObject<PerspectiveCamera>;
   // Use 'any' for now, replace with specific OrbitControls type if available and needed
@@ -38,6 +33,7 @@ interface AnimationControllerProps {
 export const AnimationController: React.FC<AnimationControllerProps> = ({
   commands,
   isPlaying,
+  isRecording,
   playbackSpeed, 
   cameraRef,
   controlsRef,
@@ -89,7 +85,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         startTimeRef.current = state.clock.elapsedTime - (progressRef.current * totalDuration); 
         initialCameraPositionRef.current = cameraRef.current.position.clone();
         initialControlsTargetRef.current = controlsRef.current.target.clone();
-        console.log('AnimationController: Initializing/Resuming', { startTime: startTimeRef.current, startProgress: progressRef.current });
     }
 
     // Calculate elapsed time and progress, adjusted by playback speed
@@ -116,7 +111,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     
     const command = commands[currentCommandIndex];
     if (!command) { 
-        console.error('AnimationController Error: Command not found');
         onComplete(); // Trigger completion cleanup
         return;
     }
@@ -151,6 +145,13 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     // --- Update camera directly --- 
     cameraRef.current.position.copy(currentPosition);
     cameraRef.current.lookAt(currentTarget);
+    // cameraRef.current.updateMatrixWorld(true); // Maybe needed?
+
+    // --- Force render to canvas if recording ---
+    if (isRecording) {
+      state.gl.render(state.scene, state.camera);
+    }
+    // --- End force render ---
 
     // Update shared progress state (for UI slider etc.) - throttled
     if (frameCounterRef.current % 3 === 0) { 
@@ -159,14 +160,15 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     
     // Check if animation finished
     if (currentOverallProgress >= 1.0) {
-        console.log('AnimationController: Complete');
         const finalCommand = commands[commands.length - 1];
         cameraRef.current.position.copy(finalCommand.position);
         cameraRef.current.lookAt(finalCommand.target);
         
-        // Sync controls to final state (controls will be re-enabled by useEffect triggered by onComplete)
-        controlsRef.current.target.copy(finalCommand.target);
-        // controlsRef.current.update(); // Might not be needed if target is set before enable
+        // Sync controls to final state 
+        if (controlsRef.current) {
+          controlsRef.current.target.copy(finalCommand.target);
+          controlsRef.current.update();
+        }
 
         // Reset internal state and call completion callback
         startTimeRef.current = null;
