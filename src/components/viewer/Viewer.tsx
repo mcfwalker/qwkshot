@@ -19,6 +19,8 @@ import { ModelSelectorTabs } from './ModelSelectorTabs';
 import { TextureLibraryModal } from './TextureLibraryModal';
 import { FloorTexture } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { AnimationController } from './AnimationController';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -43,9 +45,6 @@ interface ViewerProps {
 
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(10);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
@@ -112,6 +111,14 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [showTextureModal, setShowTextureModal] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
 
+  // --- Lifted Animation State ---
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // Animation progress 0-100
+  const [commands, setCommands] = useState<CameraCommand[]>([]);
+  const [duration, setDuration] = useState(10); // Default/initial duration
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  // --- End Lifted State ---
+
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
@@ -164,61 +171,51 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     }
   };
 
-  const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to move the camera.');
-      return;
-    }
-    if (cameraRef.current && controlsRef.current) {
-      cameraRef.current.position.copy(position);
-      controlsRef.current.target.copy(target);
-    }
-  }, [isLocked]);
-
-  const handleAnimationUpdate = useCallback((progress: number) => {
-    if (!cameraRef.current || !controlsRef.current) {
-      return;
-    }
-
-    // Calculate orbit position with playback speed adjustment
-    const adjustedProgress = progress * playbackSpeed;
-    const angle = adjustedProgress * Math.PI * 2; // Full circle
-    const radius = 5; // Distance from center
-    const height = 2; // Height above ground
-
-    const newPosition = new Vector3(
-      Math.cos(angle) * radius,
-      height,
-      Math.sin(angle) * radius
-    );
-
-    // Keep looking at the center
-    const target = new Vector3(0, 0, 0);
-
-    // Update camera and controls
-    cameraRef.current.position.copy(newPosition);
-    controlsRef.current.target.copy(target);
-  }, [playbackSpeed]);
-
+  // --- Lifted Animation Handlers ---
   const handleAnimationStart = useCallback(() => {
     setIsPlaying(true);
+    // Reset progress visually when starting from beginning?
+    // If progress is not 0, it implies resuming from a paused state
+    if (progress < 1) { 
+        setProgress(0); 
+    }
     console.log("Viewer: Animation Started");
-  }, []);
+  }, [progress]); // Dependency on progress to check if restarting
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
-    console.log("Viewer: Animation Stopped");
+    // Don't reset progress here, keep it at 100 or paused state
+    console.log("Viewer: Animation Stopped/Completed");
   }, []);
 
-  const handleAnimationPause = useCallback((progress: number) => {
-    // Pause is essentially stopping for now in terms of controls state
+  const handleAnimationPause = useCallback(() => {
     setIsPlaying(false); 
-    console.log(`Viewer: Animation Paused at ${progress}%`);
+    // Progress state is already updated via onProgressUpdate
+    console.log(`Viewer: Animation Paused at ${progress.toFixed(1)}%`);
+  }, [progress]);
+
+  const handlePlaybackSpeedChange = useCallback((speed: number) => {
+    setPlaybackSpeed(speed);
+    console.log(`Viewer: Playback speed set to ${speed}x`);
   }, []);
 
-  const handlePathGenerated = useCallback(() => {
-    setIsPathGenerated(true);
+  // Handler for scrubbing the progress slider (when not playing)
+  const handleProgressChange = useCallback((newProgress: number) => {
+      if (!isPlaying) {
+          setProgress(newProgress);
+          // Potentially update camera preview based on scrub? (More complex, skip for now)
+      }
+  }, [isPlaying]);
+
+  // Handler to receive new commands/duration from CameraAnimationSystem
+  const handleNewPathGenerated = useCallback((newCommands: CameraCommand[], newDuration: number) => {
+      setCommands(newCommands);
+      setDuration(newDuration);
+      setProgress(0); // Reset progress for new path
+      setIsPlaying(false); // Ensure not playing initially
+      console.log(`Viewer: New path received (${newCommands.length} commands, ${newDuration}s)`);
   }, []);
+  // --- End Lifted Handlers ---
 
   // Handler for grid toggle
   const handleGridToggle = (visible: boolean) => {
@@ -319,6 +316,18 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           {/* --- Add Axes Helper --- */}
           <primitive object={new AxesHelper(5)} />
 
+          {/* --- Animation Controller (Inside Canvas) --- */}
+          <AnimationController 
+            commands={commands}
+            isPlaying={isPlaying}
+            playbackSpeed={playbackSpeed}
+            cameraRef={cameraRef}
+            controlsRef={controlsRef}
+            onProgressUpdate={setProgress} // Pass setProgress directly
+            onComplete={handleAnimationStop}
+            currentProgress={progress} // Pass current progress for pause/resume
+          />
+
         </Suspense>
       </Canvas>
 
@@ -342,19 +351,24 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       {/* Camera Animation System */}
       <div className="absolute top-16 right-4 z-10">
         <CameraAnimationSystem
-          onAnimationUpdate={handleAnimationUpdate}
-          onAnimationStop={handleAnimationStop}
-          onAnimationStart={handleAnimationStart}
-          onAnimationPause={handleAnimationPause}
+          // Pass down relevant state
           isPlaying={isPlaying}
-          duration={duration}
-          setDuration={setDuration}
+          progress={progress}
+          duration={duration} 
+          playbackSpeed={playbackSpeed}
+          // Pass down relevant handlers/callbacks
+          onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
+          onStop={handleAnimationStop} // Maybe need a dedicated reset handler?
+          onProgressChange={handleProgressChange} // For slider interaction
+          onSpeedChange={handlePlaybackSpeedChange}
+          onDurationChange={setDuration} // Pass down setter for UI input field
+          onGeneratePath={handleNewPathGenerated} // Callback to receive new path
+          // Pass down refs needed by CameraAnimationSystem (e.g., for lock, download)
           modelRef={modelRef}
           cameraRef={cameraRef}
           controlsRef={controlsRef}
           canvasRef={canvasRef}
-          onPathGenerated={handlePathGenerated}
-          onPlaybackSpeedChange={setPlaybackSpeed}
+          // Other props
           disabled={!modelRef.current}
           isModelLoaded={!!modelUrl}
         />

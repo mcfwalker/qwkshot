@@ -41,20 +41,22 @@ const easingFunctions = {
 // Import the name type if needed for casting/checking
 import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
 
+// Define the props interface
 interface CameraAnimationSystemProps {
-  onAnimationUpdate: (progress: number) => void;
-  onAnimationStop: () => void;
-  onAnimationStart: () => void;
-  onAnimationPause: (progress: number) => void;
   isPlaying: boolean;
+  progress: number;
   duration: number;
-  setDuration: (duration: number) => void;
+  playbackSpeed: number;
+  onPlayPause: () => void;
+  onStop: () => void;
+  onProgressChange: (progress: number) => void;
+  onSpeedChange: (speed: number) => void;
+  onDurationChange: (duration: number) => void;
+  onGeneratePath: (commands: CameraCommand[], duration: number) => void;
   modelRef: React.RefObject<Object3D | null>;
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
-  canvasRef?: React.RefObject<HTMLCanvasElement>;
-  onPathGenerated?: () => void;
-  onPlaybackSpeedChange: (speed: number) => void;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
   disabled?: boolean;
   isModelLoaded: boolean;
 }
@@ -154,23 +156,23 @@ const generatePathStates: Record<GeneratePathState, { text: string; icon: React.
 type TabValue = 'shotCaller' | 'playback';
 
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
-  onAnimationUpdate,
-  onAnimationStop,
-  onAnimationStart,
-  onAnimationPause,
   isPlaying,
+  progress,
   duration,
-  setDuration,
+  playbackSpeed,
+  onPlayPause,
+  onStop,
+  onProgressChange,
+  onSpeedChange,
+  onDurationChange,
+  onGeneratePath,
   modelRef,
   cameraRef,
   controlsRef,
   canvasRef,
-  onPathGenerated,
-  onPlaybackSpeedChange,
   disabled,
   isModelLoaded,
 }) => {
-  const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [commands, setCommands] = useState<CameraCommand[]>([]);
@@ -179,18 +181,18 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
-  const progressRef = useRef(0);
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const startTimeRef = useRef<number | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const { isLocked, toggleLock, storeEnvironmentalMetadata } = useViewerStore();
   const [messageIndex, setMessageIndex] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [takeCount, setTakeCount] = useState(0);
   const [modelName, setModelName] = useState<string | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [activeTab, setActiveTab] = useState<TabValue>('shotCaller');
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef<number | null>(null);
+  const progressRef = useRef(0);
 
   // Debug logging for button state
   useEffect(() => {
@@ -363,9 +365,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
             position: new Vector3(cmd.position.x, cmd.position.y, cmd.position.z),
             target: new Vector3(cmd.target.x, cmd.target.y, cmd.target.z),
             duration: cmd.duration,
-            // Easing function will likely not be transmitted via JSON, 
-            // It might need to be re-applied here based on index or config?
-            // easing: undefined // For now
+            easing: cmd.easing || 'linear' // Use easing from command or default to linear
           };
           return command;
         } catch (err) {
@@ -378,19 +378,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
       // Set the new commands state
       setCommands(newCommands);
-      // Comment out old keyframe state update
-      // setKeyframes(newKeyframes);
 
       // Calculate total duration from commands
       const totalDuration = newCommands.reduce((sum, cmd) => sum + cmd.duration, 0);
-      setDuration(totalDuration);
-      setProgress(0); // Reset progress
+      onDurationChange(totalDuration);
+      setInputDuration(totalDuration.toFixed(1)); // Update input field too
+      onProgressChange(0); // Use callback to reset parent state
       setGeneratePathState('ready');
       
-      // Decide whether to auto-start or wait for user
-      // onAnimationStart(); // Maybe don't auto-start?
-      
-      onPathGenerated?.();
+      onGeneratePath(newCommands, totalDuration);
       toast.success('Camera path generated successfully');
       // Switch to playback tab on success
       setActiveTab('playback'); 
@@ -412,225 +408,124 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       hasCamera: !!cameraRef.current,
       hasControls: !!controlsRef.current
     });
-    onAnimationStart();
+    onPlayPause();
   };
 
-  const handleProgressChange = (values: number[]) => {
-    const value = values[0]; // Overall progress percentage (0-100)
-    console.log('Progress update from slider:', { value, isPlaying });
-    
-    // Update only if not playing and commands exist
-    if (!isPlaying && commands.length > 0) {
-      setProgress(value); // Update the visual state of the slider
-      progressRef.current = value / 100; // Update progress ref
-
-      const normalizedProgress = value / 100;
-      const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
-      if (totalDuration <= 0) return;
-
-      let targetTime = normalizedProgress * totalDuration;
-      
-      // Find the command segment corresponding to the target time
-      let currentCommandIndex = 0;
-      let accumulatedDuration = 0;
-      while (currentCommandIndex < commands.length - 1 && 
-             accumulatedDuration + commands[currentCommandIndex].duration < targetTime) {
-        accumulatedDuration += commands[currentCommandIndex].duration;
-        currentCommandIndex++;
-      }
-      
-      const command = commands[currentCommandIndex];
-      if (!command) return; // Should not happen
-
-      // Determine the start state for interpolation
-      const startPos = (currentCommandIndex === 0) ? 
-          (commands[0].position) : 
-          commands[currentCommandIndex - 1].position;
-      const startTarget = (currentCommandIndex === 0) ? 
-          (commands[0].target) : 
-          commands[currentCommandIndex - 1].target; 
-
-      // Calculate progress within the current command segment
-      const timeElapsedInCommand = targetTime - accumulatedDuration;
-      let t = command.duration > 0 ? Math.min(1.0, Math.max(0.0, timeElapsedInCommand / command.duration)) : 1.0; 
-
-      // Apply easing by looking up the function using the name
-      const easingName = command.easing || 'linear';
-      const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
-      const easedT = easingFunction(t);
-
-      // Interpolate position and target using easedT
-      const position = new Vector3().lerpVectors(startPos, command.position, easedT);
-      const target = new Vector3().lerpVectors(startTarget, command.target, easedT);
-
-      // Update camera and controls directly
-      if (cameraRef.current && controlsRef.current) {
-        cameraRef.current.position.copy(position);
-        controlsRef.current.target.copy(target);
-        controlsRef.current.update(); // Ensure controls target is updated
-      }
-    }
-  };
-
-  // Add animation frame effect
+  // Restore the original useEffect animation loop
   useEffect(() => {
     let animationFrameId: number | undefined = undefined;
     let initialCameraPosition: Vector3 | undefined = undefined;
     let initialControlsTarget: Vector3 | undefined = undefined;
 
     if (isPlaying && commands.length > 0 && cameraRef.current && controlsRef.current) {
-      // *** Log the Commands Array ***
-      console.log('>>> Commands received for animation:', commands);
-      
       const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
       if (totalDuration <= 0) return; 
 
-      // Capture initial state 
       initialCameraPosition = cameraRef.current.position.clone();
       initialControlsTarget = controlsRef.current.target.clone();
 
-      // Set start time using ref, only if starting fresh
-      if (progressRef.current < 0.01) { // Check if starting near beginning
+      if (progressRef.current < 0.01) { 
         startTimeRef.current = performance.now();
-        // Reset visual progress state too
-        setProgress(0); 
+        onProgressChange(0); 
       } else if (startTimeRef.current === null) {
-        // If resuming but startTimeRef is not set (e.g., after hot reload?), calculate it based on current progress
         startTimeRef.current = performance.now() - (progressRef.current * totalDuration * 1000);
       }
       
-      // Ensure startTimeRef is not null before proceeding
       if (startTimeRef.current === null) {
         console.error("Animation start time could not be determined.");
         return; 
       }
-      const capturedStartTime = startTimeRef.current; // Capture for closure
+      const capturedStartTime = startTimeRef.current;
 
-      console.log('Starting animation with state:', {
-        commandCount: commands.length,
-        totalDuration: totalDuration,
-        currentProgressRef: progressRef.current, 
-        startTime: capturedStartTime
-      });
+      // --- Disable Controls --- 
+      // controlsRef.current.enabled = false; // Keep controls enabled for now
 
       const animate = (time: number) => {
-        // --- Detailed Logging Start --- 
         const currentTime = performance.now();
-        // Use capturedStartTime from ref
-        const elapsedTimeSinceStart = Math.min(totalDuration, (currentTime - capturedStartTime) / 1000);
-        const currentOverallProgress = Math.min(100, (elapsedTimeSinceStart / totalDuration) * 100);
-
-        console.log(`>>> Animate Frame: T=${time.toFixed(2)}`, {
-          currentTime,
-          startTime: capturedStartTime,
-          elapsedTimeSinceStart,
-          totalDuration,
-          currentOverallProgress
-        });
-        // --- Detailed Logging End --- 
+        const elapsedTimeSinceStart = Math.max(0, Math.min(totalDuration, (currentTime - capturedStartTime) / 1000));
+        const currentOverallProgress = Math.min(1.0, elapsedTimeSinceStart / totalDuration);
+        progressRef.current = currentOverallProgress;
+        const clampedProgressPercent = Math.min(100, currentOverallProgress * 100); 
 
         if (!isPlaying) {
           if (animationFrameId) cancelAnimationFrame(animationFrameId);
           animationFrameId = undefined;
-          console.log('>>> Animate Frame: Bailing out (!isPlaying)');
+          // Re-enable controls when paused mid-animation
+          // if (controlsRef.current) controlsRef.current.enabled = true; // Keep enabled
           return; 
         }
         
-        // Find the current segment and interpolation parameters
         let accumulatedDuration = 0;
         let currentCommandIndex = 0;
-        while (currentCommandIndex < commands.length && // Check against length, not length-1
+        while (currentCommandIndex < commands.length - 1 && 
                accumulatedDuration + commands[currentCommandIndex].duration < elapsedTimeSinceStart) {
           accumulatedDuration += commands[currentCommandIndex].duration;
           currentCommandIndex++;
         }
-        // Ensure index stays within bounds if time exceeds total duration slightly
-        currentCommandIndex = Math.min(currentCommandIndex, commands.length - 1); 
         
         const command = commands[currentCommandIndex];
-        if (!command) { 
-            console.error('Error: Could not find command for interpolation.');
+        if (!command) {
+            console.error('Animate Error: Could not find command for interpolation.');
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = undefined;
-            setProgress(100); // Ensure UI shows complete
-            onAnimationStop();
+            onProgressChange(100); 
+            onStop();
+            // if (controlsRef.current) controlsRef.current.enabled = true;
             return;
         }
 
-        // Determine start state for the LERP
-        const segmentStartPos = (currentCommandIndex === 0) 
-            ? initialCameraPosition! // Use captured initial state for the first segment
-            : commands[currentCommandIndex - 1].position; // Use previous command's end state
+        const segmentStartPos = (currentCommandIndex === 0)
+            ? initialCameraPosition!
+            : commands[currentCommandIndex - 1].position;
         const segmentStartTarget = (currentCommandIndex === 0)
-            ? initialControlsTarget! // Use captured initial state for the first segment
-            : commands[currentCommandIndex - 1].target; // Use previous command's end state
+            ? initialControlsTarget!
+            : commands[currentCommandIndex - 1].target;
 
-        // Determine end state for the LERP (current command's state)
         const segmentEndPos = command.position;
         const segmentEndTarget = command.target;
 
-        // Calculate time elapsed *within the current segment*
         const timeElapsedInSegment = elapsedTimeSinceStart - accumulatedDuration;
-        // Calculate progress `t` within the current segment (0 to 1)
         const t = command.duration > 0 
             ? Math.min(1.0, Math.max(0.0, timeElapsedInSegment / command.duration)) 
             : 1.0; 
 
-        // Apply easing
         const easingName = command.easing || 'linear';
         const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
         const easedT = easingFunction(t);
 
-        // Interpolate position and target
         const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
         const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
 
-        // *** ADD LOGGING: Target ***
-        console.log(`>>> Animate Frame: Interpolated Target: (${currentTarget.x.toFixed(2)}, ${currentTarget.y.toFixed(2)}, ${currentTarget.z.toFixed(2)})`);
-
-        // Update camera
+        // --- Update camera AND controls --- 
         if (cameraRef.current && controlsRef.current) {
-          cameraRef.current.position.copy(currentPosition);
-          // --- Revert to using OrbitControls target --- 
-          controlsRef.current.target.copy(currentTarget);
-          controlsRef.current.update(); 
-          // Comment out camera.lookAt
-          // cameraRef.current.lookAt(currentTarget);
+            cameraRef.current.position.copy(currentPosition);
+            controlsRef.current.target.copy(currentTarget);
+            controlsRef.current.update(); 
         }
-
-        // Update progress state and ref
-        progressRef.current = Math.min(1.0, elapsedTimeSinceStart / totalDuration);
-        const clampedProgressPercent = Math.min(100, progressRef.current * 100); 
-        setProgress(clampedProgressPercent); 
-        onAnimationUpdate(clampedProgressPercent);
         
-        // Continue or stop - Use the clamped percentage
-        console.log(`>>> Animate Frame: Progress Check: ${clampedProgressPercent} < 100?`, clampedProgressPercent < 100);
-        if (clampedProgressPercent < 100) { 
+        // Update UI progress
+        onProgressChange(clampedProgressPercent);
+        
+        if (currentOverallProgress < 1.0) { 
           animationFrameId = requestAnimationFrame(animate);
         } else {
           // Animation ended
-          console.log('>>> Animate Frame: Reached End Condition');
-          // Ensure final state is set exactly
           if (cameraRef.current && controlsRef.current) {
              const finalCommand = commands[commands.length-1];
              cameraRef.current.position.copy(finalCommand.position);
              controlsRef.current.target.copy(finalCommand.target);
              controlsRef.current.update();
           }
-          console.log('Animation complete');
           animationFrameId = undefined;
-          progressRef.current = 1; // Ensure ref is 100%
-          setProgress(100); // Ensure UI shows 100%
-          onAnimationStop(); // Call the PROP from parent
+          progressRef.current = 1;
+          onProgressChange(100);
+          onStop();
+          // if (controlsRef.current) controlsRef.current.enabled = true; // Keep enabled
         }
       };
       
-      // Start the animation loop
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       animationFrameId = requestAnimationFrame(animate);
     } else {
-       // Reset startTimeRef when not playing
        startTimeRef.current = null; 
     }
       
@@ -640,8 +535,10 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         cancelAnimationFrame(animationFrameId);
         animationFrameId = undefined;
       }
+      // Ensure controls are enabled on cleanup (if they were disabled)
+      // if (controlsRef.current) controlsRef.current.enabled = true; 
     };
-  }, [isPlaying, commands, duration, cameraRef, controlsRef, onAnimationUpdate, onAnimationStop]); 
+  }, [isPlaying, commands, duration, cameraRef, controlsRef, onProgressChange, onStop]);
 
   const handleDownload = async () => {
     if (!canvasRef?.current) {
@@ -672,9 +569,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         mimeType: supportedType,
         videoBitsPerSecond: 8000000
       });
-
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
 
       // Collect data chunks during recording
       mediaRecorder.ondataavailable = (event) => {
@@ -713,13 +607,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       mediaRecorder.start(50); // Request data every 50ms
 
       // Start the animation
-      onAnimationStart();
+      onPlayPause();
 
       // Stop recording after duration + small buffer
       const recordingDuration = (duration * 1000) + 100;
       setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
-          mediaRecorderRef.current.stop();
+        if (mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
         }
       }, recordingDuration);
 
@@ -741,15 +635,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   const handlePlayPause = () => {
     if (isPlaying) {
-      onAnimationPause(progress);
+      onStop();
     } else {
-      onAnimationStart();
+      onPlayPause();
     }
   };
 
   const handleReset = () => {
-    setProgress(0);
-    onAnimationStop();
+    onProgressChange(0); // Inform parent to reset progress
+    onStop();
   };
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -758,7 +652,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     
     const numValue = parseFloat(value);
     if (!isNaN(numValue) && numValue >= 1 && numValue <= 20) {
-      setDuration(numValue);
+      onDurationChange(numValue);
     }
   };
 
@@ -766,13 +660,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     const numValue = parseFloat(inputDuration);
     if (isNaN(numValue) || numValue < 1) {
       setInputDuration('1');
-      setDuration(1);
+      onDurationChange(1);
     } else if (numValue > 20) {
       setInputDuration('20');
-      setDuration(20);
+      onDurationChange(20);
     } else {
       setInputDuration(numValue.toString());
-      setDuration(numValue);
+      onDurationChange(numValue);
     }
   };
 
@@ -814,8 +708,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       return Math.abs(curr.value - value) < Math.abs(prev.value - value) ? curr : prev;
     });
     
-    setPlaybackSpeed(closestOption.value);
-    onPlaybackSpeedChange(closestOption.value);
+    onSpeedChange(closestOption.value);
   };
 
   // Handle scene clear
@@ -826,13 +719,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
 
     // Reset all states
-    setProgress(0);
+    onProgressChange(0); // Inform parent to reset progress
     setCommands([]);
     setInstruction('');
     setGeneratePathState('initial');
     setTakeCount(0);
     setModelName(null);
-    onAnimationStop();
+    onStop();
     setIsConfirmingClear(false);
 
     // Reset camera to initial position
@@ -878,7 +771,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     // Reset relevant state
     setInstruction('');
     setCommands([]);
-    setProgress(0);
+    onProgressChange(0); // Use callback to reset parent progress
     setGeneratePathState('initial');
     // Unlock? Depends on desired flow
     // if (isLocked) toggleLock(); 

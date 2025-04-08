@@ -294,6 +294,9 @@ export async function POST(request: Request) {
     try {
       const response = await engine.generatePath(compiledPrompt);
 
+      // *** ADD LOGGING: Raw LLM Response Data ***
+      logger.info('>>> Raw LLM Response Data:', JSON.stringify(response.data, null, 2));
+
       logger.debug('LLM Engine response:', response);
 
       // Handle potential errors from the engine
@@ -313,9 +316,6 @@ export async function POST(request: Request) {
           { status: 500 }
         );
       }
-
-      // *** ADD LOGGING: Raw LLM Response Data ***
-      logger.info('>>> Raw LLM Response Data:', response.data);
 
       // Use the data from the engine response
       const cameraPath = response.data; 
