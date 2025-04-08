@@ -12,6 +12,9 @@
 - ✅ Updated ARCHITECTURE.md to reflect current state
 - ✅ Migrated development tasks to Asana
 - ✅ Archived DEVELOPMENT_ROADMAP.md
+- ✅ Refactor animation loop to use useFrame hook
+- ✅ Lift animation state/refs from CameraAnimationSystem to Viewer
+- ✅ Fix static video download issue by forcing render
 
 ## Upcoming Tasks
 
@@ -43,10 +46,11 @@
   - [x] Add basic validation types (`validateInputPath`, `validateCommands` structure)
 
 - [ ] Move animation logic from UI
-  - [ ] Extract CameraAnimationSystem logic -> **Partially Done:** Path *processing* responsibility moved, playback interpolation remains. Structure for smoothing/easing added. ⚠️
-  - [ ] Create animation service layer (Covered by Interpreter structure) ✅
-  - [ ] Set up state management (Interpreter manages internal state) ✅
-  - [ ] Add event system (Deferred)
+  - [x] Refactor Animation Logic (Processing vs. Playback)
+    - [x] Extract CameraAnimationSystem logic -> Path *processing* moved to backend `SceneInterpreter`; Playback *interpolation/execution* moved to client-side `AnimationController` (`useFrame`). ✅
+    - [x] Create animation service layer -> Backend processing service (`SceneInterpreter`) created; Client playback execution component (`AnimationController`) created. ✅
+    - [x] Set up state management (Interpreter manages internal state, `Viewer`/`AnimationController` manage client state) ✅
+    - [ ] Add event system (Deferred - still deferred)
 
 - [x] Implement path processing
   - [x] Create path validation system (`validateInputPath` implemented with detailed checks) ✅
@@ -84,7 +88,7 @@
 ### Phase 3: UI/UX Refactor (2-3 weeks) ⚠️ **(In Progress)**
 - [ ] Improve core interactions
   - [ ] Enhance lock mechanism UX (Deferred)
-  - [ ] Improve animation controls (Partially done - basic playback logic adapted) ✅
+  - [ ] Improve animation controls (Partially done - playback logic refactored) ✅
   - [ ] Add better feedback systems (Deferred)
   - [ ] Streamline user flow (Tab structure implemented) ✅
 
@@ -95,21 +99,23 @@
   - [ ] Implement loading states (Existing loader adapted) ✅
 
 - [x] Optimize component structure
-  - [x] Reorganize component hierarchy (Tabs implemented) ✅
-  - [ ] Improve state management (Basic state adapted, further review maybe needed)
+  - [x] Reorganize component hierarchy (Tabs, AnimationController added) ✅
+  - [x] Improve state management (Lifted state to Viewer) ✅
   - [x] Clean up event handling (Basic handlers adapted/created) ✅
   - [x] Enhance performance (Component extraction helps) ✅
-- **Note:** `CameraAnimationSystem` refactored to use new API contract (`CameraCommand[]`) and tabbed layout. Core playback logic adapted. Panel components extracted. Initial styling pass complete. Needs easing implementation, detailed styling match, testing.
+- **Note:** `CameraAnimationSystem` refactored, `AnimationController` created using `useFrame`. Playback/Recording fixed. UI controls adapted. Needs scrubbing reimplementation, lock conflict resolution, hover states, easing refinement, visual cleanup, testing.
 
 - [ ] **Functional Completion & Testing (New Subsection)**
-  - [ ] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
+  - [x] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
   - [~] Fix "Lock Composition" button functionality (`onLockToggle` interaction, state updates, potentially related `storeEnvironmentalMetadata` call). (Disabled when no model, but underlying validation conflict remains) ⚠️
   - [ ] Implement/restore correct hover states for interactive UI elements.
   - [x] Implement rendering of controls within the "Playback" tab view. ✅
   - [ ] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions (even if underlying logic like SceneAnalyzer integration is pending).
   - [ ] Address miscellaneous visual cleanup items.
-  - [-] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ⚠️
-  - [ ] Implement refined easing logic in playback.
+  - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅
+  - [x] Fix video download (static content). ✅
+  - [ ] Re-implement slider scrubbing logic.
+  - [ ] Implement refined easing logic in playback (if needed after testing).
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
 
 ### Phase 4: Pipeline Optimization (Ongoing)
@@ -126,19 +132,18 @@
   - [ ] Reduce resource usage
 
 ## Current Priorities (Updated)
-1.  **Debug Animation Playback:** (Phase 3 Subsection)
-    *   Diagnose and resolve stuttering/incorrect motion in `CameraAnimationSystem`.
-2.  **Resolve Lock/Validation Conflict:** (Phase 3 Subsection)
+1.  **Resolve Lock/Validation Conflict:** (Phase 3 Subsection)
     *   Decide strategy (e.g., pre-validation, constrain lock) for handling locking in invalid positions.
     *   Implement chosen solution.
-3.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
-    *   Test UI triggers and basic end-to-end flow (once playback works).
+2.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
+    *   Re-implement slider scrubbing logic.
+    *   Test UI triggers and basic end-to-end flow.
     *   Implement/restore correct hover states.
-    *   Implement refined easing logic in playback.
+    *   Implement refined easing logic in playback (if needed).
     *   Address miscellaneous visual cleanup.
-4.  Implement proper Authentication/Authorization for API route data fetching.
-5.  Integrate real `SceneAnalyzer` component.
-6.  Address remaining TODOs in Engine/Interpreter.
+3.  Implement proper Authentication/Authorization for API route data fetching.
+4.  Integrate real `SceneAnalyzer` component.
+5.  Address remaining TODOs in Engine/Interpreter.
 
 ## Implementation Strategy
 
@@ -226,14 +231,11 @@
 ## Blockers and Issues
 - API route requires proper Auth strategy to work with RLS enabled.
 - `SceneAnalysis` placeholder limits accuracy of `PromptCompiler` and `EnvironmentalAnalyzer` output.
-- LLM not consistently following prompt instructions regarding target coordinates.
-- Client-side animation playback exhibits stuttering/incorrect motion despite recent fixes.
+- LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Conflict exists between allowing lock in invalid positions and subsequent path validation.
 
 ## Next Session Focus (Updated)
-1. Add detailed logging to `CameraAnimationSystem`'s `animate` function.
-2. Analyze logs to pinpoint cause of playback stuttering/incorrect motion.
-3. Implement fix for playback logic.
-4. Re-evaluate strategy for handling invalid locked camera positions.
+1. Review and decide strategy for handling the Lock/Validation conflict.
+2. Implement chosen strategy for Lock/Validation conflict.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
