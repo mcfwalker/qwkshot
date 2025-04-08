@@ -59,6 +59,10 @@ const sceneAnalyzerFactory = new SceneAnalyzerFactory(logger);
 const environmentalAnalyzerFactory = new EnvironmentalAnalyzerFactory(logger);
 
 export async function POST(request: Request) {
+  // *** ADD LOGGING: Start ***
+  console.log('>>> API ROUTE START'); 
+  logger.info('>>> API ROUTE START - Logger');
+
   try {
     logger.info('Starting camera path generation request');
 
@@ -90,6 +94,8 @@ export async function POST(request: Request) {
 
     // --- Process Request Body --- 
     const body = await request.json();
+    // *** ADD LOGGING: Body Parsed ***
+    logger.info('>>> Request Body Parsed'); 
     const { instruction, sceneGeometry, duration, modelId } = body;
 
     // --- Declare Context Variables --- 
@@ -102,6 +108,9 @@ export async function POST(request: Request) {
     try {
         modelMetadata = await metadataManager.getModelMetadata(modelId);
         if (!modelMetadata) throw new Error(`Model metadata not found for id: ${modelId}`);
+        
+        // *** ADD LOGGING: Model Metadata Fetched ***
+        logger.info('>>> Model Metadata Fetched Successfully'); 
         
         // Create placeholder SceneAnalysis based on ModelMetadata
         const modelGeom = modelMetadata.geometry;
@@ -155,11 +164,13 @@ export async function POST(request: Request) {
             throw new Error('Failed to construct placeholder scene analysis data from model metadata.');
         }
 
-        // Analyze Environment (environmentalAnalyzer instance should be in scope here)
+        // Analyze Environment
         logger.info('Analyzing environment...');
         environmentalMetadata = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
         if (!environmentalMetadata) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
+        // *** ADD LOGGING: Context Data Done ***
+        logger.info('>>> Context Data Fetched & Analyzed Successfully'); 
         logger.debug('Successfully fetched and analyzed context data');
     } catch (error) {
         logger.error('Error fetching/analyzing context data:', error);
@@ -167,6 +178,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Failed to fetch context data: ${errorMessage}` }, { status: 500 });
     }
 
+    // --- Input Validation --- 
     if (!instruction || !sceneGeometry || !duration || !modelId) {
       const missing = {
         instruction: !instruction,
@@ -180,6 +192,12 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (!sceneGeometry.currentCamera || !sceneGeometry.currentCamera.position || !sceneGeometry.currentCamera.target) {
+        logger.error('Missing current camera state in sceneGeometry');
+        return NextResponse.json({ error: 'Missing current camera state in sceneGeometry' }, { status: 400 });
+    }
+    // *** ADD LOGGING: Input Validated ***
+    logger.info('>>> Input Parameters Validated'); 
 
     // --- Get Provider & Configure --- 
     const provider = await getActiveProvider() as LLMProvider;
@@ -232,6 +250,9 @@ export async function POST(request: Request) {
       )
     };
 
+    // *** ADD LOGGING: Received Camera State ***
+    logger.info('>>> Received Camera State:', JSON.stringify(currentCameraState));
+
     logger.debug('Camera state:', {
       position: currentCameraState.position.toArray(),
       target: currentCameraState.target.toArray()
@@ -255,6 +276,8 @@ export async function POST(request: Request) {
         modelMetadata, 
         currentCameraState
       );
+      // *** ADD LOGGING: Compiled System Message ***
+      logger.info('>>> Compiled System Message:', compiledPrompt.systemMessage);
       logger.debug('Prompt compiled successfully');
     } catch (error) {
         logger.error('Error during prompt compilation:', error);
@@ -290,6 +313,9 @@ export async function POST(request: Request) {
           { status: 500 }
         );
       }
+
+      // *** ADD LOGGING: Raw LLM Response Data ***
+      logger.info('>>> Raw LLM Response Data:', response.data);
 
       // Use the data from the engine response
       const cameraPath = response.data; 

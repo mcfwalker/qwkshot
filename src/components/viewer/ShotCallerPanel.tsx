@@ -31,6 +31,7 @@ export interface ShotCallerPanelProps {
     onDurationChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onDurationBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
     onGeneratePath: () => void;
+    isModelLoaded: boolean;
 }
 
 export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
@@ -40,20 +41,11 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         <div className="mb-4 flex w-8 h-8 px-2 py-0 flex-col justify-center items-center gap-2.5 aspect-square rounded-[20px] border border-[#444444] bg-[#1D1D1D] text-[#CFD0D0] text-xs font-normal">
           1
         </div>
-        <Button 
-          variant="secondary"
-          className={cn(
-            "w-full h-10 px-6 py-0 inline-flex items-center justify-center gap-2.5",
-            "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
-            "hover:bg-[#404040]",
-            "disabled:opacity-70 disabled:pointer-events-none",
-            "text-sm"
-          )}
-          onClick={props.onLockToggle}
-          disabled={props.isGenerating || props.generatePathState === 'ready'} 
-        >
-          {props.isLocked ? "Composition Locked" : "Lock Composition"} 
-        </Button>
+        <LockButton 
+          isLocked={props.isLocked} 
+          onToggle={props.onLockToggle} 
+          isModelLoaded={props.isModelLoaded}
+        />
       </div>
     </div>
     <div className="space-y-4 mb-6">

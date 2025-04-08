@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -201,17 +201,19 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   }, [playbackSpeed]);
 
   const handleAnimationStart = useCallback(() => {
-    if (cameraRef.current && controlsRef.current) {
-      setIsPlaying(true);
-    }
+    setIsPlaying(true);
+    console.log("Viewer: Animation Started");
   }, []);
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
+    console.log("Viewer: Animation Stopped");
   }, []);
 
-  const handleAnimationPause = useCallback(() => {
-    setIsPlaying(false);
+  const handleAnimationPause = useCallback((progress: number) => {
+    // Pause is essentially stopping for now in terms of controls state
+    setIsPlaying(false); 
+    console.log(`Viewer: Animation Paused at ${progress}%`);
   }, []);
 
   const handlePathGenerated = useCallback(() => {
@@ -295,7 +297,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
               MIDDLE: MOUSE.DOLLY,
               RIGHT: MOUSE.PAN
             }}
-            enabled={!isLocked}
+            enabled={!isPlaying && !isLocked}
           />
 
           {/* Floor */}
@@ -313,6 +315,10 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           
           {/* Environment for realistic lighting */}
           <Environment preset="city" />
+
+          {/* --- Add Axes Helper --- */}
+          <primitive object={new AxesHelper(5)} />
+
         </Suspense>
       </Canvas>
 
@@ -350,11 +356,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           onPathGenerated={handlePathGenerated}
           onPlaybackSpeedChange={setPlaybackSpeed}
           disabled={!modelRef.current}
+          isModelLoaded={!!modelUrl}
         />
       </div>
 
-      {/* Camera telemetry display - Align vertically with DevInfo */}
-      <div className="absolute right-8 bottom-4 z-10">
+      {/* Camera telemetry display - Center Position */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}

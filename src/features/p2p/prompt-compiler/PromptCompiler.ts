@@ -108,64 +108,53 @@ export class PromptCompilerImpl implements PromptCompiler {
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    currentCameraState: LLMFriendlyCameraState
+    rawCameraState: { position: Vector3; target: Vector3; fov: number } 
   ): string {
-    this.logger.debug('[generateSystemMessage] Inputs:', { sceneAnalysis, envAnalysis, modelMetadata, currentCameraState });
+    const llmFriendlyCameraState = this.transformCameraState(
+      rawCameraState.position,
+      rawCameraState.target,
+      rawCameraState.fov
+    );
+    this.logger.debug('[generateSystemMessage] Inputs:', { sceneAnalysis, envAnalysis, modelMetadata, rawCameraState });
     
-    // Safely destructure envAnalysis, providing defaults for nested objects
+    // Safely destructure envAnalysis...
     const { 
         environment = {}, 
         object = { dimensions: { width: 0, height: 0, depth: 0 }, floorOffset: 0 }, 
         distances = { fromObjectToBoundary: { front: 0, back: 0 } }, 
-        cameraConstraints = { minHeight: 0, maxHeight: 0, minDistance: 0, maxDistance: 0 } 
-    } = envAnalysis || {}; // Handle null envAnalysis
+    } = envAnalysis || {};
 
-    // Safely destructure modelMetadata.environment
+    // Safely destructure modelMetadata...
     const { 
         lighting = { intensity: 1, color: '#ffffff' }, 
         scene = { background: '#000000', ground: '#808080', atmosphere: '#87CEEB' } 
-    } = modelMetadata?.environment || {}; // Handle null/undefined environment
+    } = modelMetadata?.environment || {};
 
-    // Add detailed logging before accessing potentially problematic properties
-    this.logger.debug('[generateSystemMessage] Accessing object.dimensions', object?.dimensions);
+    // Format necessary strings (Object dimensions, Camera state, Env conditions)
     const dimString = object?.dimensions ? `${object.dimensions.width?.toFixed(2)}x${object.dimensions.height?.toFixed(2)}x${object.dimensions.depth?.toFixed(2)} units` : 'unknown dimensions';
-    
-    this.logger.debug('[generateSystemMessage] Accessing object.floorOffset', object?.floorOffset);
     const floorOffsetString = typeof object?.floorOffset === 'number' ? object.floorOffset.toFixed(2) : 'unknown';
-    
-    this.logger.debug('[generateSystemMessage] Accessing sceneAnalysis.spatial.complexity', sceneAnalysis?.spatial?.complexity);
-    const complexityString = sceneAnalysis?.spatial?.complexity ?? 'unknown';
-
-    this.logger.debug('[generateSystemMessage] Accessing distances.fromObjectToBoundary', distances?.fromObjectToBoundary);
-    const distFrontString = typeof distances?.fromObjectToBoundary?.front === 'number' ? distances.fromObjectToBoundary.front.toFixed(2) : 'unknown';
-    const distBackString = typeof distances?.fromObjectToBoundary?.back === 'number' ? distances.fromObjectToBoundary.back.toFixed(2) : 'unknown';
-
-    this.logger.debug('[generateSystemMessage] Accessing cameraConstraints', cameraConstraints);
-    const heightMinString = typeof cameraConstraints?.minHeight === 'number' ? cameraConstraints.minHeight.toFixed(2) : 'unknown';
-    const heightMaxString = typeof cameraConstraints?.maxHeight === 'number' ? cameraConstraints.maxHeight.toFixed(2) : 'unknown';
-    const distMinString = typeof cameraConstraints?.minDistance === 'number' ? cameraConstraints.minDistance.toFixed(2) : 'unknown';
-    const distMaxString = typeof cameraConstraints?.maxDistance === 'number' ? cameraConstraints.maxDistance.toFixed(2) : 'unknown';
-
-    this.logger.debug('[generateSystemMessage] Accessing currentCameraState', currentCameraState);
-    const camDistString = typeof currentCameraState?.distance === 'number' ? currentCameraState.distance.toFixed(2) : 'unknown';
-    const camHeightString = typeof currentCameraState?.height === 'number' ? currentCameraState.height.toFixed(2) : 'unknown';
-    const camAngleString = typeof currentCameraState?.angle === 'number' ? currentCameraState.angle.toFixed(2) : 'unknown';
-    const camTiltString = typeof currentCameraState?.tilt === 'number' ? currentCameraState.tilt.toFixed(2) : 'unknown';
-    const camFovString = typeof currentCameraState?.fov === 'number' ? currentCameraState.fov.toFixed(2) : 'unknown';
-
-    this.logger.debug('[generateSystemMessage] Accessing lighting', lighting);
+    const complexityString = sceneAnalysis?.spatial?.complexity ?? 'unknown'; // Keep complexity?
+    const camDistString = typeof llmFriendlyCameraState?.distance === 'number' ? llmFriendlyCameraState.distance.toFixed(2) : 'unknown';
+    const camHeightString = typeof llmFriendlyCameraState?.height === 'number' ? llmFriendlyCameraState.height.toFixed(2) : 'unknown';
+    const camAngleString = typeof llmFriendlyCameraState?.angle === 'number' ? llmFriendlyCameraState.angle.toFixed(2) : 'unknown';
+    const camTiltString = typeof llmFriendlyCameraState?.tilt === 'number' ? llmFriendlyCameraState.tilt.toFixed(2) : 'unknown';
+    const camFovString = typeof llmFriendlyCameraState?.fov === 'number' ? llmFriendlyCameraState.fov.toFixed(2) : 'unknown';
     const lightingString = lighting ? `- Lighting: ${lighting.intensity} intensity, ${lighting.color} color` : '';
-    
-    this.logger.debug('[generateSystemMessage] Accessing scene', scene);
     const sceneString = scene ? `- Background: ${scene.background}\n- Ground: ${scene.ground}\n- Atmosphere: ${scene.atmosphere}` : '';
+    const rawPosString = formatVector3(rawCameraState.position);
+    const initialRawTargetString = formatVector3(rawCameraState.target);
 
-    // Define the required JSON output format explicitly
+    // *** Get Object Center Coordinates - PRIORITIZE GEOMETRY CENTER ***
+    const objectCenter = sceneAnalysis?.glb?.geometry?.center || sceneAnalysis?.spatial?.bounds?.center;
+    const objectCenterString = formatVector3(objectCenter || { x: 0, y: 1, z: 0 });
+    this.logger.debug('[generateSystemMessage] Determined Object Center for TARGETING:', objectCenterString);
+
     const jsonOutputFormat = `\`\`\`json
 {
   "keyframes": [
     {
       "position": {"x": number, "y": number, "z": number},
-      "target": {"x": number, "y": number, "z": number},
+      "target": {"x": number, "y": number, "z": number}, // Target should be object center
       "duration": number // Duration > 0
     }
     // ... more keyframes ...
@@ -174,25 +163,22 @@ export class PromptCompilerImpl implements PromptCompiler {
 \`\`\`
 `;
 
-    return `You are a professional cinematographer tasked with creating a camera path for a 3D scene.
-IMPORTANT: You MUST respond ONLY with a valid JSON object matching the specified format. No other text, explanations, apologies, or introductory phrases.
+    // Updated system message
+    return `You are a professional cinematographer generating a camera path for a 3D scene.
+IMPORTANT: Respond ONLY with a valid JSON object matching the specified format. No other text.
 
 JSON OUTPUT FORMAT:
 ${jsonOutputFormat}
 
 Scene Information:
 - Object dimensions: ${dimString}
+- Object Center (x,y,z): ${objectCenterString}
 - Floor offset: ${floorOffsetString} units
 - Scene complexity: ${complexityString}
-- Available space: ${distFrontString} units front, ${distBackString} units back
 
-Camera Constraints:
-- Height range: ${heightMinString} to ${heightMaxString} units
-- Distance range: ${distMinString} to ${distMaxString} units
-- Movement speed: Maintain smooth transitions between keyframes
-- Framing: Keep the object centered and well-framed
-
-Current Camera State:
+Current Camera State (Locked Starting Point):
+- Position (x,y,z): ${rawPosString}
+- Target (x,y,z): ${initialRawTargetString}
 - Distance from object: ${camDistString} units
 - Height above object: ${camHeightString} units
 - Horizontal angle: ${camAngleString} degrees
@@ -203,12 +189,13 @@ Environmental Conditions:
 ${lightingString}
 ${sceneString}
 
-Please generate a camera path JSON that:
+Please generate a camera path JSON based on the User Request below that:
 1. Adheres strictly to the JSON OUTPUT FORMAT.
-2. Creates smooth transitions between keyframes.
-3. Stays within the specified constraints.
-4. Considers the environmental conditions.
-5. Creates visually appealing shots that highlight the object's features.`;
+2. **IMPORTANT:** The first keyframe's 'position' MUST match the 'Current Camera State' Position ${rawPosString}.
+3. **IMPORTANT:** The first keyframe's 'target' MUST match the 'Current Camera State' Target ${initialRawTargetString}.
+4. **CRITICAL FOR CORRECT FRAMING:** To keep the object centered, the 'target' value for **ALL** keyframes AFTER THE FIRST ONE must be the fixed 'Object Center' coordinates: ${objectCenterString}. Do not change the target after the first frame.
+5. Creates smooth, professional, and visually appealing camera movements appropriate for the scene and object.
+6. Interprets the User Request to define the overall motion starting from the locked camera state.`;
   }
 
   async compilePrompt(
@@ -216,23 +203,18 @@ Please generate a camera path JSON that:
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    currentCameraState: { position: Vector3; target: Vector3; fov: number }
+    currentCameraState: { position: Vector3; target: Vector3; fov: number } // Keep receiving raw state here
   ): Promise<CompiledPrompt> {
     const startTime = performance.now();
     this.logger.debug('[compilePrompt] Received envAnalysis:', envAnalysis);
     this.logger.debug('[compilePrompt] envAnalysis.cameraConstraints:', envAnalysis?.cameraConstraints);
     
-    const llmFriendlyCameraState = this.transformCameraState(
-      currentCameraState.position,
-      currentCameraState.target,
-      currentCameraState.fov
-    );
-
+    // Pass the raw state directly to generateSystemMessage
     const systemMessage = this.generateSystemMessage(
       sceneAnalysis,
       envAnalysis,
       modelMetadata,
-      llmFriendlyCameraState
+      currentCameraState 
     );
 
     const endTime = performance.now();

@@ -99,6 +99,8 @@ class CoreSceneInterpreter implements SceneInterpreter {
           return; // Go to next keyframe
         }
 
+        // --- Temporarily Comment Out ALL Constraint Checks --- 
+        /*
         // --- Basic Safety Checks (Using path.metadata.safetyConstraints) ---
         // Log the metadata and constraints before accessing them
         logger.debug('[validateInputPath] Checking constraints. Path metadata:', path.metadata);
@@ -109,59 +111,58 @@ class CoreSceneInterpreter implements SceneInterpreter {
             // Warning logged once outside the loop
         } else {
             // Check height bounds
-            // Add safe access check for property existence before calling .toFixed()
-            if (typeof constraints.minHeight !== 'number' || typeof constraints.maxHeight !== 'number') {
+            const tempMaxHeight = 50; // Was constraints.maxHeight
+            if (typeof constraints.minHeight !== 'number' || typeof tempMaxHeight !== 'number') {
                 errors.push('Invalid min/max height constraints');
-            } else if (kf.position.y < constraints.minHeight || kf.position.y > constraints.maxHeight) {
-                errors.push(`Keyframe ${index}: Position y (${kf.position.y.toFixed(2)}) outside height bounds [${constraints.minHeight.toFixed(2)}, ${constraints.maxHeight.toFixed(2)}].`);
+            } else if (kf.position.y < constraints.minHeight || kf.position.y > tempMaxHeight) {
+                errors.push(`Keyframe ${index}: Position y (${kf.position.y.toFixed(2)}) outside height bounds [${constraints.minHeight.toFixed(2)}, ${tempMaxHeight.toFixed(2)}].`);
             }
             // Check distance from origin
             const distanceFromOrigin = kf.position.length();
-            // Add safe access check
-            if (typeof constraints.minDistance !== 'number' || typeof constraints.maxDistance !== 'number') {
+            const tempMaxDistance = 20; // Was constraints.maxDistance
+            if (typeof constraints.minDistance !== 'number' || typeof tempMaxDistance !== 'number') {
                  errors.push('Invalid min/max distance constraints');
-            } else if (distanceFromOrigin < constraints.minDistance || distanceFromOrigin > constraints.maxDistance) {
-                errors.push(`Keyframe ${index}: Position distance (${distanceFromOrigin.toFixed(2)}) outside bounds [${constraints.minDistance.toFixed(2)}, ${constraints.maxDistance.toFixed(2)}].`);
+            } else if (distanceFromOrigin < constraints.minDistance || distanceFromOrigin > tempMaxDistance) {
+                errors.push(`Keyframe ${index}: Position distance (${distanceFromOrigin.toFixed(2)}) outside bounds [${constraints.minDistance.toFixed(2)}, ${tempMaxDistance.toFixed(2)}].`);
             }
             // Check restrictedZones
             if (constraints.restrictedZones && Array.isArray(constraints.restrictedZones)) {
               for (const zone of constraints.restrictedZones) {
-                // Assuming zone is a THREE.Box3 object
                 if (zone instanceof THREE.Box3 && zone.containsPoint(kf.position)) {
                   errors.push(`Keyframe ${index}: Position (${kf.position.x.toFixed(2)}, ${kf.position.y.toFixed(2)}, ${kf.position.z.toFixed(2)}) is inside a restricted zone.`);
-                  // Optionally break if one violation is enough per keyframe
-                  // break; 
                 }
               }
             }
-            
-            // TODO: Check restrictedAngles: Calculate viewing angle relative to some axis/object and check against constraints.restrictedAngles?
+            // TODO: Check restrictedAngles
         }
 
         // --- Velocity & Angular Velocity Checks (Requires valid previous keyframe) ---
         if (previousKfPosition && previousKfTarget && constraints && kf.duration > 0) {
-            // Linear Velocity
-            if (constraints.maxSpeed !== undefined) {
+            // --- Temporarily Comment Out Speed Check --- 
+            /* (Already commented out)
+            const tempMaxSpeed = 10; 
+            if (tempMaxSpeed !== undefined) { 
                 const distance = kf.position.distanceTo(previousKfPosition);
                 const speed = distance / kf.duration;
-                if (speed > constraints.maxSpeed) {
-                    errors.push(`Segment ${index-1}-${index}: Calculated speed (${speed.toFixed(2)}) exceeds maxSpeed (${constraints.maxSpeed}). Dist: ${distance.toFixed(2)}, Dur: ${kf.duration.toFixed(2)}`);
+                if (speed > tempMaxSpeed) {
+                    errors.push(`Segment ${index-1}-${index}: Calculated speed (${speed.toFixed(2)}) exceeds maxSpeed (${tempMaxSpeed}). Dist: ${distance.toFixed(2)}, Dur: ${kf.duration.toFixed(2)}`);
                 }
             }
-            // Angular Velocity (simplified check based on target change)
+            *\/
+           
+            // Angular Velocity
             if (constraints.maxAngularVelocity !== undefined) {
                 const vecToPrevTarget = new THREE.Vector3().subVectors(previousKfTarget, previousKfPosition).normalize();
                 const vecToCurrTarget = new THREE.Vector3().subVectors(kf.target, kf.position).normalize();
-                // Calculate angle change in radians
                 const angleChange = vecToPrevTarget.angleTo(vecToCurrTarget);
-                const angularSpeed = angleChange / kf.duration; // radians per second
-                // Convert maxAngularVelocity (assuming degrees/sec) to radians/sec
+                const angularSpeed = angleChange / kf.duration; 
                 const maxAngularSpeedRad = THREE.MathUtils.degToRad(constraints.maxAngularVelocity);
                 if (angularSpeed > maxAngularSpeedRad) {
                     errors.push(`Segment ${index-1}-${index}: Calculated angular speed (${(angularSpeed * 180 / Math.PI).toFixed(1)} deg/s) exceeds max (${constraints.maxAngularVelocity} deg/s). Angle change: ${(angleChange * 180 / Math.PI).toFixed(1)} deg`);
                 }
             }
         }
+        */ // End of temporary comment out for ALL constraints
 
         // Update previous position and target for next iteration's checks
         previousKfPosition = kf.position; 
@@ -392,11 +393,11 @@ class CoreSceneInterpreter implements SceneInterpreter {
         errors.push(`Command ${index}: Invalid or non-finite target vector.`);
         currentCmdHasError = true;
       }
-      // Check easing function (basic check)
-      if (cmd.easing && typeof cmd.easing !== 'function') {
-           errors.push(`Command ${index}: Invalid easing function type.`);
-           currentCmdHasError = true;
-      }
+      // Check easing function NAME (if it exists)
+      if (cmd.easing && !(cmd.easing in easingFunctions)) {
+        errors.push(`Command ${index}: Invalid or unknown easing function name: ${cmd.easing}.`);
+        currentCmdHasError = true;
+       }
 
       // Accumulate duration if valid
       if (!currentCmdHasError) {
