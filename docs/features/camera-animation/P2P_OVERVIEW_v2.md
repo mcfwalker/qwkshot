@@ -2,6 +2,9 @@
 
 This document outlines the re-imagined architecture of the LLM-driven camera control system, reflecting the current implementation and planned improvements. This version incorporates learnings from our initial implementation and investigation findings.
 
+## High-Level Explanation
+"Our Prompt-to-Path pipeline takes a user's natural language request, analyzes the 3D scene and environment context, and compiles a detailed prompt for an LLM. The LLM generates a sequence of camera keyframes. This sequence is then processed on our backend by a 'Scene Interpreter' which validates the path, applies cinematic smoothing, and translates it into a precise list of frame-by-frame camera commands. These commands are sent to the client, where a dedicated controller running within the React Three Fiber render loop executes them, ensuring smooth, synchronized camera animation in the 3D viewer."
+
 ## 🔄 Pipeline Data Flow
 
 ### Current Working Flow
@@ -13,12 +16,14 @@ User Upload → Scene Analyzer → Metadata Manager → DB
 Camera/Model Adjustments → Lock Scene → Environmental Analyzer → Metadata Manager → DB
 
 3. Path Generation:
-User Prompt → Prompt Compiler → Metadata Manager (fetch) → API Route → LLM Provider
-                                                                          ↓
-                                                        UI Components ← Response
+User Prompt → Prompt Compiler → Metadata Manager (fetch) → API Route → LLM Engine → Scene Interpreter
+                                                                            ↓
+                                               Viewer State ← API Response (CameraCommand[])
 
 4. Animation:
-UI Components (CameraAnimationSystem) handles all animation logic and playback
+Viewer State → AnimationController (useFrame) → Camera/Scene Updates
+  ↑                   ↓
+  |--- UI Controls --- CameraAnimationSystem
 ```
 
 ### Target Architecture Flow
@@ -35,7 +40,7 @@ User Prompt → Prompt Compiler → Metadata Manager (fetch) → LLM Engine → 
                                                         Scene Interpreter
 
 4. Animation:
-Scene Interpreter → Viewer (playback only)
+Scene Interpreter → API → Viewer (state) → AnimationController (execution) → Camera/Scene
 ```
 
 ## 🎯 Core Components
@@ -78,29 +83,41 @@ Scene Interpreter → Viewer (playback only)
 | Provider Abstraction   | ✅ Implemented   | Abstracts provider communication via `ThinLLMEngine`           |
 | Response Processing    | ✅ Implemented   | Standardizes response into `CameraPath` via `LLMResponse`    |
 | Error Management      | ✅ Implemented   | Centralizes provider API error handling                     |
-| Provider Selection    | ❌ Not Started   | Currently configured externally, not selected by engine     |
 - **Note:** Takes `CompiledPrompt`, uses helpers from `lib/llm/providers`, returns `LLMResponse<CameraPath>`.
 
 ### 6. Scene Interpreter ✅ (Substantially Complete)
 | **Task**                | **Current Status** | **What it does**                                              |
 |------------------------|-------------------|--------------------------------------------------------------|
 | Path Processing        | ✅ Implemented   | Processes `CameraPath` into `CameraCommand[]`                |
-| Animation Logic        | ✅ In Progress   | Basic smoothing/easing logic added (Refinement needed)       |
+| Animation Logic        | ✅ Implemented   | Applies smoothing (Catmull-Rom), assigns easing types. (Execution is client-side) |
 | Safety Enforcement     | ✅ Implemented   | Detailed input path validation added (velocity, bounds etc) |
-| Viewer Integration     | ❌ Not Started   | Provides `CameraCommand[]` for viewer consumption          |
+| Viewer Integration     | ✅ Complete      | Provides `CameraCommand[]` via API for client consumption    |
 - **Note:** Performs detailed validation and processing. Output format is `CameraCommand[]`.
+
+### 7. Animation Controller (Client) ✅ (New)
+| **Task**                | **Current Status** | **What it does**                                              |
+|------------------------|-------------------|--------------------------------------------------------------|
+| Frame Loop Execution   | ✅ Implemented   | Uses R3F `useFrame` for synchronized updates.                 |
+| Interpolation          | ✅ Implemented   | Calculates position/target per frame using `lerpVectors`.     |
+| Easing Application     | ✅ Implemented   | Applies easing functions based on command data.               |
+| Camera Update          | ✅ Implemented   | Applies calculated state to camera ref (`position`, `lookAt`). |
+| Playback Control       | ✅ Implemented   | Handles `isPlaying`, speed adjustments, progress reporting.   |
+- **Note:** Lives inside R3F Canvas, receives state/commands via props.
 
 ## 🔄 Current Implementation vs. Target Architecture
 
 ### Current Implementation (Actual)
 ```
-                    Scene Analyzer
-                         ↓
-User Input → Prompt Compiler → Metadata Manager → API Route → LLM Provider → UI Components (CameraAnimationSystem)
-     ↑                             ↑                  ↑              
-     |                             |                  |              
-Camera/Model                  Environmental      Animation
-Adjustments                   Analyzer           Logic
+                                Scene Analyzer
+                                     ↓
+User Input → Prompt Compiler → Metadata Manager → API Route → LLM Engine → Scene Interpreter
+     ↑                             ↑                                             ↓
+     |                             |                                             |
+Camera/Model                  Environmental                               API Response (Commands)
+Adjustments                   Analyzer                                         ↓
+                                                                      Viewer (State Management)
+                                                                            ↙         ↘
+                                                    CameraAnimationSystem (UI)   AnimationController (useFrame → Camera)
 ```
 
 ### Target Architecture (Goal)
@@ -132,10 +149,10 @@ Prompt Compiler → LLM Engine → Scene Interpreter → Viewer
 - **Blocker:** Real data fetching requires Auth solution.
 - **Blocker:** `SceneAnalysis` input uses placeholder.
 
-### Phase 3: UI/UX Refactor (Next)
-1. Modify UI to consume `CameraCommand[]`.
-2. Adapt UI animation playback logic.
-3. Improve controls and feedback.
+### Phase 3: UI/UX Refactor (✅ Mostly Complete, Testing/Refinement Remaining)
+1. Modify UI to consume `CameraCommand[]`. ✅
+2. Adapt UI animation playback logic (Refactored to `useFrame` in `AnimationController`). ✅
+3. Improve controls and feedback (In Progress - needs scrubbing, hover states, etc.). ⚠️
 
 ### Phase 4: Enhanced Safety & Reliability (Future / TODOs)
 1. Improve Environmental Analyzer (Existing ⚠️)

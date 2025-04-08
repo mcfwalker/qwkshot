@@ -79,7 +79,7 @@ Current implementation status and detailed flow diagrams are maintained in P2P_O
 ### 6. Scene Interpreter ✅ (Substantially Complete)
 - **Purpose**: Convert LLM output (`CameraPath`) into executable camera commands
 - **Key Features**:
-  - Path processing (smoothing/easing structure added)
+  - Path processing (smoothing/easing structure added, execution is client-side)
   - Detailed input path validation (incl. speed, bounds, etc.)
   - Basic output command validation structure
   - Safety constraint enforcement (partially implemented via validation)
@@ -91,30 +91,40 @@ Current implementation status and detailed flow diagrams are maintained in P2P_O
     - Integrated into API route after LLM Engine.
 - **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md) (Needs Update)
 
-### 7. Viewer Integration ⚠️ (Partially Implemented)
-- **Purpose**: Execute and visualize camera paths (`CameraCommand[]`)
-- **Key Features**:
-  - Camera animation with ref-based progress tracking
-  - Smooth interpolation between keyframes
-  - Lock mechanism for camera position capture
-  - Animation frame management
-  - UI feedback system
-  - Export capabilities
-- **Status**: ⚠️ Partially Implemented
+### 7. Client-Side Animation & UI (Formerly Viewer Integration)
+- **Purpose**: Receive camera commands, manage playback state, execute animation within R3F context, and handle UI interactions.
+- **Key Components & Features**:
+  - **`Viewer` Component:** 
+      - Renders the R3F `<Canvas>`.
+      - Holds lifted animation state (`isPlaying`, `commands`, `progress`, `duration`, `playbackSpeed`).
+      - Holds core refs (`cameraRef`, `controlsRef`, `canvasRef`, `modelRef`).
+      - Passes state/refs/callbacks down to child components.
+  - **`AnimationController` Component (New):**
+      - Rendered inside `<Canvas>`.
+      - Uses `useFrame` hook for synchronized frame-by-frame execution.
+      - Performs interpolation (lerp) and applies easing based on `CameraCommand[]`.
+      - Updates `cameraRef` directly (`position.copy`, `lookAt`).
+      - Manages internal animation timing (`startTimeRef`, `progressRef`).
+      - Handles playback speed adjustment.
+      - Calls `onProgressUpdate` and `onComplete` callbacks.
+      - Manages `OrbitControls.enabled` state during playback.
+  - **`CameraAnimationSystem` Component:**
+      - Renders UI panels (Shot Caller, Playback).
+      - Handles user inputs (prompt, duration, speed slider, play/pause, download, lock buttons).
+      - Displays animation progress and state.
+      - Communicates user actions and receives state via props/callbacks from `Viewer`.
+- **Status**: ✅ Core playback/recording functional using `useFrame`. UI adapted. State lifted.
 - **Recent Improvements**:
-  - Implemented ref-based animation system
-  - Added lock mechanism for camera position capture
-  - Enhanced animation frame cleanup
-  - Improved state management
-  - Added visual feedback for user actions
-  - Removed redundant start position system
+  - Refactored animation execution to use R3F `useFrame` hook via `AnimationController`.
+  - Lifted animation state/refs to `Viewer` component.
+  - Resolved visual playback glitches.
+  - Resolved static video recording issue (by forcing render in `useFrame`).
 - **Known Issues**:
-  - Animation playback requires scene unlock (UX improvement needed)
-  - Need for easing functions
-  - Limited animation preview capabilities
-  - Basic progress tracking
-  - Lock state and animation playback coordination
-- **Interface**: See [Viewer Integration Documentation](./viewer-integration/README.md)
+  - Lock state and animation playback coordination (Lock/Validation conflict).
+  - Slider scrubbing needs reimplementation after state lifting.
+  - Easing function refinement/testing needed.
+  - Hover states and minor UI cleanup pending.
+- **Interface**: N/A (Internal component structure)
 
 ### 8. Feedback System
 - **Purpose**: Monitor and improve pipeline performance
@@ -187,10 +197,18 @@ graph TD
     - Interpreter validates output commands (basic structure added).
     - Interpreter returns `CameraCommand[]`.
 
-6.  **Execution** (Viewer - Not yet refactored)
+6.  **Execution** (Client-Side - Refactored)
     - API Route returns `CameraCommand[]` to client.
-    *   Viewer Integration needs update to receive `CameraCommand[]`.
-    *   Viewer executes commands (interpolation, animation loop).
+    - `Viewer` component receives response (via handler like `handleNewPathGenerated`), stores `commands` and `duration` in state.
+    - `Viewer` passes `commands`, `isPlaying`, `playbackSpeed`, `cameraRef`, `controlsRef` etc. as props to `AnimationController`.
+    - `AnimationController` uses `useFrame` hook:
+        - Calculates current time/progress based on `isPlaying` and internal refs.
+        - Finds the relevant command segment(s).
+        - Interpolates `position` and `target` vectors using easing.
+        - Updates `cameraRef.current.position` and `cameraRef.current.lookAt`.
+        - Calls `onProgressUpdate` callback (updates `Viewer` state, which updates `CameraAnimationSystem` UI).
+        - Calls `onComplete` callback when finished (updates `Viewer` state).
+    - `CameraAnimationSystem` displays progress/state received from `Viewer` and handles UI interactions (play/pause etc.) which call back up to `Viewer` to modify state.
 
 7.  **Feedback Loop** (Planned)
 
@@ -246,17 +264,9 @@ graph TD
 
 ## Current Focus Areas
 
-### 1. Data Persistence
-- Resolve environmental data storage issues
-- Optimize metadata structure
-- Enhance database integration
-- Implement robust error handling
-
-### 2. Integration Stability
-- Improve component coordination
-- Standardize data formats
-- Enhance error handling
-- Optimize performance
+1.  **Lock/Validation Conflict Resolution:** Decide and implement strategy.
+2.  **UI Functional Testing & Refinement:** Re-implement scrubbing, test all interactions, fix hover states, finalize easing.
+3.  **API Authentication:** Implement proper auth for API routes.
 
 ## Future Enhancements
 
