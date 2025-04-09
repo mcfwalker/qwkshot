@@ -393,6 +393,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       toast.success('Camera path generated successfully');
       // Switch to playback tab on success
       setActiveTab('playback'); 
+      // Reset button state *after* switching tab
+      setGeneratePathState('initial'); 
 
     } catch (error) {
       console.error('Error generating camera path:', error);
