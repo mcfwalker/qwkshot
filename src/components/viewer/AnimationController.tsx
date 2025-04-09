@@ -42,19 +42,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   currentProgress, // Receive current progress from parent
 }) => {
   const startTimeRef = useRef<number | null>(null);
-  const progressRef = useRef(currentProgress / 100); // Initialize internal progress from parent state
   const initialCameraPositionRef = useRef<Vector3 | null>(null);
   const initialControlsTargetRef = useRef<Vector3 | null>(null);
   const frameCounterRef = useRef(0); // For throttling UI updates
-
-  // Effect to sync internal progress ref when external progress changes (e.g., slider scrub)
-  // Only sync when NOT playing to avoid conflicts
-   useEffect(() => {
-    if (!isPlaying) {
-      progressRef.current = currentProgress / 100;
-      startTimeRef.current = null; // Ensure start time recalculates if played after scrubbing
-    }
-  }, [currentProgress, isPlaying]);
 
   // Effect to manage controls enabling/disabling
   useEffect(() => {
@@ -71,18 +61,28 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
   useFrame((state, delta) => {
     frameCounterRef.current++;
-
+    
     if (!isPlaying || commands.length === 0 || !cameraRef.current || !controlsRef.current) {
+      // Reset start time if we stop playing mid-animation to ensure correct restart
+      startTimeRef.current = null;
       return; // Exit if not playing or prerequisites missing
     }
 
     const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0) / playbackSpeed; // Adjust total duration by speed
-    if (totalDuration <= 0) return; 
+    // --- Stricter Duration Check ---
+    if (totalDuration <= 1e-6) { // Use a small epsilon instead of just > 0
+        if (isPlaying) {
+            onProgressUpdate(100);
+            onComplete();
+        }
+        return;
+    } 
 
     // Initialize start time and initial state on the first frame of playback *or* after scrubbing
     if (startTimeRef.current === null) {
-        // Calculate adjusted start time based on current progress
-        startTimeRef.current = state.clock.elapsedTime - (progressRef.current * totalDuration); 
+        // Calculate adjusted start time based on current progress prop
+        const startProgressValue = currentProgress / 100; // Use prop
+        startTimeRef.current = state.clock.elapsedTime - (startProgressValue * totalDuration); 
         initialCameraPositionRef.current = cameraRef.current.position.clone();
         initialControlsTargetRef.current = controlsRef.current.target.clone();
     }
@@ -91,10 +91,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     const elapsedTime = state.clock.elapsedTime - startTimeRef.current;
     let currentOverallProgress = Math.min(1.0, elapsedTime / totalDuration); // Progress based on adjusted duration
     
-    // Ensure progress doesn't go backward if startTimeRef was adjusted mid-flight
-    currentOverallProgress = Math.max(progressRef.current, currentOverallProgress); 
-    progressRef.current = currentOverallProgress; // Update internal ref
-
     const clampedProgressPercent = Math.min(100, currentOverallProgress * 100);
 
     // Calculate target time based on unadjusted durations for segment finding
@@ -172,7 +168,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
         // Reset internal state and call completion callback
         startTimeRef.current = null;
-        progressRef.current = 0; // Reset internal progress for next playback
         initialCameraPositionRef.current = null; 
         initialControlsTargetRef.current = null;
         onProgressUpdate(100); // Ensure UI shows 100

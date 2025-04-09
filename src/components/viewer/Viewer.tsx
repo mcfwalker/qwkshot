@@ -174,13 +174,13 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   // --- Lifted Animation Handlers ---
   const handleAnimationStart = useCallback(() => {
     setIsPlaying(true);
-    // Reset progress visually when starting from beginning?
-    // If progress is not 0, it implies resuming from a paused state
-    if (progress < 1) { 
-        setProgress(0); 
-    }
+    // Reset progress visually when starting playback
+    // if (progress < 1) { 
+    //     setProgress(0); 
+    // }
+    setProgress(0); // Always reset progress when starting play
     console.log("Viewer: Animation Started");
-  }, [progress]); // Dependency on progress to check if restarting
+  }, []); // Remove progress dependency
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
