@@ -15,6 +15,8 @@
 - ✅ Refactor animation loop to use useFrame hook
 - ✅ Lift animation state/refs from CameraAnimationSystem to Viewer
 - ✅ Fix static video download issue by forcing render
+- ✅ Fix Lock state UI/control bug (controls stay disabled)
+- ✅ Fix Generate Shot button state reset
 
 ## Upcoming Tasks
 
@@ -103,17 +105,18 @@
   - [x] Improve state management (Lifted state to Viewer) ✅
   - [x] Clean up event handling (Basic handlers adapted/created) ✅
   - [x] Enhance performance (Component extraction helps) ✅
-- **Note:** `CameraAnimationSystem` refactored, `AnimationController` created using `useFrame`. Playback/Recording fixed. UI controls adapted. Needs scrubbing reimplementation, lock conflict resolution, hover states, easing refinement, visual cleanup, testing.
+- **Note:** `CameraAnimationSystem` refactored, `AnimationController` created using `useFrame`. Playback/Recording fixed. Lock UI state fixed. Generate button state fixed. UI controls adapted. Needs scrubbing reimplementation, hover states, easing refinement, lock/validation strategy definition, visual cleanup, testing.
 
 - [ ] **Functional Completion & Testing (New Subsection)**
   - [x] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
-  - [~] Fix "Lock Composition" button functionality (`onLockToggle` interaction, state updates, potentially related `storeEnvironmentalMetadata` call). (Disabled when no model, but underlying validation conflict remains) ⚠️
+  - [~] Define strategy for Lock/Validation conflict -> Potential future issue if strict constraints are added/enabled, but not currently blocking. ⚠️ 
   - [ ] Implement/restore correct hover states for interactive UI elements.
   - [x] Implement rendering of controls within the "Playback" tab view. ✅
   - [ ] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions (even if underlying logic like SceneAnalyzer integration is pending).
   - [ ] Address miscellaneous visual cleanup items.
-  - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅
+  - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅ 
   - [x] Fix video download (static content). ✅
+  - [x] Fix Generate Shot button state reset after playback. ✅
   - [ ] Re-implement slider scrubbing logic.
   - [ ] Implement refined easing logic in playback (if needed after testing).
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
@@ -124,26 +127,39 @@
   - [ ] Add comprehensive safety checks
   - [ ] Implement advanced constraints
   - [ ] Add validation visualization
+  - [ ] Implement Real-time Validation Feedback (Client-side)
+  - [ ] Define strategy for *potential* Lock/Validation Conflict.
 
 - [ ] Performance improvements
-  - [ ] Optimize computation
-  - [ ] Improve animation smoothness
-  - [ ] Enhance response times
+  - [ ] Optimize computation (SceneInterpreter, other?)
+  - [ ] Improve animation smoothness (Further smoothing/easing refinement?)
+  - [ ] Enhance response times (LLM Engine, API)
   - [ ] Reduce resource usage
+  - [ ] Implement LLM Engine Monitoring (Response time, error rates)
+  - [ ] (Potential) Refine prompt to ensure motion utilizes full requested duration (address "dead time").
+
+- [ ] Feature Enhancements
+  - [ ] Implement Interactive Orientation Setup
+  - [ ] Implement Prompt Pre-processing Step
+  - [ ] Implement Path Preview
+  - [ ] Implement Editable Path Controls
+  - [ ] Implement Viewer Background Color Picker
+  - [ ] Implement Aspect Ratio Options for Download (16:9, 9:16)
+  - [ ] Implement MP4 Format Option for Download
+  - [ ] Implement LLM Seamless Texture Generator
+  - [ ] Implement Image-to-3D Model Generation (Meshy API)
 
 ## Current Priorities (Updated)
-1.  **Resolve Lock/Validation Conflict:** (Phase 3 Subsection)
-    *   Decide strategy (e.g., pre-validation, constrain lock) for handling locking in invalid positions.
-    *   Implement chosen solution.
-2.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
+1.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
     *   Re-implement slider scrubbing logic.
     *   Test UI triggers and basic end-to-end flow.
     *   Implement/restore correct hover states.
     *   Implement refined easing logic in playback (if needed).
     *   Address miscellaneous visual cleanup.
-3.  Implement proper Authentication/Authorization for API route data fetching.
-4.  Integrate real `SceneAnalyzer` component.
-5.  Address remaining TODOs in Engine/Interpreter.
+2.  Implement proper Authentication/Authorization for API route data fetching.
+3.  Integrate real `SceneAnalyzer` component.
+4.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
+5.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
 
 ## Implementation Strategy
 
@@ -232,10 +248,10 @@
 - API route requires proper Auth strategy to work with RLS enabled.
 - `SceneAnalysis` placeholder limits accuracy of `PromptCompiler` and `EnvironmentalAnalyzer` output.
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
-- Conflict exists between allowing lock in invalid positions and subsequent path validation.
+- Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 
 ## Next Session Focus (Updated)
-1. Review and decide strategy for handling the Lock/Validation conflict.
-2. Implement chosen strategy for Lock/Validation conflict.
+1. Re-implement slider scrubbing logic.
+2. Continue UI functional testing (Hover states, etc.).
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
