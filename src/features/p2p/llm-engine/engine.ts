@@ -79,8 +79,10 @@ class ThinLLMEngine implements LLMEngine {
       // TODO: Figure out where 'duration' should come from.
       // Maybe it should be part of CompiledPrompt or LLMEngineConfig?
       // Using a placeholder for now.
-      const requestedDuration = 10; // Placeholder!
-      logger.warn(`Using placeholder duration: ${requestedDuration}s`);
+      const requestedDuration = prompt.requestedDuration ?? 10; // Use from prompt, fallback to 10
+      if (prompt.requestedDuration === undefined) {
+          logger.warn(`Requested duration missing in prompt, falling back to default: ${requestedDuration}s`);
+      }
 
       // 4. Call the provider's generation method
       logger.info(`Calling ${providerType} provider to generate path...`);
@@ -119,7 +121,7 @@ class ThinLLMEngine implements LLMEngine {
 
       const finalPath: CameraPath = {
         keyframes: mappedKeyframes,
-        // Use the requested duration for the overall path duration
+        // Use the ACTUAL requested duration for the overall path duration
         duration: requestedDuration,
         metadata: { 
           // TODO: Populate metadata correctly. Maybe from prompt or config?

@@ -236,7 +236,7 @@ export async function POST(request: Request) {
     await interpreter.initialize(interpreterConfig);
     logger.info('Scene Interpreter initialized with config:', interpreterConfig);
 
-    // Convert camera state to Vector3
+    // Convert camera state to Vector3 and include fov
     const currentCameraState = {
       position: new Vector3(
         sceneGeometry.currentCamera.position.x,
@@ -247,7 +247,8 @@ export async function POST(request: Request) {
         sceneGeometry.currentCamera.target.x,
         sceneGeometry.currentCamera.target.y,
         sceneGeometry.currentCamera.target.z
-      )
+      ),
+      fov: sceneGeometry.currentCamera.fov ?? 50 // Add fov, default to 50 if missing
     };
 
     // *** ADD LOGGING: Received Camera State ***
@@ -274,7 +275,8 @@ export async function POST(request: Request) {
         sceneAnalysis, 
         environmentalMetadata, 
         modelMetadata, 
-        currentCameraState
+        currentCameraState,
+        duration
       );
       // *** REMOVE LOG ***
       // logger.info('>>> Compiled System Message:', compiledPrompt.systemMessage);
@@ -371,7 +373,7 @@ export async function POST(request: Request) {
             y: currentCameraState.target.y,
             z: currentCameraState.target.z
           },
-          fov: 45
+          fov: currentCameraState.fov
         },
         scene: {
           background: '#000000',

@@ -203,7 +203,8 @@ Please generate a camera path JSON based on the User Request below that:
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    currentCameraState: { position: Vector3; target: Vector3; fov: number } // Keep receiving raw state here
+    currentCameraState: { position: Vector3; target: Vector3; fov: number }, 
+    requestedDuration: number
   ): Promise<CompiledPrompt> {
     const startTime = performance.now();
     this.logger.debug('[compilePrompt] Received envAnalysis:', envAnalysis);
@@ -236,8 +237,8 @@ Please generate a camera path JSON based on the User Request below that:
     const promptToReturn: CompiledPrompt = {
       systemMessage,
       userMessage: userInput,
-      // Log the value just before assignment
-      constraints: envAnalysis?.cameraConstraints, 
+      constraints: envAnalysis?.cameraConstraints,
+      requestedDuration: requestedDuration,
       metadata: {
         timestamp: new Date(),
         version: '1.0',
