@@ -125,6 +125,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const canvasRef = useRef<HTMLCanvasElement>(null!);
   const { isLocked, setModelId } = useViewerStore();
 
+  // --- Log isLocked state changes ---
+  useEffect(() => {
+    console.log(`Viewer State Check: isLocked=${isLocked}, isPlaying=${isPlaying}`);
+  }, [isLocked, isPlaying]);
+  // --- End Log ---
+
   // Extract and set modelId when modelUrl changes
   useEffect(() => {
     if (modelUrl) {
@@ -285,17 +291,23 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           />
 
           {/* Controls */}
-          <OrbitControls
-            ref={controlsRef}
-            enableDamping
-            dampingFactor={0.05}
-            mouseButtons={{
-              LEFT: MOUSE.ROTATE,
-              MIDDLE: MOUSE.DOLLY,
-              RIGHT: MOUSE.PAN
-            }}
-            enabled={!isPlaying && !isLocked}
-          />
+          {(() => { // Immediately invoked function expression for logging
+            const controlsEnabled = !isPlaying && !isLocked;
+            console.log(`Viewer Render: Setting OrbitControls enabled=${controlsEnabled} (isPlaying=${isPlaying}, isLocked=${isLocked})`);
+            return (
+              <OrbitControls
+                ref={controlsRef}
+                enableDamping
+                dampingFactor={0.05}
+                mouseButtons={{
+                  LEFT: MOUSE.ROTATE,
+                  MIDDLE: MOUSE.DOLLY,
+                  RIGHT: MOUSE.PAN
+                }}
+                enabled={controlsEnabled}
+              />
+            );
+          })()}
 
           {/* Floor */}
           <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />

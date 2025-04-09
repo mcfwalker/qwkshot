@@ -46,19 +46,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const initialControlsTargetRef = useRef<Vector3 | null>(null);
   const frameCounterRef = useRef(0); // For throttling UI updates
 
-  // Effect to manage controls enabling/disabling
-  useEffect(() => {
-      if (controlsRef.current) {
-          controlsRef.current.enabled = !isPlaying;
-      }
-      // Ensure controls are enabled if component unmounts while playing
-      return () => {
-          if (controlsRef.current) {
-              controlsRef.current.enabled = true;
-          }
-      };
-  }, [isPlaying, controlsRef]);
-
   useFrame((state, delta) => {
     frameCounterRef.current++;
     
