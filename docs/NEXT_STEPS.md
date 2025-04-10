@@ -17,6 +17,11 @@
 - ✅ Fix static video download issue by forcing render
 - ✅ Fix Lock state UI/control bug (controls stay disabled)
 - ✅ Fix Generate Shot button state reset
+- ✅ Fix floor texture application and Add/Remove button logic
+- ✅ Fix model offset toast message spam
+- ✅ Implement Full Reset Logic for Clear Stage button
+- ✅ Fix video download filename format and takeCount reset
+- ✅ Configure toast notification position and base styling
 
 ## Upcoming Tasks
 
@@ -117,6 +122,8 @@
   - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅ 
   - [x] Fix video download (static content). ✅
   - [x] Fix Generate Shot button state reset after playback. ✅
+  - [x] Fix floor texture application and Add/Remove button logic. ✅
+  - [x] Implement Full Reset Logic for Clear Stage button. ✅
   - [ ] Audit and refine toast notifications (remove unnecessary, ensure consistency).
   - [ ] Implement refined easing logic in playback (if needed after testing).
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
@@ -260,7 +267,7 @@
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 
 ## Next Session Focus (Updated)
-1. Continue UI functional testing (Hover states, Triggers, etc.).
+1. Continue UI functional testing (Hover states, Triggers, Toast messages, etc.).
 2. Implement proper Authentication/Authorization for API route data fetching.
 3. Integrate real `SceneAnalyzer` component.
 4. Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
