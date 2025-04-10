@@ -34,11 +34,9 @@ export const LockButton: React.FC<LockButtonProps> = ({
                   "w-full h-14 px-3 py-0 inline-flex items-center justify-center gap-2.5",
                   "rounded-2xl border-0",
                   "text-sm font-semibold",
-                  (!isModelLoaded || isGenerating) 
-                    ? "bg-[#444444] text-[#666666] shadow-none pointer-events-none cursor-not-allowed"
-                    : isLocked
-                      ? "shadow-none dark:shadow-transparent bg-[#353535] text-white shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040]"
-                      : "bg-[#C2F751] text-black shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#C2F751]/90"
+                  isLocked
+                    ? "shadow-none dark:shadow-transparent bg-[#353535] text-white shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040]"
+                    : "bg-[#C2F751] text-black shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#C2F751]/90",
                 )}
                 disabled={!isModelLoaded || isGenerating}
               >
@@ -51,9 +49,13 @@ export const LockButton: React.FC<LockButtonProps> = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {isLocked 
-                ? 'Scene is locked. Camera and model position cannot be changed'
-                : 'Lock the scene to generate camera paths'
+              {!isModelLoaded
+                ? 'Load a model to enable locking'
+                : isGenerating
+                  ? 'Generation in progress...'
+                  : isLocked 
+                    ? 'Click to unlock camera and scene controls'
+                    : 'Lock camera position to enable path generation'
               }
             </TooltipContent>
           </Tooltip>
