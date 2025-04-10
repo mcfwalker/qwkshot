@@ -67,6 +67,19 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
     // Initialize start time and initial state on the first frame of playback *or* after scrubbing
     if (startTimeRef.current === null) {
+        // --- Jump to Start Position Immediately ---
+        if (commands.length > 0 && cameraRef.current) {
+            const firstCommand = commands[0];
+            cameraRef.current.position.copy(firstCommand.position);
+            cameraRef.current.lookAt(firstCommand.target); 
+            // If recording, force render this initial state immediately
+            if (isRecording) {
+              state.gl.render(state.scene, state.camera);
+              console.log("AnimationController: Forced render of initial frame for recording");
+            }
+        }
+        // --- End Jump to Start ---
+
         // Calculate adjusted start time based on current progress prop
         const startProgressValue = currentProgress / 100; // Use prop
         startTimeRef.current = state.clock.elapsedTime - (startProgressValue * totalDuration); 
