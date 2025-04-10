@@ -117,7 +117,6 @@
   - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅ 
   - [x] Fix video download (static content). ✅
   - [x] Fix Generate Shot button state reset after playback. ✅
-  - [ ] Re-implement slider scrubbing logic.
   - [ ] Audit and refine toast notifications (remove unnecessary, ensure consistency).
   - [ ] Implement refined easing logic in playback (if needed after testing).
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
@@ -156,9 +155,11 @@
   - [ ] Implement Animation Storage & History
   - [ ] (Enhancement) Allow Reapplying Saved Animations to Different Models
 
+- [ ] Documentation & Process
+  - [ ] Document Prompt Architecture & Engineering Strategy
+
 ## Current Priorities (Updated)
 1.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
-    *   Re-implement slider scrubbing logic.
     *   Test UI triggers and basic end-to-end flow.
     *   Implement/restore correct hover states.
     *   Implement refined easing logic in playback (if needed).
@@ -258,7 +259,10 @@
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 
 ## Next Session Focus (Updated)
-1. Re-implement slider scrubbing logic.
-2. Continue UI functional testing (Hover states, etc.).
+1. Continue UI functional testing (Hover states, Triggers, etc.).
+2. Implement proper Authentication/Authorization for API route data fetching.
+3. Integrate real `SceneAnalyzer` component.
+4. Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
+5. Define strategy for *potential* Lock/Validation Conflict.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
