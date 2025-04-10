@@ -16,7 +16,7 @@ function SignInContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const redirectTo = searchParams.get('redirectTo') || '/library'
+  const redirectTo = searchParams.get('redirectTo') || '/viewer'
 
   // Listen for auth state changes
   useEffect(() => {

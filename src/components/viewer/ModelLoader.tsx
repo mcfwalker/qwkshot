@@ -335,6 +335,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           {...getRootProps()}
           className={cn(
             "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-xl border border-dashed border-[#444444] text-center cursor-pointer",
+            "transition-colors",
+            "hover:border-[#C2F751]",
             isDragActive && 'border-primary bg-primary/5',
             error && 'border-destructive',
             isInitializing && 'opacity-60 cursor-not-allowed'

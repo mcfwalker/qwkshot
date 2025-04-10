@@ -28,23 +28,25 @@ export const LockButton: React.FC<LockButtonProps> = ({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button 
-                variant="secondary"
+                variant="primary"
                 onClick={onToggle}
                 className={cn(
-                  "w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5",
-                  "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
-                  "hover:bg-[#404040]",
-                  "disabled:opacity-70 disabled:pointer-events-none",
-                  "text-sm text-foreground/80"
+                  "w-full h-14 px-3 py-0 inline-flex items-center justify-center gap-2.5",
+                  "rounded-xl border-0",
+                  "text-sm font-semibold",
+                  isLocked
+                    ? "shadow-none dark:shadow-transparent bg-[#353535] text-white shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040]"
+                    : "bg-[#C2F751] text-black shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#C2F751]/90",
+                  (!isModelLoaded || isGenerating) && "opacity-50 pointer-events-none cursor-not-allowed"
                 )}
                 disabled={!isModelLoaded || isGenerating}
               >
                 {isLocked ? (
-                  <Lock size={16} className="text-lime-400" />
+                  <Lock size={16} />
                 ) : (
-                  <Unlock size={16} className="text-orange-400" />
+                  <Unlock size={16} />
                 )}
-                {isLocked ? 'Unlock Scene' : 'Lock Composition'}
+                {isLocked ? 'Camera Is Locked' : 'Lock Your Camera'}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">

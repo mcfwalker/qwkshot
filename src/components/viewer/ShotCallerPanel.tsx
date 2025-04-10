@@ -90,7 +90,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
             (props.isGenerating || !props.isLocked || props.generatePathState === 'ready') && 
               "bg-[#2a2a2a] border border-[#555555] text-foreground hover:bg-[#2a2a2a]/90 cursor-default shadow-none"
         )}
-        whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { scale: 1.02 }}
+        whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { /* scale removed */ }}
         whileTap={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { scale: 0.98 }}
       >
         <AnimatePresence mode="wait">

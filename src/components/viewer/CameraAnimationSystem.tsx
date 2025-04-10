@@ -127,16 +127,16 @@ const SPEED_OPTIONS = [
 // Update the generate path states type
 type GeneratePathState = 'initial' | 'generating' | 'ready';
 
-// Fun, cinematic-themed messages for the generating state
+// Fun, cinematic-themed messages for the generating state - shortened
 const generatingMessages = [
-  "Setting up the perfect shot...",
-  "Calculating cinematic angles...",
-  "Choreographing the camera moves...",
-  "Finding the dramatic moments...",
-  "Making it look epic...",
-  "Adding that cinematic magic...",
-  "Crafting the perfect sequence...",
-  "Directing your scene..."
+  "Setting up shot...",
+  "Calculating angles...",
+  "Choreographing moves...",
+  "Finding moments...",
+  "Making it epic...",
+  "Adding magic...",
+  "Crafting sequence...",
+  "Directing scene..."
 ];
 
 // Update the generate path states configuration
