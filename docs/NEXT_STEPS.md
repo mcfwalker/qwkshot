@@ -165,7 +165,8 @@
     *   Implement refined easing logic in playback (if needed).
     *   Address miscellaneous visual cleanup.
 2.  Implement proper Authentication/Authorization for API route data fetching.
-3.  Integrate real `SceneAnalyzer` component.
+3.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
+    *   Note: Currently uses basic geometry + placeholders. Need to fetch/reconstruct full analysis data (complexity, reference points, features, initial constraints) from upload process for use by Env. Analyzer & Prompt Compiler.
 4.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
 5.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
 
@@ -254,7 +255,7 @@
 
 ## Blockers and Issues
 - API route requires proper Auth strategy to work with RLS enabled.
-- `SceneAnalysis` placeholder limits accuracy of `PromptCompiler` and `EnvironmentalAnalyzer` output.
+- `SceneAnalysis` placeholder limits accuracy -> Use of simplified SceneAnalysis data in path generation limits context accuracy.
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 
