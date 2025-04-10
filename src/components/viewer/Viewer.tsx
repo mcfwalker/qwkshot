@@ -165,10 +165,10 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       // Update height
       setModelHeight(newHeight);
 
-      // Show success toast
-      toast.success('Floor offset updated', {
-        description: `Model height set to ${newHeight.toFixed(2)} units`
-      });
+      // Show success toast - REMOVE THIS
+      // toast.success('Floor offset updated', {
+      //  description: `Model height set to ${newHeight.toFixed(2)} units`
+      // });
     } catch (error) {
       console.error('Error updating model height:', error);
       toast.error('Failed to update floor offset', {
@@ -242,6 +242,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   // Update handler to accept FloorTexture and use file_url
   const handleTextureSelect = (texture: FloorTexture | null) => {
     // Handle null case if user closes modal without selecting
+    const urlToSet = texture ? texture.file_url : null;
+    console.log('Viewer: handleTextureSelect - Setting floorTexture to:', urlToSet); // Log the URL being set
     if (texture) {
         setFloorTexture(texture.file_url); 
     } else {
@@ -272,6 +274,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     toast.success("Stage Reset Successfully");
     setIsConfirmingReset(false); // Reset confirmation state
   };
+
+  // Handler to REMOVE the texture
+  const handleRemoveTexture = useCallback(() => {
+    setFloorTexture(null);
+    toast.info("Floor texture removed."); 
+  }, []);
 
   return (
     <div className={cn('relative w-full h-full', className)}>
@@ -358,6 +366,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           gridVisible={gridVisible}
           onGridToggle={handleGridToggle}
           onAddTextureClick={handleAddTextureClick}
+          texture={floorTexture}
+          onRemoveTexture={handleRemoveTexture}
         />
       </div>
 
@@ -400,7 +410,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       {/* Texture Modal - onSelect prop matches now */}
       <TextureLibraryModal 
         isOpen={showTextureModal}
-        onClose={() => handleTextureSelect(null)} // Pass null on close
+        onClose={() => setShowTextureModal(false)} // Just close, don't call handleTextureSelect
         onSelect={handleTextureSelect}
       />
 

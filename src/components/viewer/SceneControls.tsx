@@ -21,6 +21,8 @@ interface SceneControlsProps {
   gridVisible: boolean;
   onGridToggle: (visible: boolean) => void;
   onAddTextureClick?: () => void;
+  texture?: string | null;
+  onRemoveTexture?: () => void;
 }
 
 export function SceneControls({
@@ -31,6 +33,8 @@ export function SceneControls({
   gridVisible,
   onGridToggle,
   onAddTextureClick,
+  texture,
+  onRemoveTexture,
 }: SceneControlsProps) {
   const { isLocked } = useViewerStore();
 
@@ -116,10 +120,10 @@ export function SceneControls({
                 "disabled:opacity-70 disabled:pointer-events-none",
                 "text-sm text-foreground/80"
              )}
-             onClick={onAddTextureClick}
+             onClick={texture ? onRemoveTexture : onAddTextureClick}
              disabled={isLocked}
            >
-             Add Texture
+             {texture ? "Remove Texture" : "Add Texture"}
            </Button>
         </div>
       </div>
