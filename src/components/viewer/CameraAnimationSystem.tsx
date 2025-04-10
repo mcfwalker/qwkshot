@@ -500,7 +500,18 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'camera-path-animation.webm';
+          
+          // --- Dynamic Filename Generation ---
+          const now = new Date();
+          const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+          // Replace spaces with dashes, remove unsafe chars
+          const safeModelName = (modelName || 'Model').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_\-]/g, ''); 
+          const takeNumber = takeCount > 0 ? takeCount : 1; // Ensure take is at least 1 if generation happened
+          const filename = `${safeModelName}-Take${takeNumber}-${timestamp}.webm`;
+          console.log("Generated Filename:", filename);
+          // --- End Dynamic Filename ---
+          
+          a.download = filename; // Use dynamic filename
           a.click();
           URL.revokeObjectURL(url);
         } else {

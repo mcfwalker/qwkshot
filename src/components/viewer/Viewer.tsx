@@ -128,10 +128,11 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   // Extract and set modelId when modelUrl changes
   useEffect(() => {
+    let modelId: string | undefined;
     if (modelUrl) {
       // First try to get modelId from URL pathname
       const pathParts = window.location.pathname.split('/');
-      let modelId = pathParts.find(part => 
+      modelId = pathParts.find(part => 
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
       );
 
@@ -147,7 +148,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     } else {
       setModelId(null);
     }
-  }, [modelUrl, setModelId]);
+    // Trigger reset in child component when model changes or is cleared
+    setResetCounter(prev => prev + 1); 
+  }, [modelUrl, setModelId, setResetCounter]);
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
