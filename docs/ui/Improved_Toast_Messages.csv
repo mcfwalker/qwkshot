@@ -1,0 +1,59 @@
+Original Message,Category,Improved Message
+Switched to {provider} provider successfully,success,Provider switched to {provider} successfully.
+Signed in successfully,success,Signed in successfully.
+Failed to sign in. Please check your credentials.,error,Sign-in failed. Please check your credentials.
+Failed to sign in with Google,error,Google sign-in failed. Please try again.
+Signed out successfully,success,Signed out successfully.
+Failed to sign out,error,Sign-out failed. Please try again.
+Connection restored,info,Connection restored.
+Connection lost,error,Connection lost. Trying to reconnect...
+Failed to navigate. Please try again.,error,Navigation failed. Please try again.
+Model name cannot be empty,error,Please provide a name for the model.
+Model updated successfully,success,Model updated successfully.
+(error message from error object or 'Failed to update model'),error,Failed to update model.
+Model deleted successfully,success,Model deleted successfully.
+(error message from error object or 'Failed to delete model'),error,Failed to delete model.
+Failed to delete model file,error,Failed to delete model file.
+Failed to delete model record,error,Failed to delete model record.
+Failed to delete model,error,Failed to delete model.
+Please describe the camera movement you want,info,Please describe the camera movement you want.
+Model not loaded properly,error,Model failed to load correctly.
+Camera not initialized properly,error,Camera initialization failed.
+Camera controls not initialized properly,error,Camera controls failed to initialize.
+Generated path has no commands.,warning,Generated path has no commands.
+Camera path generated successfully,success,Camera path generated successfully.
+(error message from error object or 'Failed to generate camera path'),error,Failed to generate camera path.
+Canvas not available for recording,error,Canvas not available for recording.
+No supported video recording format found,error,No supported recording format found.
+Recording error occurred. See console for details.,error,Recording error occurred. See console for details.
+No video data was recorded,error,No video data was recorded.
+Generated video file was empty,error,Generated video file was empty.
+Failed to start recording. Please try again.,error,Failed to start recording. Please try again.
+Scene composition locked and saved,success,Scene composition locked and saved.
+Scene unlocked,info,Scene unlocked.
+Failed to store scene composition,error,Failed to store scene composition.
+Scene cleared,success,Scene cleared.
+Ready for new shot,info,Ready for new shot.
+Failed to load models,error,Failed to load models.
+System is still initializing. Please wait a moment and try again.,info,System is initializing. Please wait and try again.
+Failed to process model,error,Failed to process model.
+Failed to save model,error,Failed to save model.
+Failed to load model from library,error,Failed to load model from library.
+Failed to load model URL,error,Failed to load model from URL.
+Failed to load 3D model,error,Failed to load 3D model.
+Viewer is locked. Unlock to adjust model height.,info,Viewer is locked. Unlock to adjust model height.
+Viewer is locked. Unlock to adjust field of view.,info,Viewer is locked. Unlock to adjust field of view.
+Failed to load textures,error,Failed to load textures.
+Texture uploaded successfully,success,Texture uploaded successfully.
+(error message from error object or 'Failed to upload texture'),error,Failed to upload texture.
+Failed to update floor offset,error,Failed to update floor offset.
+Cannot change texture while scene is locked.,warning,Cannot change texture while scene is locked.
+Click again to confirm stage reset.,info,Click again to confirm stage reset.
+Stage Reset Successfully,success,Stage reset successfully.
+Floor texture removed.,success,Floor texture removed.
+An error occurred,error,An unexpected error occurred.
+Loading models failed (attempt {attempt}/3),warning,Loading models failed (attempt {attempt}/3).
+Loading model failed (attempt {attempt}/3),warning,Loading model failed (attempt {attempt}/3).
+Operation failed. Retrying... ({attempt}),warning,Operation failed. Retrying... (attempt {attempt})
+Loading textures failed (attempt {attempt}/3),warning,Loading textures failed (attempt {attempt}/3).
+Loading texture failed (attempt {attempt}/3),warning,Loading texture failed (attempt {attempt}/3).
