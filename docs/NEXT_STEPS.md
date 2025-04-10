@@ -91,7 +91,7 @@
 - [ ] Improve core interactions
   - [ ] Enhance lock mechanism UX (Deferred)
   - [ ] Improve animation controls (Partially done - playback logic refactored) ✅
-  - [ ] Add better feedback systems (Deferred)
+  - [ ] Add better feedback systems
   - [ ] Streamline user flow (Tab structure implemented) ✅
 
 - [ ] Enhance visual feedback
@@ -118,6 +118,7 @@
   - [x] Fix video download (static content). ✅
   - [x] Fix Generate Shot button state reset after playback. ✅
   - [ ] Re-implement slider scrubbing logic.
+  - [ ] Audit and refine toast notifications (remove unnecessary, ensure consistency).
   - [ ] Implement refined easing logic in playback (if needed after testing).
   - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
 
@@ -136,6 +137,8 @@
   - [ ] Enhance response times (LLM Engine, API)
   - [ ] Reduce resource usage
   - [ ] Implement LLM Engine Monitoring (Response time, error rates)
+  - [ ] Implement System Alerting
+  - [ ] Implement Monitoring Dashboard
   - [ ] (Potential) Refine prompt to ensure motion utilizes full requested duration (address "dead time").
 
 - [ ] Feature Enhancements
@@ -148,6 +151,10 @@
   - [ ] Implement MP4 Format Option for Download
   - [ ] Implement LLM Seamless Texture Generator
   - [ ] Implement Image-to-3D Model Generation (Meshy API)
+  - [ ] Implement Session Tracking & Analytics System
+  - [ ] Implement User Feedback System (Rating/Comments)
+  - [ ] Implement Animation Storage & History
+  - [ ] (Enhancement) Allow Reapplying Saved Animations to Different Models
 
 ## Current Priorities (Updated)
 1.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
