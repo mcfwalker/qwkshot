@@ -32,12 +32,13 @@ export const LockButton: React.FC<LockButtonProps> = ({
                 onClick={onToggle}
                 className={cn(
                   "w-full h-14 px-3 py-0 inline-flex items-center justify-center gap-2.5",
-                  "rounded-xl border-0",
+                  "rounded-2xl border-0",
                   "text-sm font-semibold",
-                  isLocked
-                    ? "shadow-none dark:shadow-transparent bg-[#353535] text-white shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040]"
-                    : "bg-[#C2F751] text-black shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#C2F751]/90",
-                  (!isModelLoaded || isGenerating) && "opacity-50 pointer-events-none cursor-not-allowed"
+                  (!isModelLoaded || isGenerating) 
+                    ? "bg-[#444444] text-[#666666] shadow-none pointer-events-none cursor-not-allowed"
+                    : isLocked
+                      ? "shadow-none dark:shadow-transparent bg-[#353535] text-white shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040]"
+                      : "bg-[#C2F751] text-black shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#C2F751]/90"
                 )}
                 disabled={!isModelLoaded || isGenerating}
               >

@@ -84,11 +84,12 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         disabled={!props.isLocked || props.isGenerating || props.generatePathState === 'ready'}
         className={cn(
             "w-full h-14 px-6 py-0 inline-flex items-center justify-center gap-2.5",
-            "rounded-2xl border border-[#444444] bg-[#C2F751] text-black font-semibold text-sm",
+            "rounded-2xl border border-[#444444]",
             "shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
-            "hover:bg-[#C2F751]/90",
-            (props.isGenerating || !props.isLocked || props.generatePathState === 'ready') && 
-              "bg-[#2a2a2a] border border-[#555555] text-foreground hover:bg-[#2a2a2a]/90 cursor-default shadow-none"
+            "font-semibold text-sm",
+            (props.isGenerating || !props.isLocked || props.generatePathState === 'ready')
+              ? "bg-[#444444] text-[#666666] shadow-none cursor-not-allowed"
+              : "bg-[#C2F751] text-black hover:bg-[#C2F751]/90"
         )}
         whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { /* scale removed */ }}
         whileTap={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { scale: 0.98 }}
