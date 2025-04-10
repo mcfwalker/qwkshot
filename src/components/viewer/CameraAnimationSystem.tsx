@@ -61,6 +61,7 @@ interface CameraAnimationSystemProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   disabled?: boolean;
   isModelLoaded: boolean;
+  resetCounter: number;
 }
 
 const CameraSystemFallback = () => (
@@ -176,6 +177,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   canvasRef,
   disabled,
   isModelLoaded,
+  resetCounter,
 }) => {
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -241,6 +243,26 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       }
     };
   }, [isGenerating]);
+
+  // Effect to reset local state when resetCounter changes
+  useEffect(() => {
+    if (resetCounter > 0) { // Only run after initial mount
+      console.log("CameraAnimationSystem: Resetting local state due to trigger");
+      setInstruction('');
+      setCommands([]); // Also clear local commands if used for anything
+      setGeneratePathState('initial');
+      setTakeCount(0);
+      setActiveTab('shotCaller');
+      // Reset other local state related to generation/playback if needed
+    }
+  }, [resetCounter]);
+
+  // Effect to update inputDuration when duration prop changes externally
+  useEffect(() => {
+    if (duration !== parseFloat(inputDuration)) {
+      setInputDuration(duration.toString());
+    }
+  }, [duration, inputDuration]);
 
   const handleGeneratePath = async () => {
     if (!instruction.trim()) {

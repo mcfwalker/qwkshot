@@ -117,19 +117,14 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [commands, setCommands] = useState<CameraCommand[]>([]);
   const [duration, setDuration] = useState(10); // Default/initial duration
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
   // --- End Lifted State ---
 
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
-  const { isLocked, setModelId } = useViewerStore();
-
-  // --- Log isLocked state changes ---
-  useEffect(() => {
-    console.log(`Viewer State Check: isLocked=${isLocked}, isPlaying=${isPlaying}`);
-  }, [isLocked, isPlaying]);
-  // --- End Log ---
+  const { isLocked, setModelId, setLock } = useViewerStore();
 
   // Extract and set modelId when modelUrl changes
   useEffect(() => {
@@ -256,23 +251,40 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const handleClearStageReset = () => {
     if (!isConfirmingReset) {
       setIsConfirmingReset(true);
-      // Optional: Add a timer to revert confirmation state
-      // setTimeout(() => setIsConfirmingReset(false), 3000);
       toast.warning("Click again to confirm stage reset.");
       return;
     }
 
-    // --- Actual Reset Logic (Placeholder) ---
     console.log("PERFORMING STAGE RESET");
-    // TODO: Implement the full reset logic:
-    // - Reset modelUrl (call onModelSelect with null/default?)
-    // - Reset camera position/target (use controlsRef)
-    // - Reset CameraAnimationSystem state (clear commands, instruction, etc. - need callback/store)
-    // - Reset local state (fov, modelHeight, etc.)
-    // - Reset viewerStore state (isLocked, etc.)
+    
+    // 1. Clear Model (Trigger callback passed from parent/page)
+    onModelSelect(''); // Pass empty string instead of null
+    setModelId(null); // Clear model ID in store
 
+    // 2. Reset Camera Position/Target
+    if (controlsRef.current) {
+      controlsRef.current.reset(); 
+    }
+
+    // 3. Reset Viewer State
+    setLock(false); // Call the action from useViewerStore
+    setCommands([]);
+    setIsPlaying(false);
+    setProgress(0);
+    setDuration(10); // Reset to default duration
+    setPlaybackSpeed(1); // Reset to default speed
+    setFov(50); // Reset FOV
+    setModelHeight(0); // Reset model offset
+    setFloorTexture(null); // Reset floor texture
+    setGridVisible(true); // Ensure grid is visible
+    // Add any other relevant state resets here
+
+    // 4. Trigger Child Reset
+    setResetCounter(prev => prev + 1); 
+
+    // 5. Feedback & Confirmation Reset
     toast.success("Stage Reset Successfully");
-    setIsConfirmingReset(false); // Reset confirmation state
+    setIsConfirmingReset(false); 
   };
 
   // Handler to REMOVE the texture
@@ -396,6 +408,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           isModelLoaded={!!modelUrl}
           isRecording={isRecording}
           setIsRecording={setIsRecording}
+          resetCounter={resetCounter} // Pass reset trigger
         />
       </div>
 
