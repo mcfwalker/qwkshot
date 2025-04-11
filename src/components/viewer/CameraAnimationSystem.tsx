@@ -49,6 +49,7 @@ interface CameraAnimationSystemProps {
   progress: number;
   duration: number;
   playbackSpeed: number;
+  fov: number;
   onPlayPause: () => void;
   onStop: () => void;
   onProgressChange: (progress: number) => void;
@@ -165,6 +166,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   progress,
   duration,
   playbackSpeed,
+  fov,
   onPlayPause,
   onStop,
   onProgressChange,
@@ -605,7 +607,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         await storeEnvironmentalMetadata(
           modelRef.current,
           cameraRef.current,
-          controlsRef.current
+          controlsRef.current,
+          fov
         );
         toast.success('Scene composition locked and saved');
       } else if (isLocked) {

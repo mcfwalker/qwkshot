@@ -394,6 +394,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           progress={progress}
           duration={duration} 
           playbackSpeed={playbackSpeed}
+          fov={fov}
           // Pass down relevant handlers/callbacks
           onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
           onStop={handleAnimationStop} // Maybe need a dedicated reset handler?
