@@ -90,7 +90,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           onClick={onPlayPause}
           variant="primary" // Use primary variant
           size="lg" // Use larger size for 48px height
-          className="flex-1 h-14 rounded-2xl" // Changed h-12 to h-14 for 56px height
+          className="flex-1 h-14 rounded-2xl disabled:cursor-not-allowed" // Added disabled cursor
           disabled={!hasCommands || isGenerating || isRecording}
         >
           {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
@@ -99,7 +99,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           onClick={onDownload}
           variant="primary" // Use primary variant
           size="lg" // Use larger size
-          className="flex-1 h-14 rounded-2xl" // Changed h-12 to h-14 for 56px height
+          className="flex-1 h-14 rounded-2xl disabled:cursor-not-allowed" // Added disabled cursor
           disabled={!hasCommands || isPlaying || isRecording || isGenerating}
         >
           {isRecording ? (
@@ -127,7 +127,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             min={0.25}
             max={2}
             step={0.25}
-            className="viewer-slider h-2" // Apply custom styles if needed + ADD h-2
+            className="viewer-slider h-2 disabled:cursor-not-allowed" // Added disabled cursor
             disabled={!hasCommands || isPlaying || isRecording || isGenerating}
           />
           {/* Tick Marks Container - remove pt-1 */}
@@ -160,7 +160,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             "w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5", // Size, padding, flex
             "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]", // Appearance
             "hover:bg-[#404040]", // Hover state
-            "disabled:opacity-70 disabled:pointer-events-none", // Disabled state (adjust opacity if needed)
+            "disabled:opacity-70 disabled:pointer-events-none disabled:cursor-not-allowed", // Added disabled cursor
             "text-sm text-foreground/80" // Text style
           )}
           onClick={onCreateNewShot}

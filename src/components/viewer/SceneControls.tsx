@@ -70,7 +70,7 @@ export function SceneControls({
             min={0}
             max={5} 
             step={0.1}
-            className="viewer-slider h-2" 
+            className="viewer-slider h-2 disabled:cursor-not-allowed"
             disabled={isLocked}
           />
         </div>
@@ -86,7 +86,7 @@ export function SceneControls({
             min={20}
             max={120}
             step={1}
-            className="viewer-slider h-2" 
+            className="viewer-slider h-2 disabled:cursor-not-allowed"
             disabled={isLocked}
           />
         </div>
@@ -118,6 +118,7 @@ export function SceneControls({
                 "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
                 "hover:bg-[#404040]",
                 "disabled:opacity-70 disabled:pointer-events-none",
+                "disabled:cursor-not-allowed",
                 "text-sm text-foreground/80"
              )}
              onClick={texture ? onRemoveTexture : onAddTextureClick}
