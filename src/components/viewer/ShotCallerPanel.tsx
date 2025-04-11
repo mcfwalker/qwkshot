@@ -79,10 +79,10 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         </div>
       </div>
     </div>
-    <div>
-      <TooltipProvider>
+    <div className="w-full">
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger asChild className="w-full">
             <motion.button 
               onClick={(e) => { e.preventDefault(); props.onGeneratePath(); }}
               disabled={!props.isModelLoaded || !props.isLocked || props.isGenerating || props.generatePathState === 'ready'}
@@ -92,7 +92,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
                   "shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
                   "font-semibold text-sm",
                   (props.isGenerating || !props.isModelLoaded || !props.isLocked || props.generatePathState === 'ready')
-                    ? "bg-[#444444] text-[#666666] shadow-none cursor-not-allowed"
+                    ? "bg-[#444444] text-[#666666] shadow-none"
                     : "bg-[#C2F751] text-black hover:bg-[#C2F751]/90"
               )}
               whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked || !props.isModelLoaded) ? undefined : { /* scale removed */ }}
@@ -118,11 +118,14 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
               </AnimatePresence>
             </motion.button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">
+          <TooltipContent 
+            side="top" 
+            className="bg-[#121212] border-none text-white"
+          >
             {!props.isModelLoaded
-              ? 'Load a model first'
+              ? 'Load a model first.'
               : !props.isLocked
-                ? 'Lock the camera first'
+                ? 'Camera must be locked.'
                 : props.isGenerating
                   ? 'Generation in progress...'
                   : props.generatePathState === 'ready'
