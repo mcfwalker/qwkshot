@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Wand2, Loader2, Lock } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Copied from CameraAnimationSystem - move to a shared types file?
 type GeneratePathState = 'initial' | 'generating' | 'ready';
@@ -59,7 +60,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
             value={props.instruction}
             onChange={(e) => props.onInstructionChange(e.target.value)}
             disabled={!props.isLocked || props.isGenerating} 
-            className="min-h-[128px] p-4 resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/70 placeholder:text-sm rounded-xl"
+            className="min-h-[128px] w-full p-4 resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/70 placeholder:text-sm rounded-xl"
           />
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -79,40 +80,58 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
       </div>
     </div>
     <div>
-      <motion.button 
-        onClick={(e) => { e.preventDefault(); props.onGeneratePath(); }}
-        disabled={!props.isLocked || props.isGenerating || props.generatePathState === 'ready'}
-        className={cn(
-            "w-full h-14 px-6 py-0 inline-flex items-center justify-center gap-2.5",
-            "rounded-2xl border border-[#444444]",
-            "shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
-            "font-semibold text-sm",
-            (props.isGenerating || !props.isLocked || props.generatePathState === 'ready')
-              ? "bg-[#444444] text-[#666666] shadow-none cursor-not-allowed"
-              : "bg-[#C2F751] text-black hover:bg-[#C2F751]/90"
-        )}
-        whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { /* scale removed */ }}
-        whileTap={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked) ? undefined : { scale: 0.98 }}
-      >
-        <AnimatePresence mode="wait">
-          <motion.div 
-            key={props.isGenerating ? props.messageIndex : props.generatePathState} 
-            initial={{ opacity: 0, y: 10 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -10 }} 
-            transition={{ duration: 0.3 }} 
-            className="flex items-center justify-center gap-2 w-full h-6"
-          >
-            {props.isGenerating ? 
-              generatePathStates['generating'].icon 
-              : (props.generatePathState === 'ready' ? null : <Wand2 className="h-4 w-4" />)
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.button 
+              onClick={(e) => { e.preventDefault(); props.onGeneratePath(); }}
+              disabled={!props.isModelLoaded || !props.isLocked || props.isGenerating || props.generatePathState === 'ready'}
+              className={cn(
+                  "w-full h-14 px-6 py-0 inline-flex items-center justify-center gap-2.5",
+                  "rounded-2xl border border-[#444444]",
+                  "shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
+                  "font-semibold text-sm",
+                  (props.isGenerating || !props.isModelLoaded || !props.isLocked || props.generatePathState === 'ready')
+                    ? "bg-[#444444] text-[#666666] shadow-none cursor-not-allowed"
+                    : "bg-[#C2F751] text-black hover:bg-[#C2F751]/90"
+              )}
+              whileHover={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked || !props.isModelLoaded) ? undefined : { /* scale removed */ }}
+              whileTap={(props.isGenerating || props.generatePathState === 'ready' || !props.isLocked || !props.isModelLoaded) ? undefined : { scale: 0.98 }}
+            >
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={props.isGenerating ? props.messageIndex : props.generatePathState} 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  exit={{ opacity: 0, y: -10 }} 
+                  transition={{ duration: 0.3 }} 
+                  className="flex items-center justify-center gap-2 w-full h-6"
+                >
+                  {props.isGenerating ? 
+                    generatePathStates['generating'].icon 
+                    : (props.generatePathState === 'ready' ? null : <Wand2 className="h-4 w-4" />)
+                  }
+                  <span className="leading-none"> 
+                    {props.isGenerating ? props.generatingMessage : (props.generatePathState === 'ready' ? "Ready!" : "Generate Shot")}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {!props.isModelLoaded
+              ? 'Load a model first'
+              : !props.isLocked
+                ? 'Lock the camera first'
+                : props.isGenerating
+                  ? 'Generation in progress...'
+                  : props.generatePathState === 'ready'
+                    ? 'Path is ready, go to Playback tab'
+                    : 'Generate camera path based on description'
             }
-            <span className="leading-none"> 
-              {props.isGenerating ? props.generatingMessage : (props.generatePathState === 'ready' ? "Ready!" : "Generate Shot")}
-            </span>
-          </motion.div>
-        </AnimatePresence>
-      </motion.button>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   </div>
 ); 

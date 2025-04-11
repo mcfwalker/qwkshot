@@ -48,7 +48,10 @@ export const LockButton: React.FC<LockButtonProps> = ({
                 {isLocked ? 'Camera Is Locked' : 'Lock Your Camera'}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
+            <TooltipContent 
+              side="bottom"
+              className="bg-[#C2F751] text-black border-[#C2F751]"
+            >
               {!isModelLoaded
                 ? 'Load a model to enable locking'
                 : isGenerating
