@@ -60,7 +60,13 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
             value={props.instruction}
             onChange={(e) => props.onInstructionChange(e.target.value)}
             disabled={!props.isLocked || props.isGenerating} 
-            className="min-h-[128px] w-full p-4 resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/70 placeholder:text-sm rounded-xl disabled:placeholder:text-[#666666]"
+            className={cn(
+              "min-h-[128px] w-full p-4 resize-none bg-[#121212] border-0 focus:ring-1 focus:ring-primary/50 rounded-xl",
+              "placeholder:text-muted-foreground/70 placeholder:text-sm",
+              "text-foreground",
+              "disabled:text-[#666666]",
+              "disabled:placeholder:text-[#666666]"
+            )}
           />
           <div className="space-y-1">
             <div className="flex items-center justify-between">
