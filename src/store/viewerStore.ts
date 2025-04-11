@@ -40,7 +40,8 @@ interface ViewerState {
   storeEnvironmentalMetadata: (
     modelRef: Object3D,
     cameraRef: PerspectiveCamera,
-    controlsRef: any
+    controlsRef: any,
+    fov: number
   ) => Promise<void>;
 }
 
@@ -61,7 +62,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
   setLock: (locked) => set({ isLocked: locked }),
   setModelId: (id) => set({ modelId: id }),
-  storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef) => {
+  storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef, fov) => {
     const { modelId } = get();
     if (!modelId) {
       console.error('No model ID available');
@@ -97,7 +98,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
             y: controlsRef.target.y,
             z: controlsRef.target.z
           },
-          fov: cameraRef.fov
+          fov: fov
         },
         scene: {
           background: '#000000',

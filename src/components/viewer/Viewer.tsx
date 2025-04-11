@@ -188,9 +188,10 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
-    // Don't reset progress here, keep it at 100 or paused state
+    // Use setTimeout to ensure progress reset happens after final updates
+    setTimeout(() => setProgress(0), 0); 
     console.log("Viewer: Animation Stopped/Completed");
-  }, []);
+  }, [setIsPlaying, setProgress]); // Add setIsPlaying and setProgress
 
   const handleAnimationPause = useCallback(() => {
     setIsPlaying(false); 
@@ -394,6 +395,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           progress={progress}
           duration={duration} 
           playbackSpeed={playbackSpeed}
+          fov={fov}
           // Pass down relevant handlers/callbacks
           onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
           onStop={handleAnimationStop} // Maybe need a dedicated reset handler?

@@ -49,6 +49,7 @@ interface CameraAnimationSystemProps {
   progress: number;
   duration: number;
   playbackSpeed: number;
+  fov: number;
   onPlayPause: () => void;
   onStop: () => void;
   onProgressChange: (progress: number) => void;
@@ -165,6 +166,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   progress,
   duration,
   playbackSpeed,
+  fov,
   onPlayPause,
   onStop,
   onProgressChange,
@@ -605,7 +607,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         await storeEnvironmentalMetadata(
           modelRef.current,
           cameraRef.current,
-          controlsRef.current
+          controlsRef.current,
+          fov
         );
         toast.success('Scene composition locked and saved');
       } else if (isLocked) {
@@ -689,13 +692,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   // Add handler for creating a new shot
   const handleCreateNewShot = () => {
-    // Reset relevant state
-    setInstruction('');
+    // Reset relevant state, but keep the instruction
+    // setInstruction(''); // Keep the previous instruction
     setCommands([]);
     onProgressChange(0); // Use callback to reset parent progress
     setGeneratePathState('initial');
-    // Unlock? Depends on desired flow
-    // if (isLocked) toggleLock(); 
+    // Unlock if currently locked
+    if (isLocked) {
+      toggleLock();
+    }
     setActiveTab('shotCaller'); // Switch back to shot caller tab
     toast.info('Ready for new shot');
   };
@@ -770,6 +775,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                     takeCount={takeCount}
                     modelName={modelName}
                     isGenerating={isGenerating}
+                    progress={progress}
                     onPlayPause={handlePlayPause}
                     onDownload={handleDownload}
                     onSpeedChange={handleSpeedChange}

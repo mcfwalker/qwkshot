@@ -25,6 +25,8 @@
 - ✅ Fix post-login redirect and dropzone hover/drag states
 - ✅ Refine LockButton & Generate Shot appearance/behavior
 - ✅ Improve disabled input styling
+- ✅ Fix Environmental Metadata Capture (FOV)
+- ✅ Address UI inconsistencies (Tooltips, Create New Shot, Playback Reset)
 
 ## Upcoming Tasks
 
@@ -171,13 +173,11 @@
   - [ ] Document Prompt Architecture & Engineering Strategy
 
 ## Current Priorities (Updated)
-1.  **Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).**
-2.  Implement proper Authentication/Authorization for API route data fetching.
-3.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
+1.  Implement proper Authentication/Authorization for API route data fetching.
+2.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
     *   Note: Currently uses basic geometry + placeholders. Need to fetch/reconstruct full analysis data (complexity, reference points, features, initial constraints) from upload process for use by Env. Analyzer & Prompt Compiler.
-4.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
-5.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
-6.  **Fix Environmental Metadata Capture:** Ensure current camera state (FOV, position, target/rotation) is accurately captured and stored by `storeEnvironmentalMetadata` when locking the camera. (Investigate FOV specifically).
+3.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
+4.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
 
 ## Implementation Strategy
 
