@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -14,6 +14,13 @@ import { SceneControls } from './SceneControls';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { ModelSelectorTabs } from './ModelSelectorTabs';
+import { TextureLibraryModal } from './TextureLibraryModal';
+import { FloorTexture } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { AnimationController } from './AnimationController';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -33,16 +40,15 @@ function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.Ref
 interface ViewerProps {
   className?: string;
   modelUrl: string;
+  onModelSelect: (url: string) => void;
 }
 
-export default function Viewer({ className, modelUrl }: ViewerProps) {
+export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(10);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
+  const [gridVisible, setGridVisible] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
@@ -102,19 +108,31 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
   const [isReady, setIsReady] = useState(false);
   const [isError, setIsError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showTextureModal, setShowTextureModal] = useState(false);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+
+  // --- Lifted Animation State ---
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // Animation progress 0-100
+  const [commands, setCommands] = useState<CameraCommand[]>([]);
+  const [duration, setDuration] = useState(10); // Default/initial duration
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
+  // --- End Lifted State ---
 
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
-  const { isLocked, setModelId } = useViewerStore();
+  const { isLocked, setModelId, setLock } = useViewerStore();
 
   // Extract and set modelId when modelUrl changes
   useEffect(() => {
+    let modelId: string | undefined;
     if (modelUrl) {
       // First try to get modelId from URL pathname
       const pathParts = window.location.pathname.split('/');
-      let modelId = pathParts.find(part => 
+      modelId = pathParts.find(part => 
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
       );
 
@@ -130,7 +148,9 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     } else {
       setModelId(null);
     }
-  }, [modelUrl, setModelId]);
+    // Trigger reset in child component when model changes or is cleared
+    setResetCounter(prev => prev + 1); 
+  }, [modelUrl, setModelId, setResetCounter]);
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -143,10 +163,10 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
       // Update height
       setModelHeight(newHeight);
 
-      // Show success toast
-      toast.success('Floor offset updated', {
-        description: `Model height set to ${newHeight.toFixed(2)} units`
-      });
+      // Show success toast - REMOVE THIS
+      // toast.success('Floor offset updated', {
+      //  description: `Model height set to ${newHeight.toFixed(2)} units`
+      // });
     } catch (error) {
       console.error('Error updating model height:', error);
       toast.error('Failed to update floor offset', {
@@ -155,58 +175,125 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
     }
   };
 
-  const handleCameraUpdate = useCallback((position: Vector3, target: Vector3) => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to move the camera.');
-      return;
-    }
-    if (cameraRef.current && controlsRef.current) {
-      cameraRef.current.position.copy(position);
-      controlsRef.current.target.copy(target);
-    }
-  }, [isLocked]);
-
-  const handleAnimationUpdate = useCallback((progress: number) => {
-    if (!cameraRef.current || !controlsRef.current) {
-      return;
-    }
-
-    // Calculate orbit position with playback speed adjustment
-    const adjustedProgress = progress * playbackSpeed;
-    const angle = adjustedProgress * Math.PI * 2; // Full circle
-    const radius = 5; // Distance from center
-    const height = 2; // Height above ground
-
-    const newPosition = new Vector3(
-      Math.cos(angle) * radius,
-      height,
-      Math.sin(angle) * radius
-    );
-
-    // Keep looking at the center
-    const target = new Vector3(0, 0, 0);
-
-    // Update camera and controls
-    cameraRef.current.position.copy(newPosition);
-    controlsRef.current.target.copy(target);
-  }, [playbackSpeed]);
-
+  // --- Lifted Animation Handlers ---
   const handleAnimationStart = useCallback(() => {
-    if (cameraRef.current && controlsRef.current) {
-      setIsPlaying(true);
-    }
-  }, []);
+    setIsPlaying(true);
+    // Reset progress visually when starting playback
+    // if (progress < 1) { 
+    //     setProgress(0); 
+    // }
+    setProgress(0); // Always reset progress when starting play
+    console.log("Viewer: Animation Started");
+  }, []); // Remove progress dependency
 
   const handleAnimationStop = useCallback(() => {
     setIsPlaying(false);
+    // Don't reset progress here, keep it at 100 or paused state
+    console.log("Viewer: Animation Stopped/Completed");
   }, []);
 
   const handleAnimationPause = useCallback(() => {
-    setIsPlaying(false);
+    setIsPlaying(false); 
+    // Progress state is already updated via onProgressUpdate
+    console.log(`Viewer: Animation Paused at ${progress.toFixed(1)}%`);
+  }, [progress]);
+
+  const handlePlaybackSpeedChange = useCallback((speed: number) => {
+    setPlaybackSpeed(speed);
+    console.log(`Viewer: Playback speed set to ${speed}x`);
   }, []);
 
-  const handlePathGenerated = useCallback(() => {
-    setIsPathGenerated(true);
+  // Handler for scrubbing the progress slider (when not playing)
+  const handleProgressChange = useCallback((newProgress: number) => {
+      if (!isPlaying) {
+          setProgress(newProgress);
+          // Potentially update camera preview based on scrub? (More complex, skip for now)
+      }
+  }, [isPlaying]);
+
+  // Handler to receive new commands/duration from CameraAnimationSystem
+  const handleNewPathGenerated = useCallback((newCommands: CameraCommand[], newDuration: number) => {
+      setCommands(newCommands);
+      setDuration(newDuration);
+      setProgress(0); // Reset progress for new path
+      setIsPlaying(false); // Ensure not playing initially
+      console.log(`Viewer: New path received (${newCommands.length} commands, ${newDuration}s)`);
+  }, []);
+  // --- End Lifted Handlers ---
+
+  // Handler for grid toggle
+  const handleGridToggle = (visible: boolean) => {
+      setGridVisible(visible);
+      // Optionally update floorType based on visibility?
+      // setFloorType(visible ? 'grid' : 'none'); // Example logic
+  };
+
+  // Handler for texture button click
+  const handleAddTextureClick = () => {
+    if (isLocked) { // Prevent action if locked
+        toast.error("Cannot change texture while scene is locked.");
+        return;
+    }
+    setShowTextureModal(true);
+  };
+  
+  // Update handler to accept FloorTexture and use file_url
+  const handleTextureSelect = (texture: FloorTexture | null) => {
+    // Handle null case if user closes modal without selecting
+    const urlToSet = texture ? texture.file_url : null;
+    console.log('Viewer: handleTextureSelect - Setting floorTexture to:', urlToSet); // Log the URL being set
+    if (texture) {
+        setFloorTexture(texture.file_url); 
+    } else {
+        setFloorTexture(null);
+    }
+    setShowTextureModal(false); // Close modal
+  };
+
+  // Handler for the new reset button
+  const handleClearStageReset = () => {
+    if (!isConfirmingReset) {
+      setIsConfirmingReset(true);
+      toast.warning("Click again to confirm stage reset.");
+      return;
+    }
+
+    console.log("PERFORMING STAGE RESET");
+    
+    // 1. Clear Model (Trigger callback passed from parent/page)
+    onModelSelect(''); // Pass empty string instead of null
+    setModelId(null); // Clear model ID in store
+
+    // 2. Reset Camera Position/Target
+    if (controlsRef.current) {
+      controlsRef.current.reset(); 
+    }
+
+    // 3. Reset Viewer State
+    setLock(false); // Call the action from useViewerStore
+    setCommands([]);
+    setIsPlaying(false);
+    setProgress(0);
+    setDuration(10); // Reset to default duration
+    setPlaybackSpeed(1); // Reset to default speed
+    setFov(50); // Reset FOV
+    setModelHeight(0); // Reset model offset
+    setFloorTexture(null); // Reset floor texture
+    setGridVisible(true); // Ensure grid is visible
+    // Add any other relevant state resets here
+
+    // 4. Trigger Child Reset
+    setResetCounter(prev => prev + 1); 
+
+    // 5. Feedback & Confirmation Reset
+    toast.success("Stage Reset Successfully");
+    setIsConfirmingReset(false); 
+  };
+
+  // Handler to REMOVE the texture
+  const handleRemoveTexture = useCallback(() => {
+    setFloorTexture(null);
+    toast.info("Floor texture removed."); 
   }, []);
 
   return (
@@ -227,20 +314,26 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           />
 
           {/* Controls */}
-          <OrbitControls
-            ref={controlsRef}
-            enableDamping
-            dampingFactor={0.05}
-            mouseButtons={{
-              LEFT: MOUSE.ROTATE,
-              MIDDLE: MOUSE.DOLLY,
-              RIGHT: MOUSE.PAN
-            }}
-            enabled={!isLocked}
-          />
+          {(() => { // Immediately invoked function expression for logging
+            const controlsEnabled = !isPlaying && !isLocked;
+            console.log(`Viewer Render: Setting OrbitControls enabled=${controlsEnabled} (isPlaying=${isPlaying}, isLocked=${isLocked})`);
+            return (
+              <OrbitControls
+                ref={controlsRef}
+                enableDamping
+                dampingFactor={0.05}
+                mouseButtons={{
+                  LEFT: MOUSE.ROTATE,
+                  MIDDLE: MOUSE.DOLLY,
+                  RIGHT: MOUSE.PAN
+                }}
+                enabled={controlsEnabled}
+              />
+            );
+          })()}
 
           {/* Floor */}
-          <Floor type={floorType} texture={floorTexture} />
+          <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />
 
           {/* Model */}
           {modelUrl ? (
@@ -254,49 +347,114 @@ export default function Viewer({ className, modelUrl }: ViewerProps) {
           
           {/* Environment for realistic lighting */}
           <Environment preset="city" />
+
+          {/* --- Add Axes Helper --- */}
+          <primitive object={new AxesHelper(5)} />
+
+          {/* --- Animation Controller (Inside Canvas) --- */}
+          <AnimationController 
+            commands={commands}
+            isPlaying={isPlaying}
+            playbackSpeed={playbackSpeed}
+            cameraRef={cameraRef}
+            controlsRef={controlsRef}
+            onProgressUpdate={setProgress} // Pass setProgress directly
+            onComplete={handleAnimationStop}
+            currentProgress={progress} // Pass current progress for pause/resume
+            isRecording={isRecording}
+          />
+
         </Suspense>
       </Canvas>
 
-      {/* Scene Controls panel */}
-      <div className="absolute left-4 top-[calc(4rem+20rem+1rem)] w-80 z-10">
+      {/* This is the CORRECT container for BOTH left panels */}
+      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4">
+        <ErrorBoundary name="ModelSelectorTabs">
+           <ModelSelectorTabs onModelSelect={onModelSelect} />
+        </ErrorBoundary>
+        
         <SceneControls
           modelHeight={modelHeight}
           onModelHeightChange={handleModelHeightChange}
           fov={fov}
           onFovChange={setFov}
-          floorType={floorType}
-          onFloorTypeChange={setFloorType}
-          onFloorTextureChange={setFloorTexture}
+          gridVisible={gridVisible}
+          onGridToggle={handleGridToggle}
+          onAddTextureClick={handleAddTextureClick}
+          texture={floorTexture}
+          onRemoveTexture={handleRemoveTexture}
         />
       </div>
 
       {/* Camera Animation System */}
-      <div className="absolute right-4 top-4 w-80 z-10">
+      <div className="absolute top-16 right-4 z-10">
         <CameraAnimationSystem
-          onAnimationUpdate={handleAnimationUpdate}
-          onAnimationStop={handleAnimationStop}
-          onAnimationStart={handleAnimationStart}
-          onAnimationPause={handleAnimationPause}
+          // Pass down relevant state
           isPlaying={isPlaying}
-          duration={duration}
-          setDuration={setDuration}
+          progress={progress}
+          duration={duration} 
+          playbackSpeed={playbackSpeed}
+          // Pass down relevant handlers/callbacks
+          onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
+          onStop={handleAnimationStop} // Maybe need a dedicated reset handler?
+          onProgressChange={handleProgressChange} // For slider interaction
+          onSpeedChange={handlePlaybackSpeedChange}
+          onDurationChange={setDuration} // Pass down setter for UI input field
+          onGeneratePath={handleNewPathGenerated} // Callback to receive new path
+          // Pass down refs needed by CameraAnimationSystem (e.g., for lock, download)
           modelRef={modelRef}
           cameraRef={cameraRef}
           controlsRef={controlsRef}
           canvasRef={canvasRef}
-          onPathGenerated={handlePathGenerated}
-          onPlaybackSpeedChange={setPlaybackSpeed}
+          // Other props
           disabled={!modelRef.current}
+          isModelLoaded={!!modelUrl}
+          isRecording={isRecording}
+          setIsRecording={setIsRecording}
+          resetCounter={resetCounter} // Pass reset trigger
         />
       </div>
 
-      {/* Camera telemetry display */}
-      <div className="absolute right-4 bottom-4 w-80 z-10">
+      {/* Camera telemetry display - Center Position */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}
         />
       </div>
+
+      {/* Texture Modal - onSelect prop matches now */}
+      <TextureLibraryModal 
+        isOpen={showTextureModal}
+        onClose={() => setShowTextureModal(false)} // Just close, don't call handleTextureSelect
+        onSelect={handleTextureSelect}
+      />
+
+      {/* Clear Stage Button - Conditionally Rendered */}
+      {modelUrl && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+          <Button
+            variant="ghost" // Keep ghost for base structure, override visuals
+            // Remove size="sm"
+            className={cn(
+              // Flex layout (already default for button)
+              // Size & Padding
+              "h-10 px-6 py-0",
+              // Appearance
+              "rounded-full border border-[#444] bg-[#121212]",
+              // Hover state
+              "hover:bg-[#1f1f1f]", 
+              // Text style
+              "text-foreground/80 hover:text-foreground",
+              // Remove backdrop blur if present
+              // Keep default focus/disabled states from variant if needed
+            )}
+            onClick={handleClearStageReset}
+          >
+            {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 } 

@@ -4,7 +4,8 @@ import {
   BaseMetadata,
   Logger,
   SerializedVector3,
-  SerializedOrientation
+  SerializedOrientation,
+  Orientation as SharedOrientation
 } from './shared';
 import { EnvironmentalMetadata } from './environmental-metadata';
 
@@ -85,15 +86,6 @@ export interface UserPreferences {
 }
 
 /**
- * Orientation interface
- */
-export interface Orientation {
-  position: Vector3;
-  rotation: Vector3;
-  scale: Vector3;
-}
-
-/**
  * Validation result interface
  */
 export interface ValidationResult {
@@ -157,7 +149,7 @@ export interface MetadataManager {
   /**
    * Update model orientation
    */
-  updateModelOrientation(modelId: string, orientation: Orientation): Promise<void>;
+  updateModelOrientation(modelId: string, orientation: SharedOrientation): Promise<void>;
 
   /**
    * Add a feature point

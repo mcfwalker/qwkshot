@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ViewIcon, FolderOpen, LogOut, Home, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSupabaseClient } from '@/lib/supabase'
+import { cn } from "@/lib/utils"
 
 export function Navigation() {
   const pathname = usePathname()
@@ -38,46 +39,33 @@ export function Navigation() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center px-4">
-        <div className="mr-4 flex">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            className="font-bold"
-            onClick={() => handleNavigation('/viewer')}
-          >
-            <Home className="mr-2 h-4 w-4" />
-            MiniMav
-          </Button>
-        </div>
-        <div className="flex flex-1 items-center justify-end space-x-2">
-          <Button 
-            variant={pathname.startsWith('/library') ? "default" : "ghost"} 
-            size="sm"
-            className="mr-2"
-            onClick={() => handleNavigation('/library')}
-          >
-            <FolderOpen className="mr-2 h-4 w-4" />
-            Library
-          </Button>
-          <Button 
-            variant={pathname.startsWith('/admin') ? "default" : "ghost"} 
-            size="sm"
-            className="mr-2"
-            onClick={handleAdminNavigation}
-          >
-            <Settings className="mr-2 h-4 w-4" />
+    <nav className="sticky top-0 z-50 w-full h-14 bg-[#121212]">
+      <div className="flex h-full items-center justify-between px-4">
+        <Link href="/viewer" className="flex items-center gap-2 group">
+          <div className="h-6 w-6 rounded-md bg-[#C2F751] group-hover:opacity-90 transition-opacity"></div>
+          <span className="font-semibold text-sm text-[#CFD0D0] group-hover:text-white transition-colors">
+            Qwk Shot
+          </span>
+        </Link>
+        <div className="flex items-center space-x-4">
+          <Link href="/admin" className={cn(
+              "text-sm font-normal transition-colors",
+              pathname.startsWith('/admin') ? "text-white" : "text-[#CFD0D0] hover:text-white"
+          )}>
             Admin
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm"
+          </Link>
+          <Link href="/library" className={cn(
+              "text-sm font-normal transition-colors",
+              pathname.startsWith('/library') ? "text-white" : "text-[#CFD0D0] hover:text-white"
+          )}>
+            Library
+          </Link>
+          <button 
             onClick={handleSignOut}
+            className="text-sm font-normal text-[#CFD0D0] hover:text-white transition-colors"
           >
-            <LogOut className="mr-2 h-4 w-4" />
             Sign Out
-          </Button>
+          </button>
         </div>
       </div>
     </nav>

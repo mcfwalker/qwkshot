@@ -8,6 +8,7 @@ import {
   Logger,
 } from './shared';
 import { CameraPath } from './llm-engine';
+import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
 
 /**
  * Configuration for the Scene Interpreter
@@ -25,7 +26,7 @@ export interface CameraCommand {
   position: Vector3;
   target: Vector3;
   duration: number;
-  easing?: (t: number) => number;
+  easing?: EasingFunctionName;
 }
 
 /**

@@ -72,6 +72,8 @@ export interface SafetyConstraints {
   maxDistance: number;
   minHeight: number;
   maxHeight: number;
+  maxSpeed?: number;
+  maxAngularVelocity?: number;
   restrictedAngles?: number[];
   restrictedZones?: Box3[];
 }

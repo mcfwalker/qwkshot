@@ -1,3 +1,4 @@
+import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import { SupabaseClientOptions } from '@supabase/supabase-js'
@@ -10,41 +11,57 @@ console.log('Client - ENV check - Key length:', process.env.NEXT_PUBLIC_SUPABASE
 // Get environment variables without quotes
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/"/g, '') || ''
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.replace(/"/g, '') || ''
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase credentials. Check your environment variables.')
 }
 
-let clientInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null;
+// Use specific types for clarity
+let componentClientInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null;
+let serviceRoleClientInstance: SupabaseClient | null = null;
 
-// Get or create the singleton instance
-export function getSupabaseClient() {
-  if (!clientInstance) {
-    const options: SupabaseClientOptions<'public'> = {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      },
-      global: {
-        headers: {
-          'x-client-info': 'modern-3d-viewer',
-          'Accept': 'application/json'
-        }
-      }
-    };
-
-    clientInstance = createClientComponentClient<Database>({
-      supabaseUrl,
-      supabaseKey,
-      options
-    });
+/**
+ * Gets the singleton Supabase client instance (using ANON key via Auth Helper).
+ * Suitable for client-side usage or server-side components.
+ */
+export function getSupabaseClient(): ReturnType<typeof createClientComponentClient<Database>> {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase URL or Anon Key is missing from environment variables.');
   }
-  return clientInstance;
+  if (!componentClientInstance) {
+    // Assuming component client is the intended default based on original code
+    componentClientInstance = createClientComponentClient<Database>();
+  }
+  return componentClientInstance;
 }
 
-// Export the singleton instance for direct use
+/**
+ * Gets the singleton Supabase client instance (using SERVICE ROLE key).
+ * WARNING: This client bypasses RLS. Use only in trusted server-side environments (like API routes).
+ * Requires SUPABASE_SERVICE_ROLE_KEY environment variable to be set.
+ */
+export function getSupabaseServiceRoleClient(): SupabaseClient {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Supabase URL or Service Role Key is missing from environment variables.');
+  }
+  if (!serviceRoleClientInstance) {
+    console.warn('!!! Creating Supabase client with SERVICE ROLE KEY !!!'); 
+    // Use the imported core createClient
+    serviceRoleClientInstance = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+  }
+  return serviceRoleClientInstance;
+}
+
+// Export the component client as default?
+// Re-enable direct export if needed by components
 export const supabase = getSupabaseClient();
 
 // Direct client for specific use cases (like SSR)

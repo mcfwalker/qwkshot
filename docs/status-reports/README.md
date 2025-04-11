@@ -39,6 +39,12 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-10-1158 - UI Bug Fixes & Backlog Grooming
+- M3DV-SR-2025-04-09-1531 - Animation Refactor & Bug Fixes
+- M3DV-SR-2025-04-08-0927-PMORTEM - Animation Playback Issue Post-Mortem
+- M3DV-SR-2025-04-06-2243 - UI Styling Refinements (Phase 3 Continued)
+- M3DV-SR-2025-04-06-1501 - P2P UI Refactor (Phase 3) - Initial Implementation
+- M3DV-SR-2025-04-06-1150 - P2P Backend Refactor Phases 1, 2, 2.5, 2.7
 - M3DV-SR-2025-04-05-2121-P2P - P2P Pipeline Architecture and Implementation Strategy
 - M3DV-SR-2025-04-05-1251-P2P - P2P Pipeline Architecture Investigation
 - M3DV-SR-2025-04-04-2337 - Animation Playback UX Improvements

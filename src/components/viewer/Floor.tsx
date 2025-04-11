@@ -21,6 +21,8 @@ export default function Floor({
   divisions = 20,
   color = '#444444'
 }: FloorProps) {
+  console.log('Floor component props:', { type, texture }); // Log received props
+
   // Don't render anything if type is 'none' and no texture
   if (type === 'none' && !texture) return null;
 
@@ -46,13 +48,24 @@ export default function Floor({
 function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
   // Load the texture using React Three Fiber's useTexture hook
   const texture = useTexture(url);
+  console.log('TexturedFloor: Loaded texture object:', texture); // Log texture object
+
+  const materialRef = useRef<MeshStandardMaterial>(null!); // Ref for material
   
-  // Configure texture for tiling
-  if (texture) {
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(10, 10); // Repeat the texture 10 times
-  }
+  // Configure texture for tiling using useEffect
+  useEffect(() => {
+    if (texture) {
+      console.log("TexturedFloor Effect: Applying texture settings for:", texture.image?.src); // Log image source
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.repeat.set(10, 10); // Repeat the texture 10 times
+      texture.needsUpdate = true; // Signal texture properties changed
+      // Force material update - likely not needed if texture update is signaled
+      // if (materialRef.current) {
+      //   materialRef.current.needsUpdate = true;
+      // }
+    }
+  }, [texture]); // Run effect when texture object changes
 
   return (
     <mesh 
@@ -62,6 +75,7 @@ function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
     >
       <planeGeometry args={[size, size]} />
       <meshStandardMaterial 
+        ref={materialRef} // Assign ref to material
         map={texture}
         color="#ffffff" 
         side={DoubleSide}

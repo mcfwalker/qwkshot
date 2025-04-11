@@ -71,6 +71,7 @@ export interface CompiledPrompt {
   systemMessage: string;
   userMessage: string;
   constraints: CameraConstraints;
+  requestedDuration?: number;
   metadata: PromptMetadata;
   tokenCount?: number;
 }
@@ -92,6 +93,7 @@ export interface PromptCompiler {
    * @param envAnalysis Analysis result from the Environmental Analyzer.
    * @param modelMetadata Metadata associated with the current model.
    * @param currentCameraState Current position and target of the camera.
+   * @param requestedDuration The requested duration for the prompt.
    * @returns A promise resolving to the compiled prompt object.
    */
   compilePrompt(
@@ -99,7 +101,8 @@ export interface PromptCompiler {
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    currentCameraState: { position: Vector3; target: Vector3 }
+    currentCameraState: { position: Vector3; target: Vector3; fov: number },
+    requestedDuration: number
   ): Promise<CompiledPrompt>;
 
   /**

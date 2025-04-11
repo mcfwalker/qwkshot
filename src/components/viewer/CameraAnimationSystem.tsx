@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -21,28 +21,47 @@ import { useViewerStore } from '@/store/viewerStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import * as TabsPrimitive from "@radix-ui/react-tabs";
 
-interface CameraKeyframe {
-  position: Vector3;
-  target: Vector3;
-  duration: number;
-}
+// Import the extracted components
+import { ShotCallerPanel } from './ShotCallerPanel'; 
+import { PlaybackPanel } from './PlaybackPanel';
 
+// Import the actual easing functions map
+// We need access to the functions themselves on the client-side
+// TODO: Define this map in a shared utility file?
+const easingFunctions = {
+  linear: (t: number) => t,
+  easeInQuad: (t: number) => t * t,
+  easeOutQuad: (t: number) => t * (2 - t),
+  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+};
+
+// Import the name type if needed for casting/checking
+import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
+
+// Define the props interface
 interface CameraAnimationSystemProps {
-  onAnimationUpdate: (progress: number) => void;
-  onAnimationStop: () => void;
-  onAnimationStart: () => void;
-  onAnimationPause: (progress: number) => void;
   isPlaying: boolean;
+  isRecording: boolean;
+  setIsRecording: React.Dispatch<React.SetStateAction<boolean>>;
+  progress: number;
   duration: number;
-  setDuration: (duration: number) => void;
+  playbackSpeed: number;
+  onPlayPause: () => void;
+  onStop: () => void;
+  onProgressChange: (progress: number) => void;
+  onSpeedChange: (speed: number) => void;
+  onDurationChange: (duration: number) => void;
+  onGeneratePath: (commands: CameraCommand[], duration: number) => void;
   modelRef: React.RefObject<Object3D | null>;
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
-  canvasRef?: React.RefObject<HTMLCanvasElement>;
-  onPathGenerated?: () => void;
-  onPlaybackSpeedChange: (speed: number) => void;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
   disabled?: boolean;
+  isModelLoaded: boolean;
+  resetCounter: number;
 }
 
 const CameraSystemFallback = () => (
@@ -108,16 +127,16 @@ const SPEED_OPTIONS = [
 // Update the generate path states type
 type GeneratePathState = 'initial' | 'generating' | 'ready';
 
-// Fun, cinematic-themed messages for the generating state
+// Fun, cinematic-themed messages for the generating state - shortened
 const generatingMessages = [
-  "Setting up the perfect shot...",
-  "Calculating cinematic angles...",
-  "Choreographing the camera moves...",
-  "Finding the dramatic moments...",
-  "Making it look epic...",
-  "Adding that cinematic magic...",
-  "Crafting the perfect sequence...",
-  "Directing your scene..."
+  "Setting up shot...",
+  "Calculating angles...",
+  "Choreographing moves...",
+  "Finding moments...",
+  "Making it epic...",
+  "Adding magic...",
+  "Crafting sequence...",
+  "Directing scene..."
 ];
 
 // Update the generate path states configuration
@@ -136,41 +155,49 @@ const generatePathStates: Record<GeneratePathState, { text: string; icon: React.
   }
 };
 
+// Define Tab values
+type TabValue = 'shotCaller' | 'playback';
+
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
-  onAnimationUpdate,
-  onAnimationStop,
-  onAnimationStart,
-  onAnimationPause,
   isPlaying,
+  isRecording,
+  setIsRecording,
+  progress,
   duration,
-  setDuration,
+  playbackSpeed,
+  onPlayPause,
+  onStop,
+  onProgressChange,
+  onSpeedChange,
+  onDurationChange,
+  onGeneratePath,
   modelRef,
   cameraRef,
   controlsRef,
   canvasRef,
-  onPathGenerated,
-  onPlaybackSpeedChange,
   disabled,
+  isModelLoaded,
+  resetCounter,
 }) => {
-  const [progress, setProgress] = useState(0);
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [keyframes, setKeyframes] = useState<CameraKeyframe[]>([]);
+  const [commands, setCommands] = useState<CameraCommand[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
-  const progressRef = useRef(0);
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const { isLocked, toggleLock, storeEnvironmentalMetadata } = useViewerStore();
   const [messageIndex, setMessageIndex] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [takeCount, setTakeCount] = useState(0);
   const [modelName, setModelName] = useState<string | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabValue>('shotCaller');
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef<number | null>(null);
+  const progressRef = useRef(0);
 
   // Debug logging for button state
   useEffect(() => {
@@ -216,6 +243,26 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       }
     };
   }, [isGenerating]);
+
+  // Effect to reset local state when resetCounter changes
+  useEffect(() => {
+    if (resetCounter > 0) { // Only run after initial mount
+      console.log("CameraAnimationSystem: Resetting local state due to trigger");
+      setInstruction('');
+      setCommands([]); // Also clear local commands if used for anything
+      setGeneratePathState('initial');
+      setTakeCount(0);
+      setActiveTab('shotCaller');
+      // Reset other local state related to generation/playback if needed
+    }
+  }, [resetCounter]);
+
+  // Effect to update inputDuration when duration prop changes externally
+  useEffect(() => {
+    if (duration !== parseFloat(inputDuration)) {
+      setInputDuration(duration.toString());
+    }
+  }, [duration, inputDuration]);
 
   const handleGeneratePath = async () => {
     if (!instruction.trim()) {
@@ -301,9 +348,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // Call the API to generate camera path
       const pathResponse = await fetch('/api/camera-path', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction,
           sceneGeometry,
@@ -317,47 +362,67 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         throw new Error(error.error || 'Failed to generate camera path');
       }
 
-      const data = await pathResponse.json();
+      // Process the response - expecting CameraCommand[]
+      const receivedCommands: any[] = await pathResponse.json(); 
       
-      // Validate and parse keyframes
-      if (!data.keyframes) {
-        throw new Error('Missing keyframes in API response');
+      // Validate and parse commands
+      if (!Array.isArray(receivedCommands)) {
+        throw new Error('Invalid command data received from API');
       }
       
-      const keyframesArray = Array.isArray(data.keyframes) ? data.keyframes : [];
-      if (keyframesArray.length === 0) {
-        throw new Error('No keyframes returned from API');
+      if (receivedCommands.length === 0) {
+        // Handle empty path case - maybe show a specific message?
+        toast.info('Generated path has no commands.');
+        setCommands([]); // Set empty commands
+        setGeneratePathState('initial'); // Reset state?
+        // Maybe don't automatically start animation?
+        // onAnimationStop(); 
+        return; // Stop further processing
       }
       
-      // Parse keyframes into Vector3 objects
-      const newKeyframes = [];
-      for (let i = 0; i < keyframesArray.length; i++) {
-        const kf = keyframesArray[i];
+      // Parse commands and convert to Vector3 instances
+      const newCommands: CameraCommand[] = receivedCommands.map((cmd, index) => {
         try {
-          const keyframe = {
-            position: new Vector3(kf.position.x, kf.position.y, kf.position.z),
-            target: new Vector3(kf.target.x, kf.target.y, kf.target.z),
-            duration: kf.duration
+          if (!cmd.position || !cmd.target || typeof cmd.duration !== 'number' || cmd.duration <= 0) {
+              throw new Error(`Command ${index} missing required fields or has invalid duration.`);
+          }
+          const command: CameraCommand = {
+            position: new Vector3(cmd.position.x, cmd.position.y, cmd.position.z),
+            target: new Vector3(cmd.target.x, cmd.target.y, cmd.target.z),
+            duration: cmd.duration,
+            easing: cmd.easing || 'linear' // Use easing from command or default to linear
           };
-          newKeyframes.push(keyframe);
+          return command;
         } catch (err) {
-          console.error(`Error parsing keyframe ${i}:`, kf, err);
+          console.error(`Error parsing command ${index}:`, cmd, err);
+          // Handle unknown error type
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error during command parsing';
+          throw new Error(`Error processing command ${index}: ${errorMsg}`); // Re-throw to stop processing
         }
-      }
+      });
 
-      setKeyframes(newKeyframes);
-      const totalDuration = newKeyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      setDuration(totalDuration);
-      setProgress(0);
+      // Set the new commands state
+      setCommands(newCommands);
+
+      // Calculate total duration from commands
+      const totalDuration = newCommands.reduce((sum, cmd) => sum + cmd.duration, 0);
+      onDurationChange(totalDuration);
+      setInputDuration(totalDuration.toFixed(1)); // Update input field too
+      onProgressChange(0); // Use callback to reset parent state
       setGeneratePathState('ready');
-      onAnimationStart();
-      onPathGenerated?.();
       
+      onGeneratePath(newCommands, totalDuration);
       toast.success('Camera path generated successfully');
+      // Switch to playback tab on success
+      setActiveTab('playback'); 
+      // Reset button state *after* switching tab
+      setGeneratePathState('initial'); 
+
     } catch (error) {
       console.error('Error generating camera path:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate camera path');
       setGeneratePathState('initial');
+      setCommands([]); // Clear commands on error
     } finally {
       setIsGenerating(false);
     }
@@ -365,169 +430,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   const handleAnimationStart = () => {
     console.log('Animation starting...', {
-      keyframesCount: keyframes.length,
-      totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
+      keyframesCount: commands.length,
+      totalDuration: commands.reduce((sum, kf) => sum + kf.duration, 0),
       hasCamera: !!cameraRef.current,
       hasControls: !!controlsRef.current
     });
-    onAnimationStart();
+    onPlayPause();
   };
-
-  const handleProgressChange = (values: number[]) => {
-    const value = values[0];
-    console.log('Progress update:', {
-      value,
-      isPlaying,
-      keyframesPresent: keyframes.length > 0
-    });
-    
-    if (!isPlaying && keyframes.length > 0) {
-      setProgress(value);
-      const normalizedProgress = value / 100;
-      const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-      let currentTime = normalizedProgress * totalDuration;
-      
-      let currentKeyframeIndex = 0;
-      let accumulatedDuration = 0;
-      
-      while (currentKeyframeIndex < keyframes.length - 1 && 
-             accumulatedDuration + keyframes[currentKeyframeIndex].duration < currentTime) {
-        accumulatedDuration += keyframes[currentKeyframeIndex].duration;
-        currentKeyframeIndex++;
-      }
-      
-      const k1 = keyframes[currentKeyframeIndex];
-      const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
-      
-      const localProgress = (currentTime - accumulatedDuration) / k1.duration;
-      
-      const position = new Vector3().lerpVectors(
-        k1.position,
-        k2.position,
-        Math.min(localProgress, 1)
-      );
-      const target = new Vector3().lerpVectors(
-        k1.target,
-        k2.target,
-        Math.min(localProgress, 1)
-      );
-
-      console.log('Camera update:', {
-        position: position.toArray(),
-        target: target.toArray(),
-        currentKeyframeIndex,
-        localProgress,
-        currentTime,
-        totalDuration
-      });
-      
-      if (cameraRef.current && controlsRef.current) {
-        cameraRef.current.position.copy(position);
-        controlsRef.current.target.copy(target);
-      }
-    }
-  };
-
-  // Add animation frame effect
-  useEffect(() => {
-    if (isPlaying && keyframes.length > 0) {
-      console.log('Starting animation with state:', {
-        keyframeCount: keyframes.length,
-        totalDuration: keyframes.reduce((sum, kf) => sum + kf.duration, 0),
-        currentProgress: progress
-      });
-
-      let animationStartTime = performance.now();
-      let lastProgressUpdate = 0;
-      
-      const animate = () => {
-        const currentTime = performance.now();
-        const elapsedTime = (currentTime - animationStartTime) / 1000; // Convert to seconds
-        const currentProgress = Math.min((elapsedTime / duration) * 100, 100);
-        
-        // Only update progress state when it changes by at least 1%
-        if (Math.floor(currentProgress) > Math.floor(lastProgressUpdate)) {
-          lastProgressUpdate = currentProgress;
-          setProgress(currentProgress);
-          onAnimationUpdate(currentProgress);
-        }
-
-        // Calculate camera position based on current progress
-        const normalizedProgress = currentProgress / 100;
-        const totalDuration = keyframes.reduce((sum, kf) => sum + kf.duration, 0);
-        let animationTime = normalizedProgress * totalDuration;
-        
-        let currentKeyframeIndex = 0;
-        let accumulatedDuration = 0;
-        
-        // Find current keyframe pair
-        while (currentKeyframeIndex < keyframes.length - 1 && 
-               accumulatedDuration + keyframes[currentKeyframeIndex].duration < animationTime) {
-          accumulatedDuration += keyframes[currentKeyframeIndex].duration;
-          currentKeyframeIndex++;
-        }
-        
-        const k1 = keyframes[currentKeyframeIndex];
-        const k2 = keyframes[Math.min(currentKeyframeIndex + 1, keyframes.length - 1)];
-        
-        const localProgress = (animationTime - accumulatedDuration) / k1.duration;
-
-        // Log detailed interpolation state every 500ms
-        if (Math.floor(currentTime / 500) > Math.floor(animationStartTime / 500)) {
-          console.log('Animation interpolation:', {
-            progress: currentProgress,
-            keyframe: {
-              current: currentKeyframeIndex,
-              localProgress,
-              time: animationTime
-            }
-          });
-        }
-        
-        const position = new Vector3().lerpVectors(
-          k1.position,
-          k2.position,
-          Math.min(localProgress, 1)
-        );
-        const target = new Vector3().lerpVectors(
-          k1.target,
-          k2.target,
-          Math.min(localProgress, 1)
-        );
-
-        // Update camera position
-        if (cameraRef.current && controlsRef.current) {
-          cameraRef.current.position.copy(position);
-          controlsRef.current.target.copy(target);
-          controlsRef.current.update();
-        }
-        
-        if (currentProgress < 100) {
-          animationFrameRef.current = requestAnimationFrame(animate);
-        } else {
-          console.log('Animation complete:', {
-            finalPosition: position.toArray(),
-            finalTarget: target.toArray()
-          });
-          animationFrameRef.current = undefined;
-          onAnimationStop();
-        }
-      };
-      
-      // Cancel any existing animation frame before starting new one
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(animate);
-      
-      return () => {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = undefined;
-        }
-      };
-    }
-  }, [isPlaying, keyframes, duration]); // Removed progress from dependencies
 
   const handleDownload = async () => {
     if (!canvasRef?.current) {
@@ -558,9 +467,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         mimeType: supportedType,
         videoBitsPerSecond: 8000000
       });
+      mediaRecorderRef.current = mediaRecorder; // Store ref
+      chunksRef.current = []; // Resetting chunks
 
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      // Add error handler
+      mediaRecorder.onerror = (event: Event) => {
+        console.error('MediaRecorder error:', event);
+        toast.error('Recording error occurred. See console for details.');
+        setIsRecording(false); // Ensure loading state stops on error
+      };
 
       // Collect data chunks during recording
       mediaRecorder.ondataavailable = (event) => {
@@ -571,6 +486,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
       // Handle recording completion
       mediaRecorder.onstop = () => {
+        console.log('>>> MediaRecorder.onstop triggered'); // Log start of handler
         if (chunksRef.current.length === 0) {
           toast.error('No video data was recorded');
           setIsRecording(false);
@@ -584,7 +500,18 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'camera-path-animation.webm';
+          
+          // --- Dynamic Filename Generation ---
+          const now = new Date();
+          const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+          // Replace spaces with dashes, remove unsafe chars
+          const safeModelName = (modelName || 'Model').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_\-]/g, ''); 
+          const takeNumber = takeCount > 0 ? takeCount : 1; // Ensure take is at least 1 if generation happened
+          const filename = `${safeModelName}-Take${takeNumber}-${timestamp}.webm`;
+          console.log("Generated Filename:", filename);
+          // --- End Dynamic Filename ---
+          
+          a.download = filename; // Use dynamic filename
           a.click();
           URL.revokeObjectURL(url);
         } else {
@@ -592,6 +519,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }
         
         setIsRecording(false);
+        console.log('>>> MediaRecorder.onstop finished'); // Log end of handler
       };
 
       // Start recording
@@ -599,12 +527,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       mediaRecorder.start(50); // Request data every 50ms
 
       // Start the animation
-      onAnimationStart();
+      onPlayPause();
 
-      // Stop recording after duration + small buffer
-      const recordingDuration = (duration * 1000) + 100;
+      // Stop recording after duration + small buffer, adjusted for playback speed
+      const recordingDuration = (duration / playbackSpeed * 1000) + 100;
       setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
+        console.log('>>> setTimeout: Attempting to stop recording...', { state: mediaRecorderRef.current?.state }); // Log before stop
+        if (mediaRecorderRef.current?.state === 'recording') { // Check ref before stopping
           mediaRecorderRef.current.stop();
         }
       }, recordingDuration);
@@ -627,15 +556,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   const handlePlayPause = () => {
     if (isPlaying) {
-      onAnimationPause(progress);
+      onStop();
     } else {
-      onAnimationStart();
+      onPlayPause();
     }
   };
 
   const handleReset = () => {
-    setProgress(0);
-    onAnimationStop();
+    onProgressChange(0); // Inform parent to reset progress
+    onStop();
   };
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -644,7 +573,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     
     const numValue = parseFloat(value);
     if (!isNaN(numValue) && numValue >= 1 && numValue <= 20) {
-      setDuration(numValue);
+      onDurationChange(numValue);
     }
   };
 
@@ -652,13 +581,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     const numValue = parseFloat(inputDuration);
     if (isNaN(numValue) || numValue < 1) {
       setInputDuration('1');
-      setDuration(1);
+      onDurationChange(1);
     } else if (numValue > 20) {
       setInputDuration('20');
-      setDuration(20);
+      onDurationChange(20);
     } else {
       setInputDuration(numValue.toString());
-      setDuration(numValue);
+      onDurationChange(numValue);
     }
   };
 
@@ -700,8 +629,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       return Math.abs(curr.value - value) < Math.abs(prev.value - value) ? curr : prev;
     });
     
-    setPlaybackSpeed(closestOption.value);
-    onPlaybackSpeedChange(closestOption.value);
+    onSpeedChange(closestOption.value);
   };
 
   // Handle scene clear
@@ -712,13 +640,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
 
     // Reset all states
-    setProgress(0);
-    setKeyframes([]);
+    onProgressChange(0); // Inform parent to reset progress
+    setCommands([]);
     setInstruction('');
     setGeneratePathState('initial');
     setTakeCount(0);
     setModelName(null);
-    onAnimationStop();
+    onStop();
     setIsConfirmingClear(false);
 
     // Reset camera to initial position
@@ -761,217 +689,99 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   // Add handler for creating a new shot
   const handleCreateNewShot = () => {
-    // Reset only the states needed for a new shot
+    // Reset relevant state
     setInstruction('');
+    setCommands([]);
+    onProgressChange(0); // Use callback to reset parent progress
     setGeneratePathState('initial');
-    setIsConfirmingClear(false);
-    
-    // Unlock the scene if it's locked
-    if (isLocked) {
-      toggleLock();
-    }
-
-    toast.success('Ready for a new shot');
+    // Unlock? Depends on desired flow
+    // if (isLocked) toggleLock(); 
+    setActiveTab('shotCaller'); // Switch back to shot caller tab
+    toast.info('Ready for new shot');
   };
 
   return (
     <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
-      <Card className="viewer-card border-[#444444]">
-        <CardHeader className="viewer-panel-header">
-          <CardTitle className="viewer-panel-title">Camera Path</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-6 space-y-4">
-          <LockButton isLocked={isLocked} onToggle={handleLockToggle} />
+      <TabsPrimitive.Root 
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as TabValue)}
+          className="flex flex-col w-[288px] gap-4"
+      >
+        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+          <TabsPrimitive.Trigger 
+            value="shotCaller" 
+            className={cn(
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-50",
+                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+            )}
+          >
+            SHOT CALLER
+          </TabsPrimitive.Trigger>
+          <TabsPrimitive.Trigger 
+            value="playback" 
+            className={cn(
+                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-50",
+                activeTab === 'playback' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+            )}
+          >
+            PLAYBACK
+          </TabsPrimitive.Trigger>
+        </TabsPrimitive.List>
 
-          <div className="camera-path-fields space-y-4">
-            <div className="space-y-4">
-              <Textarea
-                placeholder="Describe the camera movement you want..."
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                disabled={!isLocked}
-                className="min-h-[100px] resize-none"
-              />
+        <Card className="viewer-card bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col flex-1">
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                className="h-full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {activeTab === 'shotCaller' && (
+                  <ShotCallerPanel 
+                    isLocked={isLocked}
+                    isGenerating={isGenerating}
+                    generatePathState={generatePathState}
+                    instruction={instruction}
+                    inputDuration={inputDuration}
+                    generatingMessage={generatingMessages[messageIndex]}
+                    messageIndex={messageIndex}
+                    onLockToggle={handleLockToggle}
+                    onInstructionChange={setInstruction}
+                    onDurationChange={handleDurationChange}
+                    onDurationBlur={handleDurationBlur}
+                    onGeneratePath={handleGeneratePath}
+                    isModelLoaded={isModelLoaded}
+                  />
+                )}
+                {activeTab === 'playback' && (
+                  <PlaybackPanel 
+                    commands={commands}
+                    isPlaying={isPlaying}
+                    isRecording={isRecording}
+                    playbackSpeed={playbackSpeed}
+                    duration={duration}
+                    takeCount={takeCount}
+                    modelName={modelName}
+                    isGenerating={isGenerating}
+                    onPlayPause={handlePlayPause}
+                    onDownload={handleDownload}
+                    onSpeedChange={handleSpeedChange}
+                    onCreateNewShot={handleCreateNewShot}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </CardContent>
+        </Card>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="duration-input" className="viewer-label">Path Duration</Label>
-                  <div className="w-20">
-                    <Input
-                      id="duration-input"
-                      type="number"
-                      value={inputDuration}
-                      onChange={handleDurationChange}
-                      onBlur={handleDurationBlur}
-                      min={1}
-                      max={20}
-                      step={0.5}
-                      className="text-right"
-                      disabled={!isLocked || isGenerating}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-[#444444] italic text-right">Max 20 sec</p>
-              </div>
-
-              <div className="mt-8">
-                <motion.button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleGeneratePath();
-                  }}
-                  disabled={!isLocked || generatePathState === 'ready'}
-                  className={cn(
-                    buttonVariants({ variant: "primary", size: "lg" }),
-                    "w-full",
-                    isGenerating && "opacity-100 cursor-not-allowed",
-                    generatePathState === 'ready' && 
-                    "bg-[#1a1a1a] border border-[#444444] text-white hover:bg-[#1a1a1a] cursor-not-allowed"
-                  )}
-                  whileHover={isGenerating || generatePathState === 'ready' ? undefined : { scale: 1.02 }}
-                  whileTap={isGenerating || generatePathState === 'ready' ? undefined : { scale: 0.98 }}
-                >
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={generatePathState === 'generating' ? messageIndex : generatePathState}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3 }}
-                      className="flex items-center justify-center gap-2 w-full"
-                    >
-                      {generatePathState === 'generating' 
-                        ? <Loader2 className="h-6 w-6 animate-spin" />
-                        : generatePathStates[generatePathState].icon
-                      }
-                      <span className="font-medium">
-                        {generatePathState === 'generating' 
-                          ? generatingMessages[messageIndex]
-                          : generatePathStates[generatePathState].text
-                        }
-                      </span>
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.button>
-              </div>
-
-              {/* Status Message Pill */}
-              <div className="mt-4 bg-[#2a2a2a] rounded-full px-4 py-2 text-sm text-center">
-                {keyframes.length > 0 
-                  ? `Take ${takeCount}: ${modelName || 'Untitled'}`
-                  : "No shot available"
-                }
-              </div>
-
-              {/* Playback Controls */}
-              <div className="mt-6 space-y-6">
-                <div className="flex justify-between gap-2">
-                  <Button
-                    onClick={handlePlayPause}
-                    variant="secondary"
-                    size="icon"
-                    className={cn(
-                      "flex-1 border border-[#444444] hover:bg-secondary/20",
-                      keyframes.length > 0 && "bg-[#bef264] text-black hover:bg-[#bef264]/90"
-                    )}
-                    disabled={!keyframes.length || isGenerating}
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-4 w-4" />
-                    ) : (
-                      <Play className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    onClick={handleDownload}
-                    variant="secondary"
-                    size="default"
-                    disabled={!keyframes.length || isPlaying || isRecording}
-                    className="flex-1 border border-[#444444] hover:bg-secondary/20"
-                  >
-                    {isRecording ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Recording...
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4 mr-2" />
-                        Download
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="viewer-label">Playback Speed</Label>
-                    <span className="text-sm text-muted-foreground">
-                      {(duration / playbackSpeed).toFixed(1)}s
-                    </span>
-                  </div>
-                  <div className="playback-speed-slider">
-                    <div className="mark-container">
-                      {SPEED_OPTIONS.map((option) => (
-                        <div
-                          key={option.value}
-                          className={`mark ${option.value === 1 ? 'normal' : ''}`}
-                          style={{
-                            left: `${((option.value - 0.25) / (2 - 0.25)) * 100}%`
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <Slider
-                      value={[playbackSpeed]}
-                      onValueChange={handleSpeedChange}
-                      min={0.25}
-                      max={2}
-                      step={0.25}
-                      className="viewer-slider"
-                      disabled={isPlaying || !keyframes.length || isRecording}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-7">
-                      <span>0.25x</span>
-                      <span>2.0x</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clear Scene Button */}
-                <div className="flex justify-between mt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCreateNewShot}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Create new shot
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearScene}
-                    className={cn(
-                      "text-muted-foreground hover:text-destructive",
-                      isConfirmingClear && "text-destructive"
-                    )}
-                  >
-                    {isConfirmingClear ? (
-                      <>
-                        <X className="h-4 w-4 mr-2" />
-                        Confirm Clear
-                      </>
-                    ) : (
-                      "Clear Scene"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      </TabsPrimitive.Root>
     </ErrorBoundary>
   );
 }; 

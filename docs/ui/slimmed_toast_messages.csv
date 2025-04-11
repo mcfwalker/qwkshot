@@ -1,0 +1,29 @@
+Message,Category
+Signed in successfully.,success
+Sign-in failed. Please check your credentials.,error
+Could not sign in with Google. Please try again.,error
+Signed out successfully.,success
+Sign-out failed. Please try again.,error
+Switched to {provider} provider.,success
+Connection lost. Reconnecting...,warning
+Connection restored.,info
+Model updated successfully.,success
+Model deleted successfully.,success
+Something went wrong with the model. Please try again.,error
+Camera path created successfully.,success
+Could not generate camera path. Please try again.,error
+Please describe the camera movement you want.,info
+Scene saved and locked.,success
+Scene unlocked.,info
+Scene cleared.,success
+Could not save or update the scene. Please try again.,error
+Ready for a new shot.,info
+Recording started.,success
+Recording failed. Please try again.,error
+No video was recorded.,error
+Texture uploaded successfully.,success
+Failed to upload texture.,error
+Floor texture removed.,success
+Scene is locked. Unlock it to change textures.,warning
+Something went wrong. Please try again.,error
+Something went wrong. Retrying... ({attempt}/3),warning

@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, RefreshCw, FolderOpen } from 'lucide-react';
+import { Upload, RefreshCw, FolderOpen, FolderGit2, Library } from 'lucide-react';
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
 import { withRetry } from '@/lib/retry-utils';
@@ -19,6 +19,7 @@ import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler';
 import { LLMEngineFactory } from '@/features/p2p/llm-engine/LLMEngineFactory';
 import { SceneInterpreterFactory } from '@/features/p2p/scene-interpreter/SceneInterpreterFactory';
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
+import { cn } from '@/lib/utils';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -329,78 +330,79 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="relative">
-          <div
-            {...getRootProps()}
-            className={`
-              viewer-drop-zone p-8
-              ${isDragActive ? 'border-primary bg-primary/5' : 'border-border'}
-              ${error ? 'border-destructive' : ''}
-              ${isInitializing ? 'opacity-60 cursor-not-allowed' : ''}
-            `}
-          >
-            <input {...getInputProps()} />
-            
-            {isInitializing ? (
-              <div className="text-center">
-                <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
-                <p className="text-sm font-medium">Initializing system...</p>
-                <p className="text-xs text-muted-foreground italic font-light">
-                  Please wait a moment
-                </p>
+      <div className="relative">
+        <div
+          {...getRootProps()}
+          className={cn(
+            "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-xl border border-dashed border-[#444444] text-center cursor-pointer",
+            "transition-colors",
+            "hover:border-[#C2F751]",
+            isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
+            error && 'border-destructive',
+            isInitializing && 'opacity-60 cursor-not-allowed'
+          )}
+        >
+          <input {...getInputProps()} />
+          
+          {isInitializing ? (
+            <div className="text-center">
+              <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
+              <p className="text-sm font-medium">Initializing system...</p>
+              <p className="text-xs text-muted-foreground italic font-light">
+                Please wait a moment
+              </p>
+            </div>
+          ) : (
+            <>
+              <Upload className="h-5 w-5 mb-1 text-muted-foreground" />
+              
+              <div className="text-center space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Drop your model here</p>
+                <p className="text-xs text-muted-foreground font-light">Supports .glb and .gltf</p>
+                {error && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-destructive font-medium">
+                      {error}
+                    </p>
+                    {currentFile && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetry();
+                        }}
+                        className="w-full"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Retry
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
-            ) : (
-              <>
-                <Upload className="h-6 w-6 mb-4 text-muted-foreground" />
-                
-                <div className="text-center space-y-2">
-                  <p className="text-sm font-medium">
-                    {isDragActive ? 'Drop your model here' : 'Drop your model here'}
-                  </p>
-                  <p className="text-xs text-muted-foreground italic font-light">
-                    Supports .glb and .gltf
-                  </p>
-                  {error && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-destructive font-medium">
-                        {error}
-                      </p>
-                      {currentFile && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRetry();
-                          }}
-                          className="w-full"
-                        >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Retry
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {loading && <LoadingOverlay message="Processing model..." />}
+            </>
+          )}
         </div>
 
-        <Button
-          variant="secondary"
-          className="w-full border border-[#444444] hover:bg-secondary/20 data-[disabled]:opacity-30 data-[disabled]:pointer-events-none"
-          size="default"
-          onClick={() => setShowLibraryModal(true)}
-          disabled={isInitializing}
-        >
-          <FolderOpen className="h-4 w-4 mr-2" />
-          Library
-        </Button>
+        {loading && <LoadingOverlay message="Processing model..." />}
       </div>
+
+      <Button
+        variant="secondary"
+        className={cn(
+          "w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5",
+          "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
+          "hover:bg-[#404040]",
+          "disabled:opacity-70 disabled:pointer-events-none",
+          "text-sm text-foreground/80"
+        )}
+        size="default"
+        onClick={() => setShowLibraryModal(true)}
+        disabled={isInitializing}
+      >
+        Library
+      </Button>
 
       {showSaveDialog && currentFile && (
         <SaveModelPortal

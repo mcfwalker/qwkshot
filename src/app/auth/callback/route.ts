@@ -5,7 +5,7 @@ import { getSupabaseClient } from '@/lib/supabase-route'
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const redirectTo = requestUrl.searchParams.get('redirectTo') || '/library'
+  const redirectTo = requestUrl.searchParams.get('redirectTo') || '/viewer'
 
   if (code) {
     try {
