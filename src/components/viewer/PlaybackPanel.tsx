@@ -14,6 +14,7 @@ interface PlaybackPanelProps {
   isRecording: boolean;
   playbackSpeed: number;
   duration: number; // Actual duration calculated from commands
+  progress: number; // <-- Add progress prop
   takeCount: number;
   modelName: string | null;
   // isConfirmingClear: boolean; // Removed
@@ -44,6 +45,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   isRecording,
   playbackSpeed,
   duration,
+  progress,
   takeCount,
   modelName,
   isGenerating,
@@ -88,12 +90,23 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       <div className="flex justify-between gap-4">
         <Button
           onClick={onPlayPause}
-          variant="primary" // Use primary variant
-          size="lg" // Use larger size for 48px height
-          className="flex-1 h-14 rounded-2xl disabled:cursor-not-allowed" // Added disabled cursor
+          variant="primary"
+          size="lg"
+          className={cn(
+            "flex-1 h-14 rounded-2xl disabled:cursor-not-allowed",
+            "relative overflow-hidden" // Add relative positioning and overflow hidden
+          )}
           disabled={!hasCommands || isGenerating || isRecording}
         >
-          {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          {/* Progress Bar Div */}
+          <div 
+            className="absolute top-0 left-0 h-full bg-[#A8D34A] z-0 transition-width duration-100 ease-linear" // Darker green, absolute, behind content
+            style={{ width: `${progress}%` }} // Dynamic width based on progress
+          />
+          {/* Icon (needs to be above progress bar) */}
+          <span className="relative z-10"> {/* Wrap icon in span with relative z-index */}
+            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          </span>
         </Button>
         <Button
           onClick={onDownload}

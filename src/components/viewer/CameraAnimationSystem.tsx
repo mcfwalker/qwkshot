@@ -775,6 +775,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                     takeCount={takeCount}
                     modelName={modelName}
                     isGenerating={isGenerating}
+                    progress={progress}
                     onPlayPause={handlePlayPause}
                     onDownload={handleDownload}
                     onSpeedChange={handleSpeedChange}
