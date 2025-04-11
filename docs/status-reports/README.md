@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-10-1952 - UI Refinements & Merge to Main
 - M3DV-SR-2025-04-10-1158 - UI Bug Fixes & Backlog Grooming
 - M3DV-SR-2025-04-09-1531 - Animation Refactor & Bug Fixes
 - M3DV-SR-2025-04-08-0927-PMORTEM - Animation Playback Issue Post-Mortem
