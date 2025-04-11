@@ -35,6 +35,11 @@ src/
 ├── components/
 │   ├── ui/                 # Reusable UI components
 │   └── viewer/             # Viewer-specific components
+│       ├── LockButton.tsx             # Added
+│       ├── ShotCallerPanel.tsx        # Added
+│       ├── PlaybackPanel.tsx          # Added
+│       ├── AnimationController.tsx    # Added
+│       └── ...                 
 ├── features/               # Feature-specific code
 ├── lib/                    # Shared utilities
 ├── store/                  # State management
@@ -132,6 +137,7 @@ await new Promise(resolve => setTimeout(resolve, 500))
   - Handle RPC errors with proper user feedback
   - Implement loading states and progress indicators
   - Use toast notifications for user feedback
+  - Use tooltips to explain the reason for disabled interactive elements
   - Handle animation state errors with clear user guidance
   - Provide contextual help for lock state requirements
   - Implement graceful fallbacks for animation playback
@@ -196,7 +202,7 @@ await new Promise(resolve => setTimeout(resolve, 500))
 
 - **UX Considerations:**
   - Provide clear feedback about lock state requirements
-  - Offer contextual help for animation playback
+  - Offer contextual help for animation playback (including tooltips on disabled elements)
   - Implement graceful degradation for locked state
   - Consider auto-unlock options for better UX
   - Maintain state consistency across components
@@ -340,7 +346,7 @@ export const createServerActionSupabaseClient = () => {
 6. **Email/Password:** Server Action or API route handles sign-in, sets session cookies.
 7. **OAuth:** User is redirected to the provider, then back to the defined callback URL (`/auth/callback`).
 8. **Callback Route Handler (`src/app/auth/callback/route.ts`):** Exchanges the OAuth code for a session using `createRouteHandlerClient`, sets session cookies.
-9. User is redirected from sign-in/callback to their original destination (`redirectTo`) or a default page (e.g., `/library`).
+9. User is redirected from sign-in/callback to their original destination (`redirectTo`) or a default page (e.g., `/viewer`).
 
 ### 3.4. Middleware for Protected Routes
 ```typescript
@@ -408,7 +414,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const redirectTo = requestUrl.searchParams.get('state') || '/library' // Assuming state might hold redirect
+  const redirectTo = requestUrl.searchParams.get('state') || '/viewer' // Updated default
 
   if (code) {
     const supabase = createRouteHandlerClient({ cookies })
@@ -426,7 +432,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Redirect back to the app, ensuring it's a relative path within the origin
-  const safeRedirectPath = redirectTo.startsWith('/') ? redirectTo : '/library';
+  const safeRedirectPath = redirectTo.startsWith('/') ? redirectTo : '/viewer'; // Updated default
   return NextResponse.redirect(`${requestUrl.origin}${safeRedirectPath}`)
 }
 ```
@@ -704,6 +710,7 @@ interface EnvironmentalMetadata {
     position: Vector3;
     target: Vector3;
     fov: number;
+    // Note: Current implementation has a known issue where FOV might not update on re-lock.
   };
   lighting: {
     intensity: number;
@@ -913,82 +920,6 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
 
 // Add function to download result and upload to Supabase storage
 ```
-
-## 7. Error Handling Strategy
-- **Client-Side:**
-  - Use React Error Boundaries for component tree errors
-  - Handle RPC errors with proper user feedback
-  - Implement loading states and progress indicators
-  - Use toast notifications for user feedback
-  - Handle animation state errors with clear user guidance
-  - Provide contextual help for lock state requirements
-  - Implement graceful fallbacks for animation playback
-
-- **Server-Side:**
-  - Implement RPC functions with proper validation
-  - Return appropriate HTTP status codes
-  - Include CORS headers in all responses
-  - Log errors with sufficient context
-  - Validate environmental metadata integrity
-  - Ensure proper lock state synchronization
-
-- **Database:**
-  - Use RPC functions for data validation
-  - Implement proper error messages
-  - Handle transactions appropriately
-  - Verify ownership before operations
-  - Maintain data consistency for environmental metadata
-
-- **Animation-Specific Error Handling:**
-  ```typescript
-  // Example error handling for animation playback
-  const handleAnimationError = (error: AnimationError) => {
-    switch (error.type) {
-      case 'lock_state':
-        if (error.requiresUnlock) {
-          toast.error('Please unlock the scene to play the animation', {
-            action: {
-              label: 'Unlock',
-              onClick: () => handleLockToggle()
-            }
-          });
-        }
-        break;
-      case 'position_validation':
-        toast.error('Invalid camera position. Please adjust the view.');
-        break;
-      case 'path_generation':
-        toast.error('Failed to generate animation path. Please try again.');
-        break;
-      case 'playback':
-        toast.error('Animation playback failed. Please try again.');
-        break;
-    }
-  };
-
-  // Example validation for animation state
-  const validateAnimationState = (state: AnimationState): ValidationResult => {
-    if (state.isLocked && !state.hasValidPosition) {
-      return {
-        isValid: false,
-        error: 'Please set a valid camera position before locking',
-        details: {
-          type: 'lock_state',
-          requiresUnlock: false
-        }
-      };
-    }
-    return { isValid: true };
-  };
-  ```
-
-- **UX Considerations:**
-  - Provide clear feedback about lock state requirements
-  - Offer contextual help for animation playback
-  - Implement graceful degradation for locked state
-  - Consider auto-unlock options for better UX
-  - Maintain state consistency across components
-  - Handle edge cases in animation transitions
 
 ## 8. Testing Strategy Implementation
 - **Framework:** Vitest with React Testing Library
