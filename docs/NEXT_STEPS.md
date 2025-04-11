@@ -22,6 +22,9 @@
 - ✅ Implement Full Reset Logic for Clear Stage button
 - ✅ Fix video download filename format and takeCount reset
 - ✅ Configure toast notification position and base styling
+- ✅ Fix post-login redirect and dropzone hover/drag states
+- ✅ Refine LockButton & Generate Shot appearance/behavior
+- ✅ Improve disabled input styling
 
 ## Upcoming Tasks
 
@@ -92,7 +95,7 @@
 - [x] Re-validate API route with real context data to ensure correct `CameraCommand[]` output (Validated flow, failed on speed constraint as expected).
 - **Note:** Completed structurally. Real data fetching works with Service Key. `SceneAnalysis` input is still placeholder. Proper API auth needed.
 
-### Phase 3: UI/UX Refactor (2-3 weeks) ⚠️ **(In Progress)**
+### Phase 3: UI/UX Refactor (2-3 weeks) ✅ **(Substantially Complete - Minor issues remain)**
 - [ ] Improve core interactions
   - [ ] Enhance lock mechanism UX (Deferred)
   - [ ] Improve animation controls (Partially done - playback logic refactored) ✅
@@ -115,9 +118,9 @@
 - [ ] **Functional Completion & Testing (New Subsection)**
   - [x] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
   - [~] Define strategy for Lock/Validation conflict -> Potential future issue if strict constraints are added/enabled, but not currently blocking. ⚠️ 
-  - [ ] Implement/restore correct hover states for interactive UI elements.
+  - [~] Implement/restore correct hover states for interactive UI elements.
   - [x] Implement rendering of controls within the "Playback" tab view. ✅
-  - [ ] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions (even if underlying logic like SceneAnalyzer integration is pending).
+  - [x] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions.
   - [ ] Address miscellaneous visual cleanup items.
   - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅ 
   - [x] Fix video download (static content). ✅
@@ -126,7 +129,8 @@
   - [x] Implement Full Reset Logic for Clear Stage button. ✅
   - [ ] Audit and refine toast notifications (remove unnecessary, ensure consistency).
   - [ ] Implement refined easing logic in playback (if needed after testing).
-  - [ ] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
+  - [x] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
+- **Note:** Phase substantially complete. Known minor issues with disabled state consistency (tooltips/cursors) and hover states remain.
 
 ### Phase 4: Pipeline Optimization (Ongoing)
 - [ ] Enhance validation systems
@@ -136,6 +140,7 @@
   - [ ] Add validation visualization
   - [ ] Implement Real-time Validation Feedback (Client-side)
   - [ ] Define strategy for *potential* Lock/Validation Conflict.
+  - [ ] Ensure accurate camera state capture (FOV, etc.) on lock.
 
 - [ ] Performance improvements
   - [ ] Optimize computation (SceneInterpreter, other?)
@@ -166,16 +171,13 @@
   - [ ] Document Prompt Architecture & Engineering Strategy
 
 ## Current Priorities (Updated)
-1.  **Complete UI Functional Completion & Testing:** (Phase 3 Subsection)
-    *   Test UI triggers and basic end-to-end flow.
-    *   Implement/restore correct hover states.
-    *   Implement refined easing logic in playback (if needed).
-    *   Address miscellaneous visual cleanup.
+1.  **Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).**
 2.  Implement proper Authentication/Authorization for API route data fetching.
 3.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
     *   Note: Currently uses basic geometry + placeholders. Need to fetch/reconstruct full analysis data (complexity, reference points, features, initial constraints) from upload process for use by Env. Analyzer & Prompt Compiler.
 4.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
 5.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
+6.  **Fix Environmental Metadata Capture:** Ensure current camera state (FOV, position, target/rotation) is accurately captured and stored by `storeEnvironmentalMetadata` when locking the camera. (Investigate FOV specifically).
 
 ## Implementation Strategy
 
@@ -191,9 +193,6 @@
   │   ├── feat/base-structure
   │   ├── feat/animation-logic
   │   └── feat/path-processing
-  └── feature/ui-refactor
-      ├── feat/core-interactions
-      └── feat/visual-feedback
   ```
 
 ### Development Workflow
@@ -265,12 +264,12 @@
 - `SceneAnalysis` placeholder limits accuracy -> Use of simplified SceneAnalysis data in path generation limits context accuracy.
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
+- Inconsistent disabled state styling/tooltips (esp. LockButton) due to component/event interactions.
 
 ## Next Session Focus (Updated)
-1. Continue UI functional testing (Hover states, Triggers, Toast messages, etc.).
-2. Implement proper Authentication/Authorization for API route data fetching.
-3. Integrate real `SceneAnalyzer` component.
-4. Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
-5. Define strategy for *potential* Lock/Validation Conflict.
+1. Implement proper Authentication/Authorization for API route data fetching.
+2. Integrate real `SceneAnalyzer` component.
+3. Fix Environmental Metadata Capture (FOV issue).
+4. Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
