@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-12-1423 - Scene Analysis Integration Refactor
 - M3DV-SR-2025-04-11-2041-PLAN - Plan to Stabilize Main & Integrate Scene Analyzer
 - M3DV-SR-2025-04-11-2032 - Metadata & UI Fixes, Merge Attempt & Recovery
 - M3DV-SR-2025-04-10-1952 - UI Refinements & Merge to Main

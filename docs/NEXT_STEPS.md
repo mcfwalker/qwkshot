@@ -27,114 +27,26 @@
 - ✅ Improve disabled input styling
 - ✅ Fix Environmental Metadata Capture (FOV)
 - ✅ Address UI inconsistencies (Tooltips, Create New Shot, Playback Reset)
+- ✅ **Integrate Scene Analyzer Data Pipeline:** Refactored model saving & env metadata updates to use Server Actions; added dedicated `scene_analysis` DB column; implemented serialization/deserialization; fixed related client-side state bugs.
 
-## Upcoming Tasks
+## Current Work & Future Phases
 
-### Phase 1: Thin LLM Engine Implementation (1-2 weeks) ✅ **(Substantially Complete)**
-- [x] Create minimal wrapper layer
-  - [x] Define basic interface between API routes and UI (`LLMEngine`, `LLMResponse`)
-  - [x] Create standard response type (`LLMResponse`)
-  - [x] Add basic error type definitions (`LLMEngineError`)
-  - [ ] Keep provider logic in API routes -> **Refactored:** Provider logic encapsulated in Engine, API uses Engine. ✅
+### Immediate Next Steps (Formerly Current Priorities)
+1.  **Verify Downstream Usage of `SceneAnalysis`**: Inspect internals of `EnvironmentalAnalyzer` and `PromptCompiler` to ensure they effectively use the detailed deserialized `SceneAnalysis` data.
+2.  **Code Cleanup**: Remove temporary `console.log` statements added for debugging the data pipeline refactor.
+3.  **Implement proper Authentication/Authorization** for API route data fetching.
+4.  **Address remaining TODOs** in Engine/Interpreter (Smoothing, validation details, etc. - Part of Phase 4 validation enhancements).
 
-- [x] Implement basic validation
-  - [x] Add response structure validation (Placeholder added)
-  - [x] Implement simple error checks (`try...catch` structure) ✅
-  - [x] Create basic error messages (`LLMEngineError` used) ✅
-  - [x] Set up simple logging ✅
+### Phase Status Overview
 
-- [x] Clean up current implementation
-  - [x] Document API route structure (Implicitly improved via refactor)
-  - [x] Clean up API route response handling ✅
-  - [x] Standardize API route error formats ✅
-  - [x] Remove duplicate provider call logic ✅
-- **Remaining TODOs:** Implement actual provider calls inside Engine; Refine metadata/duration handling.
+*   **Phase 1: Thin LLM Engine Implementation:** ✅ (Substantially Complete)
+*   **Phase 2: Scene Interpreter Core:** ✅ (Substantially Complete)
+*   **Phase 2.5: Backend Integration & Validation:** ✅ (Substantially Complete - Relied on mock context/service key)
+*   **Phase 2.7: Real Context Integration:** ✅ (Substantially Complete - Real data fetching works, `SceneAnalysis` input handled, API Auth pending)
+*   **Phase 3: UI/UX Refactor:** ✅ (Substantially Complete - Minor UI issues remain)
+*   **Phase 4: Pipeline Optimization:** ⏳ (Ongoing - See details below)
 
-### Phase 2: Scene Interpreter Core (2-3 weeks) ✅ **(Substantially Complete)**
-- [x] Create base structure
-  - [x] Define core interfaces (`SceneInterpreter`, `CameraCommand`)
-  - [x] Set up component architecture (`CoreSceneInterpreter`)
-  - [x] Create testing framework (Deferred)
-  - [x] Add basic validation types (`validateInputPath`, `validateCommands` structure)
-
-- [ ] Move animation logic from UI
-  - [x] Refactor Animation Logic (Processing vs. Playback)
-    - [x] Extract CameraAnimationSystem logic -> Path *processing* moved to backend `SceneInterpreter`; Playback *interpolation/execution* moved to client-side `AnimationController` (`useFrame`). ✅
-    - [x] Create animation service layer -> Backend processing service (`SceneInterpreter`) created; Client playback execution component (`AnimationController`) created. ✅
-    - [x] Set up state management (Interpreter manages internal state, `Viewer`/`AnimationController` manage client state) ✅
-    - [ ] Add event system (Deferred - still deferred)
-
-- [x] Implement path processing
-  - [x] Create path validation system (`validateInputPath` implemented with detailed checks) ✅
-  - [x] Add motion segment processing (Basic mapping to `CameraCommand`, smoothing/easing placeholders added) ✅
-  - [x] Set up interpolation system (Structure for Catmull-Rom & easing added) ✅
-
-- [x] Add basic safety validation
-  - [x] Implement boundary checking (Height, distance checks added) ✅
-  - [x] Add collision detection (Restricted zones check added) ✅
-  - [x] Create speed limit validation (Linear & angular velocity checks added) ✅
-  - [x] Set up constraint system (Validation uses constraints from metadata) ✅
-- **Remaining TODOs:** Implement detailed smoothing algorithms, refine easing, implement `restrictedAngles` check, add command validation details.
-
-### Phase 2.5: Backend Integration & Validation (New) ✅ (Substantially Complete)
-- [x] Integrate `SceneInterpreter` into `camera-path` API route
-  - [x] Initialize `SceneInterpreter` in API route
-  - [x] Pass `CameraPath` from `LLMEngine` to `SceneInterpreter.interpretPath`
-  - [x] Call `SceneInterpreter.validateCommands`
-  - [x] Return `CameraCommand[]` (or error) from API route
-- [x] (Optional) Integrate `PromptCompiler` call into API route
-  - [x] Replace manual `CompiledPrompt` construction (structurally, uses mock context)
-- [x] Perform basic end-to-end validation of the API route flow (with mock context)
-- **Note:** Completed structurally, but relies on mock context data.
-
-### Phase 2.7: Real Context Integration (New) ✅ (Substantially Complete)
-- [x] Remove mock data logic from `camera-path` API route
-- [x] Implement real data fetching in API route:
-  - [x] Instantiate `MetadataManager`, `EnvironmentalAnalyzer`
-  - [x] Call manager/analyzers to fetch `ModelMetadata`, `EnvironmentalMetadata`
-  - [x] Handle potential authentication/RLS issues for data fetching (Used Service Role Key as temporary solution for testing)
-- [x] Pass real context data to `PromptCompiler.compilePrompt` (Data fetched, but `SceneAnalysis` still uses placeholder derived from `ModelMetadata`)
-- [x] Re-validate API route with real context data to ensure correct `CameraCommand[]` output (Validated flow, failed on speed constraint as expected).
-- **Note:** Completed structurally. Real data fetching works with Service Key. `SceneAnalysis` input is still placeholder. Proper API auth needed.
-
-### Phase 3: UI/UX Refactor (2-3 weeks) ✅ **(Substantially Complete - Minor issues remain)**
-- [ ] Improve core interactions
-  - [ ] Enhance lock mechanism UX (Deferred)
-  - [ ] Improve animation controls (Partially done - playback logic refactored) ✅
-  - [ ] Add better feedback systems
-  - [ ] Streamline user flow (Tab structure implemented) ✅
-
-- [ ] Enhance visual feedback
-  - [ ] Add progress indicators (Existing progress bar adapted)
-  - [ ] Improve error messages (API errors handled via toast) ✅
-  - [ ] Create success states (Path generation success handled via toast & tab switch) ✅
-  - [ ] Implement loading states (Existing loader adapted) ✅
-
-- [x] Optimize component structure
-  - [x] Reorganize component hierarchy (Tabs, AnimationController added) ✅
-  - [x] Improve state management (Lifted state to Viewer) ✅
-  - [x] Clean up event handling (Basic handlers adapted/created) ✅
-  - [x] Enhance performance (Component extraction helps) ✅
-- **Note:** `CameraAnimationSystem` refactored, `AnimationController` created using `useFrame`. Playback/Recording fixed. Lock UI state fixed. Generate button state fixed. UI controls adapted. Needs scrubbing reimplementation, hover states, easing refinement, lock/validation strategy definition, visual cleanup, testing.
-
-- [ ] **Functional Completion & Testing (New Subsection)**
-  - [x] Re-test API data flow (`curl` with RLS disabled) to ensure backend still behaves as expected. ✅
-  - [~] Define strategy for Lock/Validation conflict -> Potential future issue if strict constraints are added/enabled, but not currently blocking. ⚠️ 
-  - [~] Implement/restore correct hover states for interactive UI elements.
-  - [x] Implement rendering of controls within the "Playback" tab view. ✅
-  - [x] Test UI Triggers: Verify drag-and-drop (`ModelLoader`), lock action (`CameraAnimationSystem`), scene controls (`SceneControls`), etc., still function correctly and trigger appropriate actions.
-  - [ ] Address miscellaneous visual cleanup items.
-  - [x] Debug and fix animation playback stuttering/incorrect motion (`CameraAnimationSystem`). ✅ 
-  - [x] Fix video download (static content). ✅
-  - [x] Fix Generate Shot button state reset after playback. ✅
-  - [x] Fix floor texture application and Add/Remove button logic. ✅
-  - [x] Implement Full Reset Logic for Clear Stage button. ✅
-  - [ ] Audit and refine toast notifications (remove unnecessary, ensure consistency).
-  - [ ] Implement refined easing logic in playback (if needed after testing).
-  - [x] Test end-to-end flow within the UI (generate path -> switch to playback tab -> playback controls work).
-- **Note:** Phase substantially complete. Known minor issues with disabled state consistency (tooltips/cursors) and hover states remain.
-
-### Phase 4: Pipeline Optimization (Ongoing)
+### Phase 4: Pipeline Optimization (Details - Ongoing)
 - [ ] Enhance validation systems
   - [ ] Improve path validation
   - [ ] Add comprehensive safety checks
@@ -142,7 +54,6 @@
   - [ ] Add validation visualization
   - [ ] Implement Real-time Validation Feedback (Client-side)
   - [ ] Define strategy for *potential* Lock/Validation Conflict.
-  - [ ] Ensure accurate camera state capture (FOV, etc.) on lock.
 
 - [ ] Performance improvements
   - [ ] Optimize computation (SceneInterpreter, other?)
@@ -153,8 +64,10 @@
   - [ ] Implement System Alerting
   - [ ] Implement Monitoring Dashboard
   - [ ] (Potential) Refine prompt to ensure motion utilizes full requested duration (address "dead time").
+  - [ ] Address UI Responsiveness/Freeze on Initial Load (Investigate client-side pipeline init).
 
 - [ ] Feature Enhancements
+  - [ ] Refine Serialization/Deserialization for Omitted Fields (`materials`, `symmetryPlanes`, `restrictedZones`) if needed.
   - [ ] Implement Interactive Orientation Setup
   - [ ] Implement Prompt Pre-processing Step
   - [ ] Implement Path Preview
@@ -171,13 +84,6 @@
 
 - [ ] Documentation & Process
   - [ ] Document Prompt Architecture & Engineering Strategy
-
-## Current Priorities (Updated)
-1.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
-    *   Note: Currently uses basic geometry + placeholders. Need to fetch/reconstruct full analysis data (complexity, reference points, features, initial constraints) from upload process for use by Env. Analyzer & Prompt Compiler.
-2.  Implement proper Authentication/Authorization for API route data fetching.
-3.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
-4.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
 
 ## Implementation Strategy
 
@@ -220,39 +126,6 @@
    - E2E tests for critical paths
    - Performance benchmarks
 
-### Phase 1 Implementation Plan (Completed)
-1. Create `feature/thin-llm-engine` branch
-2. Implement features in order:
-   - Basic interface
-   - Validation layer
-   - Cleanup
-3. Regular merges to main
-4. Feature flag control for rollout
-
-### Phase 2 Implementation Plan (Completed)
-1. Create `feature/scene-interpreter` branch
-2. Implement features in order:
-   - Base structure
-   - Animation logic
-   - Path processing
-3. Regular merges to main
-4. Feature flag control for rollout
-
-### Phase 2.5 Implementation Plan (Completed)
-1. Create `feature/backend-integration` branch (or similar) from `feature/thin-llm-engine`.
-2. Modify `src/app/api/camera-path/route.ts` to call `SceneInterpreter`.
-3. Test API route with sample requests.
-4. (Optional) Modify API route to call `PromptCompiler`.
-5. Merge back to main branch upon successful validation.
-
-### Phase 2.7 Implementation Plan (Completed)
-1. Create `feature/real-context-integration` branch (or similar) from `feature/thin-llm-engine`.
-2. Modify `src/app/api/camera-path/route.ts` to remove mocks and implement real data fetching.
-3. Investigate and resolve Auth/RLS issues if they block data fetching.
-4. Test API route with valid `modelId`s known to have data.
-5. Commit changes.
-6. Merge back to `feature/thin-llm-engine` upon successful validation.
-
 ## Architectural Decisions
 - Keep provider logic in API routes
 - Maintain thin LLM Engine approach
@@ -266,12 +139,11 @@
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 - ~~Inconsistent disabled state styling/tooltips (esp. LockButton) due to component/event interactions.~~ (Resolved)
+- React Warning: "Cannot update a component (`SceneControls`) while rendering a different component (`Viewer`)" appears in browser console on model load/URL change. Likely due to `Viewer`'s `useEffect` updating Zustand store (`setModelId`), causing `SceneControls` (subscribed to store) to attempt an update during `Viewer`'s render. Needs investigation (React DevTools, Zustand selectors, Tooltip interaction). (Low priority if app functions correctly).
 
 ## Next Session Focus (Updated)
-1.  Fix type errors on `main` branch.
-2.  Begin Scene Analyzer Integration (Implement storage/retrieval of full analysis).
-3.  Implement proper Authentication/Authorization for API route data fetching.
-4.  ~~Fix Environmental Metadata Capture (FOV issue).~~ (Resolved)
-5.  ~~Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).~~ (Resolved)
+1.  Verify Downstream Usage of `SceneAnalysis`.
+2.  Code Cleanup (Remove Debug Logs).
+3.  Implement API Authentication/Authorization.
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
