@@ -173,9 +173,9 @@
   - [ ] Document Prompt Architecture & Engineering Strategy
 
 ## Current Priorities (Updated)
-1.  Implement proper Authentication/Authorization for API route data fetching.
-2.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
+1.  Integrate real `SceneAnalyzer` component. -> Utilize Full SceneAnalysis Data in Path Generation.
     *   Note: Currently uses basic geometry + placeholders. Need to fetch/reconstruct full analysis data (complexity, reference points, features, initial constraints) from upload process for use by Env. Analyzer & Prompt Compiler.
+2.  Implement proper Authentication/Authorization for API route data fetching.
 3.  Address remaining TODOs in Engine/Interpreter (Smoothing, validation details, etc. - now Phase 4).
 4.  **Define strategy for *potential* Lock/Validation Conflict.** (Moved to Phase 4)
 
@@ -260,16 +260,18 @@
 - Focus on clean interfaces
 
 ## Blockers and Issues
+- **Type errors currently exist on `main` branch due to previous merge (Commit `632c3b0`). Needs fixing before proceeding.**
 - API route requires proper Auth strategy to work with RLS enabled.
 - `SceneAnalysis` placeholder limits accuracy -> Use of simplified SceneAnalysis data in path generation limits context accuracy.
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
-- Inconsistent disabled state styling/tooltips (esp. LockButton) due to component/event interactions.
+- ~~Inconsistent disabled state styling/tooltips (esp. LockButton) due to component/event interactions.~~ (Resolved)
 
 ## Next Session Focus (Updated)
-1. Implement proper Authentication/Authorization for API route data fetching.
-2. Integrate real `SceneAnalyzer` component.
-3. Fix Environmental Metadata Capture (FOV issue).
-4. Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).
+1.  Fix type errors on `main` branch.
+2.  Begin Scene Analyzer Integration (Implement storage/retrieval of full analysis).
+3.  Implement proper Authentication/Authorization for API route data fetching.
+4.  ~~Fix Environmental Metadata Capture (FOV issue).~~ (Resolved)
+5.  ~~Address remaining UI inconsistencies (LockButton tooltip/cursor, hover states, visual cleanup).~~ (Resolved)
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 
