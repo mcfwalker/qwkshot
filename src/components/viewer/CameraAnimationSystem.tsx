@@ -353,7 +353,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction,
-          sceneGeometry,
           duration: parseFloat(inputDuration),
           modelId
         }),
