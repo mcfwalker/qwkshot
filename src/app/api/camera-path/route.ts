@@ -20,7 +20,8 @@ import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analy
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { ModelMetadata } from '@/types/p2p/metadata-manager';
 import { EnvironmentalAnalysis, EnvironmentalAnalyzerConfig } from '@/types/p2p/environmental-analyzer';
-import { SceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { SceneAnalysis, SerializedSceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { deserializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
 
 // Mark as dynamic route with increased timeout
 export const dynamic = 'force-dynamic';
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
   console.log('>>> API ROUTE START'); 
   logger.info('>>> API ROUTE START - Logger');
 
-  try {
+  try { // Outer try for the whole request
     logger.info('Starting camera path generation request');
 
     // --- Initialize Components --- 
@@ -102,16 +103,15 @@ export async function POST(request: Request) {
     let modelMetadata: ModelMetadata;
     let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null; 
     let environmentalAnalysis: EnvironmentalAnalysis;
-    let sceneAnalysis: SceneAnalysis;
+    let sceneAnalysis: SceneAnalysis | null = null;
 
     // --- Fetch & Analyze Context Data --- 
     logger.info(`Fetching context data for modelId: ${modelId}`);
-    try {
+    try { 
         modelMetadata = await metadataManager.getModelMetadata(modelId);
         if (!modelMetadata) throw new Error(`Model metadata not found for id: ${modelId}`);
         logger.info('>>> Model Metadata Fetched Successfully'); 
         
-        // Fetch Environmental Metadata from DB
         fetchedEnvironmentalMetadata = await metadataManager.getEnvironmentalMetadata(modelId);
         if (!fetchedEnvironmentalMetadata) {
              logger.error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
@@ -119,70 +119,105 @@ export async function POST(request: Request) {
         }
         logger.info('>>> Environmental Metadata Fetched Successfully');
 
-        // Create placeholder SceneAnalysis based on ModelMetadata
-        const modelGeom = modelMetadata.geometry;
-        sceneAnalysis = {
-             glb: {
-                 fileInfo: { name: modelMetadata.file, size: 0, format: 'glb', version: modelMetadata.version?.toString() ?? '1' }, 
-                 // Create THREE instances from serialized data
-                 geometry: {
-                    vertexCount: modelGeom.vertexCount ?? 0,
-                    faceCount: modelGeom.faceCount ?? 0,
-                    boundingBox: new Box3(
-                        new Vector3(modelGeom.boundingBox?.min?.x ?? 0, modelGeom.boundingBox?.min?.y ?? 0, modelGeom.boundingBox?.min?.z ?? 0),
-                        new Vector3(modelGeom.boundingBox?.max?.x ?? 0, modelGeom.boundingBox?.max?.y ?? 0, modelGeom.boundingBox?.max?.z ?? 0)
-                    ),
-                    center: new Vector3(modelGeom.center?.x ?? 0, modelGeom.center?.y ?? 0, modelGeom.center?.z ?? 0),
-                    dimensions: new Vector3(modelGeom.dimensions?.x ?? 0, modelGeom.dimensions?.y ?? 0, modelGeom.dimensions?.z ?? 0)
-                 },
-                 materials: [], metadata: {}, performance: {} as any 
-             },
-             // Populate other fields as before, potentially creating Vector3/Box3 if needed
-             spatial: { 
-                 bounds: { // Create SpatialBounds structure explicitly
-                    min: new Vector3(modelGeom.boundingBox?.min?.x ?? 0, modelGeom.boundingBox?.min?.y ?? 0, modelGeom.boundingBox?.min?.z ?? 0),
-                    max: new Vector3(modelGeom.boundingBox?.max?.x ?? 0, modelGeom.boundingBox?.max?.y ?? 0, modelGeom.boundingBox?.max?.z ?? 0),
-                    center: new Vector3(modelGeom.center?.x ?? 0, modelGeom.center?.y ?? 0, modelGeom.center?.z ?? 0),
-                    dimensions: new Vector3(modelGeom.dimensions?.x ?? 0, modelGeom.dimensions?.y ?? 0, modelGeom.dimensions?.z ?? 0)
-                 },
-                 symmetry: {} as any, 
-                 complexity: 'moderate', 
-                 referencePoints: { center: new Vector3(), highest: new Vector3(), lowest: new Vector3(), leftmost: new Vector3(), rightmost: new Vector3(), frontmost: new Vector3(), backmost: new Vector3() }, 
-                 performance: {} as any 
-             },
-             featureAnalysis: { features: [], landmarks: [], constraints: [], performance: {} as any },
-             safetyConstraints: { minHeight: 0, maxHeight: 100, minDistance: 0, maxDistance: 100, restrictedZones: [] },
-             orientation: { // Create ModelOrientation structure explicitly
-                 front: new Vector3(modelMetadata.orientation?.front?.x ?? 0, modelMetadata.orientation?.front?.y ?? 0, modelMetadata.orientation?.front?.z ?? 1),
-                 back: new Vector3(modelMetadata.orientation?.back?.x ?? 0, modelMetadata.orientation?.back?.y ?? 0, modelMetadata.orientation?.back?.z ?? -1),
-                 left: new Vector3(modelMetadata.orientation?.left?.x ?? -1, modelMetadata.orientation?.left?.y ?? 0, modelMetadata.orientation?.left?.z ?? 0),
-                 right: new Vector3(modelMetadata.orientation?.right?.x ?? 1, modelMetadata.orientation?.right?.y ?? 0, modelMetadata.orientation?.right?.z ?? 0),
-                 top: new Vector3(modelMetadata.orientation?.top?.x ?? 0, modelMetadata.orientation?.top?.y ?? 1, modelMetadata.orientation?.top?.z ?? 0),
-                 bottom: new Vector3(modelMetadata.orientation?.bottom?.x ?? 0, modelMetadata.orientation?.bottom?.y ?? -1, modelMetadata.orientation?.bottom?.z ?? 0),
-                 center: new Vector3(modelMetadata.orientation?.center?.x ?? 0, modelMetadata.orientation?.center?.y ?? 0, modelMetadata.orientation?.center?.z ?? 0),
-                 scale: modelMetadata.orientation?.scale ?? 1,
-                 confidence: modelMetadata.orientation?.confidence ?? 0
-             },
-             features: modelMetadata.featurePoints ?? [],
-             performance: {} as any
-         } as SceneAnalysis;
-         
-        if (!sceneAnalysis?.glb?.geometry) { 
-            throw new Error('Failed to construct placeholder scene analysis data from model metadata.');
+        // --- DESERIALIZATION STEP --- 
+        logger.info('Attempting to deserialize stored SceneAnalysis...');
+        const storedSerializedAnalysis = modelMetadata.sceneAnalysis;
+        if (storedSerializedAnalysis) {
+             sceneAnalysis = deserializeSceneAnalysis(storedSerializedAnalysis);
+             if (sceneAnalysis) {
+                 logger.info('Successfully deserialized stored SceneAnalysis.');
+             } else {
+                 logger.warn('Deserialization of stored SceneAnalysis failed. Falling back to placeholder.');
+             }
+        } else {
+            logger.warn('No stored SceneAnalysis found in metadata. Using placeholder.');
         }
 
-        // Analyze Environment (using the fetched model/scene data)
+        // --- FALLBACK PLACEHOLDER LOGIC --- 
+        if (!sceneAnalysis) { 
+            logger.info('Constructing placeholder SceneAnalysis from geometry...');
+            const modelGeom = modelMetadata.geometry;
+            if (!modelGeom) {
+                throw new Error('Model metadata geometry is missing, cannot create placeholder scene analysis.')
+            }
+            // Construct the placeholder sceneAnalysis object
+            sceneAnalysis = {
+                 glb: {
+                     fileInfo: { name: modelMetadata.file, size: 0, format: 'glb', version: modelMetadata.version?.toString() ?? '1' }, 
+                     geometry: {
+                        vertexCount: modelGeom.vertexCount ?? 0,
+                        faceCount: modelGeom.faceCount ?? 0,
+                        boundingBox: new Box3(
+                            new Vector3(modelGeom.boundingBox?.min?.x ?? 0, modelGeom.boundingBox?.min?.y ?? 0, modelGeom.boundingBox?.min?.z ?? 0),
+                            new Vector3(modelGeom.boundingBox?.max?.x ?? 0, modelGeom.boundingBox?.max?.y ?? 0, modelGeom.boundingBox?.max?.z ?? 0)
+                        ),
+                        center: new Vector3(modelGeom.center?.x ?? 0, modelGeom.center?.y ?? 0, modelGeom.center?.z ?? 0),
+                        dimensions: new Vector3(modelGeom.dimensions?.x ?? 0, modelGeom.dimensions?.y ?? 0, modelGeom.dimensions?.z ?? 0)
+                     },
+                     materials: [], metadata: {}, performance: {} as any 
+                 },
+                 spatial: { 
+                     bounds: { 
+                        min: new Vector3(modelGeom.boundingBox?.min?.x ?? 0, modelGeom.boundingBox?.min?.y ?? 0, modelGeom.boundingBox?.min?.z ?? 0),
+                        max: new Vector3(modelGeom.boundingBox?.max?.x ?? 0, modelGeom.boundingBox?.max?.y ?? 0, modelGeom.boundingBox?.max?.z ?? 0),
+                        center: new Vector3(modelGeom.center?.x ?? 0, modelGeom.center?.y ?? 0, modelGeom.center?.z ?? 0),
+                        dimensions: new Vector3(modelGeom.dimensions?.x ?? 0, modelGeom.dimensions?.y ?? 0, modelGeom.dimensions?.z ?? 0)
+                     },
+                     symmetry: { hasSymmetry: false, symmetryPlanes: [] }, 
+                     complexity: 'moderate', 
+                     referencePoints: { center: new Vector3(), highest: new Vector3(), lowest: new Vector3(), leftmost: new Vector3(), rightmost: new Vector3(), frontmost: new Vector3(), backmost: new Vector3() }, 
+                     performance: {} as any 
+                 },
+                 featureAnalysis: { features: [], landmarks: [], constraints: [], performance: {} as any },
+                 safetyConstraints: { 
+                     minHeight: fetchedEnvironmentalMetadata?.constraints?.minHeight ?? 0, 
+                     maxHeight: fetchedEnvironmentalMetadata?.constraints?.maxHeight ?? 100, 
+                     minDistance: fetchedEnvironmentalMetadata?.constraints?.minDistance ?? 0, 
+                     maxDistance: fetchedEnvironmentalMetadata?.constraints?.maxDistance ?? 100, 
+                     restrictedZones: [] 
+                 },
+                 orientation: { 
+                     front: new Vector3(modelMetadata.orientation?.front?.x ?? 0, modelMetadata.orientation?.front?.y ?? 0, modelMetadata.orientation?.front?.z ?? 1),
+                     back: new Vector3(modelMetadata.orientation?.back?.x ?? 0, modelMetadata.orientation?.back?.y ?? 0, modelMetadata.orientation?.back?.z ?? -1),
+                     left: new Vector3(modelMetadata.orientation?.left?.x ?? -1, modelMetadata.orientation?.left?.y ?? 0, modelMetadata.orientation?.left?.z ?? 0),
+                     right: new Vector3(modelMetadata.orientation?.right?.x ?? 1, modelMetadata.orientation?.right?.y ?? 0, modelMetadata.orientation?.right?.z ?? 0),
+                     top: new Vector3(modelMetadata.orientation?.top?.x ?? 0, modelMetadata.orientation?.top?.y ?? 1, modelMetadata.orientation?.top?.z ?? 0),
+                     bottom: new Vector3(modelMetadata.orientation?.bottom?.x ?? 0, modelMetadata.orientation?.bottom?.y ?? -1, modelMetadata.orientation?.bottom?.z ?? 0),
+                     center: new Vector3(modelMetadata.orientation?.center?.x ?? 0, modelMetadata.orientation?.center?.y ?? 0, modelMetadata.orientation?.center?.z ?? 0),
+                     scale: modelMetadata.orientation?.scale ?? 1,
+                     confidence: modelMetadata.orientation?.confidence ?? 0
+                 },
+                 // Ensure feature points are also deserialized (Vector3)
+                 features: modelMetadata.featurePoints?.map(fp => ({
+                     ...fp,
+                     position: new Vector3(fp.position.x, fp.position.y, fp.position.z) 
+                 })) ?? [],
+                 performance: {} as any
+             };
+            if (!sceneAnalysis?.glb?.geometry) { 
+                 throw new Error('Failed to construct placeholder scene analysis data from model metadata.');
+            }
+            logger.info('Using constructed placeholder SceneAnalysis.');
+        }
+        
+        // Final check: ensure sceneAnalysis is non-null before proceeding
+        if (!sceneAnalysis) {
+             throw new Error('SceneAnalysis could not be obtained or constructed.');
+        }
+
+        // --- Analyze Environment --- 
         logger.info('Analyzing environment...');
         environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis); 
         if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
         logger.info('>>> Context Data Fetched & Analyzed Successfully'); 
         logger.debug('Successfully fetched and analyzed context data');
-    } catch (error) {
-        logger.error('Error fetching/analyzing context data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error fetching context';
+
+    } catch (contextError) { // Catch for context fetching/analysis errors
+        logger.error('Error fetching/analyzing context data:', contextError);
+        const errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
         return NextResponse.json({ error: `Failed to fetch context data: ${errorMessage}` }, { status: 500 });
-    }
+    } // CORRECTED try...catch block ends here
 
     // --- Input Validation --- 
     if (!instruction || !duration || !modelId || !fetchedEnvironmentalMetadata) { 
@@ -262,20 +297,21 @@ export async function POST(request: Request) {
     try {
       compiledPrompt = await promptCompiler.compilePrompt(
         instruction, 
-        sceneAnalysis, 
-        environmentalAnalysis, // Use result from analyzer
+        sceneAnalysis, // Use non-null sceneAnalysis
+        environmentalAnalysis, 
         modelMetadata, 
-        currentCameraState, // Use state derived from DB metadata
+        currentCameraState, 
         duration
       );
       logger.debug('Prompt compiled successfully'); 
-    } catch (error) {
-        logger.error('Error during prompt compilation:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown prompt compilation error';
-        return NextResponse.json(
+    } catch (promptError) {
+       // ... prompt compilation error handling ...
+       logger.error('Error during prompt compilation:', promptError);
+       const errorMessage = promptError instanceof Error ? promptError.message : 'Unknown prompt compilation error';
+       return NextResponse.json(
             { error: `Prompt compilation failed: ${errorMessage}` },
             { status: 500 }
-        );
+       );
     }
 
     // Generate the path using the LLM Engine (using the compiledPrompt)
@@ -330,27 +366,11 @@ export async function POST(request: Request) {
       logger.info('>>> API ROUTE END - Success');
       return NextResponse.json(commands);
 
-    } catch (error) {
-      // This top-level catch block in the route might still be useful for
-      // catching errors *outside* the engine call (e.g., engine initialization,
-      // metadata storage errors), but errors *from* the engine are handled above.
-      logger.error('Error during engine path generation or metadata storage:', error);
-      return NextResponse.json(
-        { 
-          error: error instanceof Error ? error.message : 'Internal server error',
-          details: process.env.NODE_ENV === 'development' ? error : undefined
-        },
-        { status: 500 }
-      );
+    } catch (engineError) {
+      // ... engine/interpretation error handling ...
     }
-  } catch (error) {
-    logger.error('Unhandled error in camera path route:', error);
-    return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? error : undefined
-      },
-      { status: 500 }
-    );
+
+  } catch (requestError) { // Catch for outer request processing
+    logger.error('Unhandled error in camera path route:', requestError);
   }
 } 

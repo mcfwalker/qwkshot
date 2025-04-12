@@ -77,41 +77,28 @@ interface ViewerState {
 ```
 
 ### 1.4. Data Mutation Patterns
-- **Approach:** Use Supabase RPC (Remote Procedure Calls) for data modifications
+- **Primary Approach:** Use Next.js Server Actions (`src/app/actions/...`) for all client-initiated data mutations (creating, updating, deleting data).
 - **Benefits:**
-  - Centralized business logic in database functions
-  - Better error handling and type safety
-  - Atomic operations with proper validation
-- **Implementation:**
+  - Colocates client calls and server logic.
+  - Provides clear separation of concerns (client prepares data, server validates and persists).
+  - Leverages Next.js infrastructure for security and data handling.
+  - Simplifies client-side logic (no manual `fetch` calls needed for actions).
+- **Specific Implementations:**
+    - **Model Upload & Metadata:** The `ModelLoader.tsx` component calls the `prepareModelUpload` Server Action in `src/app/actions/models.ts`. This action handles:
+        - Creating an initial `models` table record.
+        - Generating a signed URL for client-side file upload directly to storage.
+        - Calling the server-side `MetadataManager` to store the full `ModelMetadata` (including `sceneAnalysis`) using the appropriate database adapter logic (saving to `metadata` and `scene_analysis` columns).
+    - **Environmental Metadata:** The `CameraAnimationSystem.tsx` component calls the `updateEnvironmentalMetadataAction` Server Action in `src/app/actions/models.ts` when the scene is locked. This action handles:
+        - Calling the server-side `MetadataManager` to update/store the `EnvironmentalMetadata` in the `models` table (`environmental_metadata` column).
+    - **Other Mutations (Example):** Simpler updates like changing a model name might still use Supabase RPC functions called directly from Server Actions if complex validation/logic resides in the database.
+- **Client Usage (Server Action Example):**
 ```typescript
-// Example RPC Function (SQL)
-create or replace function update_model_name(
-  model_id uuid,
-  new_name text
-) returns void as $$
-begin
-  -- Verify ownership
-  if not exists (
-    select 1 from models 
-    where id = model_id 
-    and user_id = auth.uid()
-  ) then
-    raise exception 'Model not found or unauthorized';
-  end if;
-
-  -- Update the model
-  update models 
-  set name = new_name,
-      updated_at = now()
-  where id = model_id;
-end;
-$$ language plpgsql security definer;
-
-// Client Usage
-const { error } = await supabase.rpc('update_model_name', {
-  model_id: modelId,
-  new_name: name.trim()
-})
+// Inside a Client Component (e.g., handleSaveModel)
+import { prepareModelUpload } from '@/app/actions/models';
+// ...
+const result = await prepareModelUpload({ /* ...args... */ });
+if (result.error) { /* handle error */ }
+// Use result.signedUploadUrl for client-side storage upload
 ```
 
 ### 1.5. Cache Management
@@ -450,419 +437,63 @@ export async function GET(request: NextRequest) {
 *(See also: [Authentication Feature Documentation](./features/auth/README.md), [Storage Security Documentation](./features/storage/README.md))*
 
 ## 4. API Structure
-- Utilize Next.js API Routes (`src/app/api/.../route.ts`) for backend logic.
-- Group routes logically by feature (e.g., `auth`, `camera-paths`, `models`).
-- Use Route Handlers (GET, POST, PUT, DELETE).
-- Implement authentication checks within API routes using `createRouteHandlerClient`.
-- Validate request bodies/params (e.g., using Zod).
-- Standardize response formats (e.g., `{ data: ... }` or `{ error: ... }`).
 
-### 4.1 RPC Endpoints
-- **Purpose:** Handle data mutations with proper validation and security
-- **Location:** Defined in Supabase migrations
+- **Primary Mechanism:** Utilize Next.js Server Actions (`src/app/actions/...`) for handling client requests that involve data persistence or complex backend logic.
+- **Alternative:** API Routes (`src/app/api/...`) can be used for standard RESTful endpoints, webhook handlers, or specific cases where Server Actions are not suitable.
+- **Database Interaction Layer:**
+    - Server Actions and API Routes SHOULD interact with the database via the `MetadataManager` abstraction layer (`src/features/p2p/metadata-manager/`).
+    - The `MetadataManager` uses a `DatabaseAdapter` (currently `SupabaseAdapter`) to handle the specific database operations.
+    - **Instantiation:** Server-side components (Actions, API Routes) obtain `MetadataManager` instances via the `MetadataManagerFactory`, typically requesting the **service role client** for necessary permissions.
+
+### 4.1 Server Actions
+- **Purpose:** Handle client-initiated operations like saving models, updating environmental metadata, generating paths (if moved server-side later).
+- **Location:** `src/app/actions/`
 - **Implementation:**
-  - Use `security definer` for elevated privileges
-  - Include ownership verification
-  - Return appropriate error messages
-  - Handle transaction management
-- **Example:**
-```sql
--- Example RPC function for model deletion
-create or replace function delete_model(
-  model_id uuid
-) returns void as $$
-begin
-  -- Verify ownership
-  if not exists (
-    select 1 from models 
-    where id = model_id 
-    and user_id = auth.uid()
-  ) then
-    raise exception 'Model not found or unauthorized';
-  end if;
-
-  -- Delete associated data first
-  delete from model_metadata where model_id = model_id;
-  delete from models where id = model_id;
-end;
-$$ language plpgsql security definer;
-```
+    - Marked with `'use server';`.
+    - Use `createServerActionClient` from `@supabase/auth-helpers-nextjs` for user-context operations if needed, or directly use the service role client via the `MetadataManager` for elevated privilege tasks.
+    - Perform necessary validation on input arguments.
+    - Call appropriate `MetadataManager` methods.
+    - Return results or errors to the client.
+- **Examples:**
+    - `prepareModelUpload` (in `models.ts`): Coordinates initial record creation, signed URL generation, and full metadata storage.
+    - `updateEnvironmentalMetadataAction` (in `models.ts`): Updates the environmental metadata for a given model.
 
 ### 4.2 API Routes
-- **Purpose:** Handle client-side operations and cache management
+- **Purpose:** Handle camera path generation (`/api/camera-path`), system info/health checks (`/api/system/...`), authentication callbacks (`/api/auth/callback`).
 - **Implementation:**
-  - Include proper CORS headers
-  - Handle authentication
-  - Manage cache invalidation
-  - Return standardized responses
-- **Example:**
-```typescript
-// Example revalidation route
-export async function POST(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const path = searchParams.get('path')
-    
-    if (!path) {
-      return NextResponse.json(
-        { message: 'Missing path parameter' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      )
-    }
+    - Use Route Handlers (GET, POST, etc.).
+    - Use `createRouteHandlerClient` or `createServerComponentClient` (if applicable) for Supabase interactions.
+    - Implement necessary authentication checks.
+    - Standardize request validation and response formats.
 
-    revalidatePath(path)
-    return NextResponse.json(
-      { revalidated: true, now: Date.now() },
-      {
-        headers: {
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Origin': '*'
-        }
-      }
-    )
-  } catch (error) {
-    return NextResponse.json(
-      { message: 'Error revalidating' },
-      { status: 500 }
-    )
-  }
-}
-```
+### 4.3 Database Storage (`models` Table)
+- **Metadata Storage:** Model-specific metadata is stored across multiple columns for clarity and potential query performance:
+    - `metadata` (jsonb): Stores general metadata fields like `orientation`, `preferences`, `geometry`, `performance_metrics` (excluding `sceneAnalysis`).
+    - `scene_analysis` (jsonb): Stores the detailed, serialized `SceneAnalysis` object generated during model processing.
+    - `environmental_metadata` (jsonb): Stores the latest camera/environment state captured when the scene is locked.
+- **Adapter Logic (`SupabaseAdapter.ts`):
+    - `storeModelMetadata`:** Separates the `sceneAnalysis` from the rest of the `ModelMetadata` object and saves them to the `scene_analysis` and `metadata` columns respectively in a single `update` call.
+    - `getModelMetadata`:** Selects `id`, `created_at`, `metadata`, `scene_analysis`, `user_id`, `file_url` and reconstructs the full `ModelMetadata` object, combining data from the `metadata` and `scene_analysis` columns.
+    - `storeEnvironmentalMetadata`/`updateEnvironmentalMetadata`: Target the dedicated `environmental_metadata` column.
 
 ## 5. Feature Specifications (Data Structures)
 
-*(Extracted interfaces from original PRD Section 6)*
-
 ### 5.1. P2P Pipeline Architecture
-
-#### 5.1.1 Component Hierarchy
-```typescript
-interface P2PPipeline {
-  initialize(config: P2PPipelineConfig): Promise<void>;
-  processModel(input: ModelInput): Promise<{
-    modelId: string;
-    analysis: SceneAnalysis;
-    metadata: ModelMetadata;
-  }>;
-  generatePath(modelId: string, instruction: UserInstruction): Promise<AnimationOutput>;
-  previewKeyframe(modelId: string, keyframeIndex: number, animation: AnimationOutput): Promise<void>;
-  executeAnimation(modelId: string, animation: AnimationOutput): Promise<void>;
-  getPerformanceMetrics(): PerformanceMetrics;
-}
-
-interface P2PPipelineConfig {
-  sceneAnalyzer: SceneAnalyzerConfig;
-  metadataManager: MetadataManagerConfig;
-  promptCompiler: PromptCompilerConfig;
-  llmEngine: LLMEngineConfig;
-  sceneInterpreter: SceneInterpreterConfig;
-  viewerIntegration: ViewerIntegrationConfig;
-}
-
-interface ViewerIntegrationConfig {
-  lockMechanism: {
-    enabled: boolean;
-    storePositionOnLock: boolean;
-    validatePosition: boolean;
-  };
-  animation: {
-    requireUnlock: boolean;
-    autoUnlock: boolean;
-    easingFunctions: boolean;
-  };
-}
-```
-
-#### 5.1.2 Scene Analysis
-```typescript
-interface SceneAnalysis {
-  glb: {
-    fileInfo: {
-      name: string;
-      size: number;
-      format: string;
-      version: string;
-    };
-    geometry: {
-      vertexCount: number;
-      faceCount: number;
-      boundingBox: Box3;
-      center: Vector3;
-      dimensions: Vector3;
-    };
-    materials: Material[];
-    metadata: Record<string, any>;
-    performance: PerformanceMetrics;
-  };
-  spatial: {
-    bounds: {
-      min: Vector3;
-      max: Vector3;
-      center: Vector3;
-      dimensions: Vector3;
-    };
-    referencePoints: {
-      center: Vector3;
-      highest: Vector3;
-      lowest: Vector3;
-      leftmost: Vector3;
-      rightmost: Vector3;
-      frontmost: Vector3;
-      backmost: Vector3;
-    };
-    symmetry: {
-      hasSymmetry: boolean;
-      symmetryPlanes: any[];
-    };
-    complexity: 'simple' | 'moderate' | 'high';
-    performance: PerformanceMetrics;
-  };
-  featureAnalysis: {
-    features: Feature[];
-    landmarks: Landmark[];
-    constraints: Constraint[];
-    performance: PerformanceMetrics;
-  };
-  safetyConstraints: {
-    minDistance: number;
-    maxDistance: number;
-    minHeight: number;
-    maxHeight: number;
-    restrictedZones: Box3[];
-  };
-  orientation: {
-    front: Vector3;
-    up: Vector3;
-    right: Vector3;
-    center: Vector3;
-    scale: number;
-  };
-  features: Feature[];
-  performance: PerformanceMetrics;
-}
-```
-
-#### 5.1.3 Environmental Analysis
-```typescript
-interface EnvironmentalAnalysis {
-  environment: {
-    bounds: {
-      min: Vector3;
-      max: Vector3;
-      center: Vector3;
-      dimensions: Vector3;
-    };
-    floor: {
-      center: Vector3;
-      normal: Vector3;
-      size: Vector3;
-    };
-  };
-  object: {
-    bounds: {
-      min: Vector3;
-      max: Vector3;
-      center: Vector3;
-      dimensions: Vector3;
-    };
-    position: Vector3;
-    rotation: Vector3;
-    scale: Vector3;
-  };
-  distances: {
-    toBoundary: {
-      front: number;
-      back: number;
-      left: number;
-      right: number;
-      top: number;
-      bottom: number;
-    };
-    safeRange: {
-      min: number;
-      max: number;
-    };
-  };
-  cameraConstraints: {
-    minHeight: number;
-    maxHeight: number;
-    minDistance: number;
-    maxDistance: number;
-    restrictedZones: Box3[];
-  };
-  camera: {
-    position: Vector3;
-    target: Vector3;
-    fov: number;
-    isLocked: boolean;
-  };
-  performance: PerformanceMetrics;
-}
-
-interface EnvironmentalMetadata {
-  camera: {
-    position: Vector3;
-    target: Vector3;
-    fov: number;
-    // Note: Current implementation has a known issue where FOV might not update on re-lock.
-  };
-  lighting: {
-    intensity: number;
-    color: string;
-  };
-  constraints: {
-    minDistance: number;
-    maxDistance: number;
-    minHeight: number;
-    maxHeight: number;
-  };
-}
-```
-
-#### 5.1.4 Error Handling
-```typescript
-interface P2PError extends Error {
-  code: string;
-  component: string;
-  details?: any;
-}
-
-interface ValidationResult {
-  isValid: boolean;
-  error?: string;
-  details?: any;
-}
-
-interface PerformanceMetrics {
-  startTime: number;
-  endTime: number;
-  duration: number;
-  operations: {
-    name: string;
-    duration: number;
-    success: boolean;
-    error?: string;
-  }[];
-}
-
-interface AnimationError extends P2PError {
-  type: 'lock_state' | 'position_validation' | 'path_generation' | 'playback';
-  requiresUnlock: boolean;
-  currentState: {
-    isLocked: boolean;
-    hasValidPosition: boolean;
-  };
-}
-```
-
-### 5.2. Camera Path
-```typescript
-interface CameraPath {
-  id: string;
-  name: string;
-  description?: string;
-  keyframes: CameraKeyframe[];
-  metadata: {
-    generatedFromPrompt?: string;
-    complexity?: 'simple' | 'medium' | 'high';
-    totalDuration: number;
-    authorId: string;
-    createdAt: string;
-    updatedAt: string;
-    version?: string;
-    environmentalMetadata?: EnvironmentalMetadata;
-  };
-  isPublic?: boolean;
-}
-
-interface CameraKeyframe {
-  position: { x: number; y: number; z: number };
-  target: { x: number; y: number; z: number };
-  duration: number;
-  easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
-  up?: { x: number; y: number; z: number };
-  fov?: number;
-}
-
-interface PathGenerationParams {
-  prompt: string;
-  duration: number;
-  complexity?: 'simple' | 'medium' | 'high';
-  sceneContext: {
-    modelCenter: { x: number; y: number; z: number };
-    modelBoundingBox: { min: {x,y,z}, max: {x,y,z} };
-    environmentalMetadata: EnvironmentalMetadata;
-    currentCameraState: {
-      position: { x: number; y: number; z: number };
-      target: { x: number; y: number; z: number };
-      fov: number;
-      isLocked: boolean;
-    };
-  };
-  constraints?: {
-    avoidClipping?: boolean;
-    maintainHorizon?: boolean;
-    requireUnlock?: boolean;
-    autoUnlock?: boolean;
-  };
-}
-
-interface AnimationState {
-  isPlaying: boolean;
-  isPaused: boolean;
-  currentProgress: number;
-  isLocked: boolean;
-  hasValidPosition: boolean;
-  error?: AnimationError;
-}
-```
-*(See also: [Prompt Architecture Documentation](./docs/prompt-architecture/README.md))*
-
-### 5.3. Model Generation
-```typescript
-interface ModelGenerationJob {
-  id: string; // Job ID from the generation service
-  userId: string;
-  status: 'pending' | 'processing' | 'complete' | 'failed';
-  progress: number; // 0-100
-  sourceImageUrls?: string[]; // URLs if stored temporarily
-  generationParams: GenerationParams;
-  estimatedCompletionTime?: string; // ISO timestamp
-  resultModelId?: string; // ID of the final model in our library
-  error?: {
-    code: string;
-    message: string;
-  };
-  createdAt: string; // ISO timestamp
-  updatedAt: string; // ISO timestamp
-}
-
-interface GenerationParams { // Params sent to the generation service
-  quality: 'draft' | 'standard' | 'high';
-  style?: 'realistic' | 'stylized' | 'low-poly'; // Depending on service capabilities
-  // ... other service-specific options (texturing, background removal, scale)
-}
-
-interface GeneratedModel { // Our internal representation after generation
-  id: string; // Our library model ID
-  userId: string;
-  name: string;
-  description?: string;
-  storagePath: string; // Path in our Supabase storage
-  thumbnailUrl?: string;
-  polygonCount?: number;
-  textureResolution?: number;
-  sourceJobId: string; // Link back to the generation job
-  createdAt: string;
-  updatedAt: string;
-}
-```
+- **Overview:** Translates user prompts into camera commands, leveraging scene and environmental context.
+- **Client Interaction:**
+    - **Model Processing/Saving:** Client (`ModelLoader`) runs analysis via `P2PPipeline.processModel`, then calls `prepareModelUpload` Server Action with results and file info. Client uploads file directly to storage using signed URL from action response.
+    - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state.
+    - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID.
+- **Backend Flow (`/api/camera-path`):**
+    1. Route handler receives request.
+    2. Initializes server-side components (`MetadataManager`, `PromptCompiler`, `LLMEngine`, `SceneInterpreter`, `EnvironmentalAnalyzer`).
+    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns).
+    4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data.
+    5. Calls `EnvironmentalAnalyzer.analyzeEnvironment` with deserialized `SceneAnalysis`.
+    6. Calls `PromptCompiler.compilePrompt` with scene/env analysis and other metadata.
+    7. Calls `LLMEngine.generatePath` with compiled prompt.
+    8. Calls `SceneInterpreter.interpretPath` with LLM response.
+    9. Returns final `CameraCommand[]` to client.
 
 ## 6. External Integrations
 

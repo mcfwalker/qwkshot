@@ -8,6 +8,10 @@ import {
   SafetyConstraints as ImportedSafetyConstraints,
   Feature,
   Logger,
+  SerializedVector3,
+  SerializedOrientation,
+  PerformanceMetrics,
+  ValidationResult,
 } from './shared';
 
 /**
@@ -209,22 +213,198 @@ export class ValidationError extends SceneAnalyzerError {
   }
 }
 
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
+// --- SERIALIZED TYPES FOR STORAGE ---
+
+/**
+ * Serialized Box3 for storage
+ */
+export interface SerializedBox3 {
+  min: SerializedVector3;
+  max: SerializedVector3;
 }
 
-export interface PerformanceMetrics {
-  startTime: number;
-  endTime: number;
-  duration: number;
-  operations: Array<{
+/**
+ * Serialized Feature for storage
+ */
+export interface SerializedFeature {
+  id: string;
+  type: string;
+  position: SerializedVector3;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Serialized SpatialBounds for storage
+ */
+export interface SerializedSpatialBounds {
+  min: SerializedVector3;
+  max: SerializedVector3;
+  center: SerializedVector3;
+  dimensions: SerializedVector3;
+}
+
+/**
+ * Serialized geometry info from GLBAnalysis for storage
+ */
+export interface SerializedGLBGeometry {
+  vertexCount: number;
+  faceCount: number;
+  boundingBox: SerializedBox3;
+  center: SerializedVector3;
+  dimensions: SerializedVector3;
+}
+
+/**
+ * Serialized GLBAnalysis for storage
+ */
+export interface SerializedGLBAnalysis {
+  fileInfo: {
     name: string;
-    duration: number;
-    success: boolean;
+    size: number;
+    format: string;
+    version: string;
+  };
+  geometry: SerializedGLBGeometry;
+  // materials omitted for now
+  metadata: Record<string, unknown>;
+  performance: PerformanceMetrics; // Reuse from shared
+}
+
+/**
+ * Serialized reference points from SpatialAnalysis for storage
+ */
+export interface SerializedSpatialReferencePoints {
+  center: SerializedVector3;
+  highest: SerializedVector3;
+  lowest: SerializedVector3;
+  leftmost: SerializedVector3;
+  rightmost: SerializedVector3;
+  frontmost: SerializedVector3;
+  backmost: SerializedVector3;
+}
+
+/**
+ * Serialized symmetry info from SpatialAnalysis for storage
+ */
+export interface SerializedSymmetry {
+  hasSymmetry: boolean;
+  // symmetryPlanes omitted for now
+}
+
+/**
+ * Serialized SpatialAnalysis for storage
+ */
+export interface SerializedSpatialAnalysis {
+  bounds: SerializedSpatialBounds;
+  referencePoints: SerializedSpatialReferencePoints;
+  symmetry: SerializedSymmetry;
+  complexity: 'simple' | 'moderate' | 'high';
+  performance: PerformanceMetrics; // Reuse from shared
+}
+
+/**
+ * Serialized FeatureAnalysis for storage
+ */
+export interface SerializedFeatureAnalysis {
+  features: SerializedFeature[];
+  landmarks: SerializedFeature[];
+  constraints: SerializedFeature[];
+  performance: PerformanceMetrics; // Reuse from shared
+}
+
+/**
+ * Serialized SceneSafetyConstraints for storage
+ */
+export interface SerializedSceneSafetyConstraints {
+  minHeight: number;
+  maxHeight: number;
+  minDistance: number;
+  maxDistance: number;
+  // restrictedZones omitted for now
+}
+
+/**
+ * Serialized SceneAnalysis for storage (Complete result)
+ */
+export interface SerializedSceneAnalysis {
+  glb: SerializedGLBAnalysis;
+  spatial: SerializedSpatialAnalysis;
+  featureAnalysis: SerializedFeatureAnalysis;
+  safetyConstraints: SerializedSceneSafetyConstraints;
+  orientation: SerializedOrientation; // Reuse from shared
+  features: SerializedFeature[];
+  performance: PerformanceMetrics; // Reuse from shared
+}
+
+// --- Original Interfaces (Keep for reference/type checking) ---
+
+/**
+ * Main Scene Analyzer interface
+ */
+export interface SceneAnalyzer {
+  /**
+   * Initialize the analyzer with configuration
+   */
+  initialize(config: SceneAnalyzerConfig): Promise<void>;
+
+  /**
+   * Analyze a GLB file
+   */
+  analyzeScene(file: File): Promise<SceneAnalysis>;
+
+  /**
+   * Calculate orientation of the model
+   */
+  calculateOrientation(scene: Object3D): Promise<ModelOrientation>;
+
+  /**
+   * Calculate safety boundaries
+   */
+  calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SceneSafetyConstraints>;
+
+  /**
+   * Extract spatial reference points
+   */
+  extractReferencePoints(scene: SceneAnalysis): Promise<{
+    center: Vector3;
+    highest: Vector3;
+    lowest: Vector3;
+    leftmost: Vector3;
+    rightmost: Vector3;
+    frontmost: Vector3;
+    backmost: Vector3;
   }>;
-  cacheHits: number;
-  cacheMisses: number;
-  databaseQueries: number;
-  averageResponseTime: number;
-} 
+
+  /**
+   * Get basic scene understanding
+   */
+  getSceneUnderstanding(scene: SceneAnalysis): Promise<{
+    complexity: 'simple' | 'moderate' | 'high';
+    symmetry: {
+      hasSymmetry: boolean;
+      symmetryPlanes: Plane[];
+    };
+    features: Feature[];
+  }>;
+
+  /**
+   * Validate scene analysis results
+   */
+  validateAnalysis(analysis: SceneAnalysis): ValidationResult;
+
+  /**
+   * Get performance metrics
+   */
+  getPerformanceMetrics(): PerformanceMetrics;
+}
+
+/**
+ * Scene Analyzer factory interface
+ */
+export interface SceneAnalyzerFactory {
+  create(config: SceneAnalyzerConfig): SceneAnalyzer;
+}
+
+// --- Error types remain unchanged ---
+// Note: Error class definitions were moved above Serialized Types

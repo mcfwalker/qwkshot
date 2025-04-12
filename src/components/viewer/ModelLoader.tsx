@@ -6,7 +6,7 @@ import { Upload, RefreshCw, FolderOpen, FolderGit2, Library } from 'lucide-react
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
 import { withRetry } from '@/lib/retry-utils';
-import { uploadModel } from '@/lib/library-service';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { SaveModelPortal } from './SaveModelPortal';
 import { LibraryModelPortal } from './LibraryModelPortal';
@@ -20,11 +20,14 @@ import { LLMEngineFactory } from '@/features/p2p/llm-engine/LLMEngineFactory';
 import { SceneInterpreterFactory } from '@/features/p2p/scene-interpreter/SceneInterpreterFactory';
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
 import { cn } from '@/lib/utils';
+import { prepareModelUpload } from '@/app/actions/models';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Processing model...');
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [currentAnalysisMetadata, setCurrentAnalysisMetadata] = useState<any | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -134,23 +137,22 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     if (!pipelineRef.current) {
       throw new Error('Pipeline not initialized');
     }
-
-    // Validate file type
     if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
       throw new Error('Please upload a .glb or .gltf file');
     }
 
-    // Create object URL for the file
+    setLoadingMessage('Analyzing scene...');
     const url = URL.createObjectURL(file);
     onModelLoad(url);
 
-    // Process the model through the pipeline
-    const { modelId } = await pipelineRef.current.processModel({
+    const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
       file,
-      userId: 'current-user-id' // TODO: Get actual user ID
+      userId: 'current-user-id'
     });
-
-    return modelId;
+    
+    setCurrentAnalysisMetadata(metadata);
+    
+    return true;
   };
 
   const handleFile = async (file: File) => {
@@ -161,7 +163,9 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     
     setCurrentFile(file);
     setLoading(true);
+    setLoadingMessage('Processing model...');
     setError(null);
+    setCurrentAnalysisMetadata(null);
 
     try {
       await withRetry(
@@ -175,13 +179,10 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           }
         }
       );
-      // Show save dialog after successful load
       setShowSaveDialog(true);
     } catch (err) {
       console.error('Model loading error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load model');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -189,7 +190,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     const file = acceptedFiles[0];
     if (!file) return;
     await handleFile(file);
-  }, [isInitializing]); // Include isInitializing in dependencies
+  }, [isInitializing]);
 
   const handleRetry = async () => {
     if (!currentFile) return;
@@ -197,108 +198,75 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   };
 
   const handleSaveModel = async (name: string) => {
-    if (!currentFile || !pipelineRef.current) return;
-    
+    if (!currentFile || !currentAnalysisMetadata) {
+        toast.error('File or analysis data missing.');
+        setLoading(false);
+        return;
+    }
+
+    setLoading(true);
+    setLoadingMessage('Saving model...');
+    setShowSaveDialog(false);
+
     try {
-      // Process the model first to get metadata
-      const { modelId, analysis, metadata } = await pipelineRef.current.processModel({
-        file: currentFile,
-        userId: 'current-user-id' // TODO: Get actual user ID
+      // --- Get User ID --- 
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+          toast.error('Authentication error', { description: userError?.message || 'User not found.' });
+          throw new Error(userError?.message || 'User not found');
+      }
+      const userId = user.id;
+      // -------------------
+
+      // Call the server action to prepare upload and save metadata
+      const prepareResult = await prepareModelUpload({
+          fileName: currentFile.name,
+          fileSize: currentFile.size,
+          fileType: currentFile.type,
+          userId: userId, 
+          modelName: name,
+          initialMetadata: currentAnalysisMetadata 
       });
 
-      // Save the model with the processed metadata
-      const savedModel = await uploadModel(currentFile, {
-        name,
-        description: '',
-        tags: [],
-        metadata: {
-          size: currentFile.size,
-          format: currentFile.name.split('.').pop() || 'unknown',
-          geometry: {
-            vertexCount: analysis.glb.geometry.vertexCount,
-            faceCount: analysis.glb.geometry.faceCount,
-            boundingBox: {
-              min: {
-                x: analysis.glb.geometry.boundingBox.min.x,
-                y: analysis.glb.geometry.boundingBox.min.y,
-                z: analysis.glb.geometry.boundingBox.min.z
-              },
-              max: {
-                x: analysis.glb.geometry.boundingBox.max.x,
-                y: analysis.glb.geometry.boundingBox.max.y,
-                z: analysis.glb.geometry.boundingBox.max.z
-              }
-            },
-            center: {
-              x: analysis.glb.geometry.center.x,
-              y: analysis.glb.geometry.center.y,
-              z: analysis.glb.geometry.center.z
-            },
-            dimensions: {
-              x: analysis.glb.geometry.dimensions.x,
-              y: analysis.glb.geometry.dimensions.y,
-              z: analysis.glb.geometry.dimensions.z
-            }
+      if (prepareResult.error) {
+          throw new Error(prepareResult.error);
+      }
+      
+      const { modelId, signedUploadUrl } = prepareResult;
+      loggerRef.current.info('Received signed URL and model ID from server action', { modelId });
+
+      setLoadingMessage('Uploading file...');
+      
+      const uploadResponse = await fetch(signedUploadUrl, {
+          method: 'PUT',
+          body: currentFile,
+          headers: {
           },
-          spatial: {
-            bounds: {
-              min: {
-                x: analysis.spatial.bounds.min.x,
-                y: analysis.spatial.bounds.min.y,
-                z: analysis.spatial.bounds.min.z
-              },
-              max: {
-                x: analysis.spatial.bounds.max.x,
-                y: analysis.spatial.bounds.max.y,
-                z: analysis.spatial.bounds.max.z
-              },
-              center: {
-                x: analysis.spatial.bounds.center.x,
-                y: analysis.spatial.bounds.center.y,
-                z: analysis.spatial.bounds.center.z
-              },
-              dimensions: {
-                x: analysis.spatial.bounds.dimensions.x,
-                y: analysis.spatial.bounds.dimensions.y,
-                z: analysis.spatial.bounds.dimensions.z
-              }
-            },
-            complexity: analysis.spatial.complexity,
-            symmetry: {
-              hasSymmetry: analysis.spatial.symmetry.hasSymmetry,
-              symmetryPlanes: analysis.spatial.symmetry.symmetryPlanes.map(plane => ({
-                normal: {
-                  x: plane.normal.x,
-                  y: plane.normal.y,
-                  z: plane.normal.z
-                },
-                constant: plane.constant
-              }))
-            }
-          },
-          orientation: metadata.orientation,
-          preferences: metadata.preferences,
-          performance_metrics: {
-            sceneAnalysis: analysis.performance,
-            spatialAnalysis: analysis.spatial.performance,
-            featureAnalysis: analysis.featureAnalysis.performance
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          version: 1
-        }
       });
 
-      // Update the URL to include the model ID
-      const newPath = `/viewer/${savedModel.id}`;
+      if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          loggerRef.current.error('Direct storage upload failed using fetch:', { 
+              status: uploadResponse.status, 
+              statusText: uploadResponse.statusText,
+              body: errorText
+           });
+          throw new Error(`Storage upload failed: ${uploadResponse.statusText}`);
+      }
+
+      loggerRef.current.info('File uploaded successfully to storage via fetch.');
+
+      const newPath = `/viewer/${modelId}`;
       window.history.pushState({}, '', newPath);
+      toast.success('Model saved successfully!');
 
-      // Get the signed URL for the model
-      const url = await loadModel(savedModel.id);
-      onModelLoad(url);
     } catch (error) {
       console.error('Error saving model:', error);
-      toast.error('Failed to save model');
+      toast.error('Failed to save model', { description: error instanceof Error ? error.message : undefined });
+    } finally {
+       setLoading(false);
+       setCurrentFile(null);
+       setCurrentAnalysisMetadata(null);
     }
   };
 
@@ -306,7 +274,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     try {
       setLoading(true);
       const url = await loadModel(model.id);
-      // Update the URL to include the model ID
       const newPath = `/viewer/${model.id}`;
       window.history.pushState({}, '', newPath);
       onModelLoad(url);
@@ -325,7 +292,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       'model/gltf+json': ['.gltf']
     },
     multiple: false,
-    disabled: isInitializing // Disable dropzone during initialization
+    disabled: isInitializing
   });
 
   return (
@@ -385,7 +352,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           )}
         </div>
 
-        {loading && <LoadingOverlay message="Processing model..." />}
+        {loading && <LoadingOverlay message={loadingMessage} />}
       </div>
 
       <Button

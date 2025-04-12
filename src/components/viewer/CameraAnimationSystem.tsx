@@ -20,9 +20,11 @@ import { LockButton } from './LockButton';
 import { useViewerStore } from '@/store/viewerStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
+import { SerializedVector3 } from '@/types/p2p/shared';
+import { supabase } from '@/lib/supabase';
 
 // Import the extracted components
 import { ShotCallerPanel } from './ShotCallerPanel'; 
@@ -63,6 +65,7 @@ interface CameraAnimationSystemProps {
   disabled?: boolean;
   isModelLoaded: boolean;
   resetCounter: number;
+  modelId: string | null;
 }
 
 const CameraSystemFallback = () => (
@@ -159,6 +162,14 @@ const generatePathStates: Record<GeneratePathState, { text: string; icon: React.
 // Define Tab values
 type TabValue = 'shotCaller' | 'playback';
 
+// Helper to serialize Vector3 for sending to server action
+function serializeVector3(v: Vector3): SerializedVector3 {
+  return { x: v.x || 0, y: v.y || 0, z: v.z || 0 };
+}
+
+// UUID Regex for validation
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   isPlaying,
   isRecording,
@@ -180,16 +191,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   disabled,
   isModelLoaded,
   resetCounter,
+  modelId,
 }) => {
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [commands, setCommands] = useState<CameraCommand[]>([]);
-  const [modelId, setModelId] = useState<string | null>(null);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const { isLocked, toggleLock, storeEnvironmentalMetadata } = useViewerStore();
+  const { isLocked, toggleLock } = useViewerStore();
   const [messageIndex, setMessageIndex] = useState(0);
   const [takeCount, setTakeCount] = useState(0);
   const [modelName, setModelName] = useState<string | null>(null);
@@ -215,19 +226,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     };
     console.log('Detailed button state:', buttonState);
   }, [isLocked, isGenerating, instruction]);
-
-  // Generate UUID when model is loaded
-  useEffect(() => {
-    if (modelRef.current) {
-      const pathParts = window.location.pathname.split('/');
-      const modelId = pathParts[pathParts.length - 1]; // Get the last segment of the path
-      
-      if (modelId) {
-        setModelId(modelId);
-        console.log('Using model ID from URL:', modelId);
-      }
-    }
-  }, [modelRef.current]);
 
   // Add effect for cycling through messages during generation
   useEffect(() => {
@@ -593,34 +591,78 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   };
 
   const handleLockToggle = async () => {
-    try {
-      console.log('Lock toggle initiated. Current state:', {
-        isLocked,
-        hasModelRef: !!modelRef?.current,
-        hasCameraRef: !!cameraRef?.current,
-        hasControlsRef: !!controlsRef?.current
-      });
+    console.log(`>>> handleLockToggle called with modelId prop: ${modelId}`); 
+    const currentModelId = modelId; 
+    console.log('Lock toggle initiated. Current state:', { isLocked, currentModelId });
 
-      if (!isLocked && modelRef?.current && cameraRef?.current && controlsRef?.current) {
-        console.log('Locking scene, storing metadata...');
-        await storeEnvironmentalMetadata(
-          modelRef.current,
-          cameraRef.current,
-          controlsRef.current,
-          fov
-        );
-        toast.success('Scene composition locked and saved');
+    if (!currentModelId || !uuidRegex.test(currentModelId)) {
+        toast.error('Cannot lock scene: No valid model loaded.', { description: 'Please select or upload a model first.'});
+        return;
+    }
+    
+    try {
+      if (!isLocked && cameraRef?.current && controlsRef?.current) {
+        console.log('Locking scene, preparing metadata...');
+        
+        // 1. Get current camera state
+        const cameraPosition = cameraRef.current.position.clone();
+        const cameraTarget = controlsRef.current.target.clone();
+        const currentFov = fov; // Get FOV from props
+
+        // 2. Construct EnvironmentalMetadata payload with ALL required fields
+        const envMetadataPayload: EnvironmentalMetadata = {
+            camera: {
+                position: serializeVector3(cameraPosition),
+                target: serializeVector3(cameraTarget),
+                fov: currentFov
+            },
+            // Add missing fields with defaults
+            lighting: { 
+                intensity: 1, 
+                color: '#FFFFFF',
+                // Add default position for lighting
+                position: { x: 0, y: 10, z: 0 } 
+            }, 
+            constraints: { 
+                minDistance: 0.1, 
+                maxDistance: 100, 
+                minHeight: 0, 
+                maxHeight: 100,
+                // Add missing constraint fields with defaults
+                maxSpeed: 2.0, 
+                maxAngleChange: Math.PI / 4, // 45 degrees
+                minFramingMargin: 0.1 
+            } 
+        };
+
+        console.log('Calling updateEnvironmentalMetadataAction with:', { currentModelId, envMetadataPayload });
+
+        // 3. Call the Server Action
+        const result = await updateEnvironmentalMetadataAction({
+            modelId: currentModelId,
+            metadata: envMetadataPayload
+        });
+
+        // 4. Handle result
+        if (result.success) {
+            toast.success('Scene composition locked and saved');
+        } else {
+            throw new Error(result.error || 'Failed to save scene composition via server action.');
+        }
+        
       } else if (isLocked) {
         console.log('Unlocking scene...');
-        toast.success('Scene unlocked');
+        toast.info('Scene unlocked'); // Use info for unlock
       }
       
-      console.log('Toggling lock state...');
-      toggleLock();
-      console.log('Lock state toggled. New state:', { isLocked: !isLocked });
+      // Toggle lock state (likely via Zustand action)
+      console.log('Toggling lock state in store...');
+      toggleLock(); 
+      console.log('Lock state toggle processed.');
+
     } catch (error) {
-      console.error('Failed to store environmental metadata:', error);
-      toast.error('Failed to store scene composition');
+      console.error('Failed to store/update environmental metadata:', error);
+      toast.error('Failed to save scene composition', { description: error instanceof Error ? error.message : undefined });
     }
   };
 

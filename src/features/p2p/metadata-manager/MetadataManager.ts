@@ -9,10 +9,8 @@ import {
   ValidationError,
   MetadataManagerConfig,
   MetadataManager as IMetadataManager,
-  ValidationResult
 } from '../../../types/p2p/metadata-manager';
-import { Orientation } from '../../../types/p2p/shared';
-import { Logger } from '../../../types/p2p/shared';
+import { Orientation, ValidationResult, Logger } from '../../../types/p2p/shared';
 import { EnvironmentalMetadata } from '../../../types/p2p/environmental-metadata';
 
 const DEFAULT_CONFIG: Required<MetadataManagerConfig> = {
@@ -352,7 +350,15 @@ export class MetadataManagerImpl implements IMetadataManager {
       orientation: {
         position: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 }
+        scale: 1,
+        front: { x: 0, y: 0, z: 1 },
+        back: { x: 0, y: 0, z: -1 },
+        left: { x: -1, y: 0, z: 0 },
+        right: { x: 1, y: 0, z: 0 },
+        top: { x: 0, y: 1, z: 0 },
+        bottom: { x: 0, y: -1, z: 0 },
+        center: { x: 0, y: 0, z: 0 },
+        confidence: 0
       },
       featurePoints: [],
       preferences: {
@@ -497,7 +503,7 @@ export class MetadataManagerImpl implements IMetadataManager {
   /**
    * Get environmental metadata with caching
    */
-  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata> {
+  async getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata | null> {
     try {
       // Try cache first if enabled
       if (this.config.caching.enabled) {
@@ -508,16 +514,26 @@ export class MetadataManagerImpl implements IMetadataManager {
         }
       }
 
-      // Get from database
+      // Get from database - this might return null
       const metadata = await this.db.getEnvironmentalMetadata(modelId);
       
-      // Store in cache if enabled
-      if (this.config.caching.enabled) {
-        const modelMetadata = await this.getModelMetadata(modelId);
-        await this.cache.setModelMetadata(modelId, modelMetadata, this.config.caching.ttl);
+      // Store in cache if enabled AND data was found
+      if (metadata && this.config.caching.enabled) {
+        // We need the full ModelMetadata to cache it correctly
+        // Avoid re-fetching if we already have it (potentially from cache check)
+        let fullModelMetadata = await this.cache.getModelMetadata(modelId);
+        if (!fullModelMetadata) { 
+            fullModelMetadata = await this.db.getModelMetadata(modelId); // Fetch if not in cache
+        } 
+        // Only update cache if we successfully fetched the full model metadata
+        if (fullModelMetadata) {
+            // Ensure the fetched env metadata is placed correctly before caching
+            fullModelMetadata.environment = metadata; 
+            await this.cache.setModelMetadata(modelId, fullModelMetadata, this.config.caching.ttl);
+        }
       }
 
-      return metadata;
+      return metadata; // Return the potentially null metadata from DB
     } catch (error) {
       this.logger.error(`Failed to get environmental metadata for model: ${modelId}`, error);
       if (error instanceof Error) {

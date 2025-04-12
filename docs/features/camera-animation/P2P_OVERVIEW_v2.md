@@ -104,6 +104,27 @@ Scene Interpreter → API → Viewer (state) → AnimationController (execution)
 | Playback Control       | ✅ Implemented   | Handles `isPlaying`, speed adjustments, progress reporting.   |
 - **Note:** Lives inside R3F Canvas, receives state/commands via props.
 
+## 💾 Data Persistence (`models` Table)
+
+To support the pipeline, model information is stored in the `models` table using several columns:
+
+1.  **`metadata` (jsonb): Core Information & Basic Derived Data**
+    *   **Purpose:** Stores general information about the model record, user preferences, and basic, relatively static geometric properties derived from the initial analysis.
+    *   **Key Contents:** `orientation` (serialized), `preferences`, basic `geometry` (counts, bounding box, center, dimensions), `performance_metrics` (for analysis duration).
+    *   **Analogy:** The label on a box – identifies the object, owner, creation date, basic dimensions.
+
+2.  **`scene_analysis` (jsonb): Detailed Static Model Analysis**
+    *   **Purpose:** Stores the comprehensive, objective results from the `SceneAnalyzer` describing the model's intrinsic geometric and structural properties. Generated once during processing.
+    *   **Key Contents:** Detailed `glb` info, `spatial` analysis (all reference points, bounds, complexity, symmetry), `featureAnalysis` (detected features/landmarks), model-based `safetyConstraints`.
+    *   **Analogy:** A detailed blueprint or CT scan of the object itself.
+
+3.  **`environmental_metadata` (jsonb): Dynamic User Context (On Lock)**
+    *   **Purpose:** Stores the specific state of the viewer environment captured when the user locks the scene for path generation.
+    *   **Key Contents:** `camera` state (position, target, fov), `lighting` info, scene `constraints`.
+    *   **Analogy:** A photograph of the object on the table showing its position and the current conditions right before path generation.
+
+*Note: Other top-level columns like `id`, `name`, `user_id`, `file_url`, `created_at` store essential record identifiers.*
+
 ## 🔄 Current Implementation vs. Target Architecture
 
 ### Current Implementation (Actual)

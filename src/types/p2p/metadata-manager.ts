@@ -5,9 +5,12 @@ import {
   Logger,
   SerializedVector3,
   SerializedOrientation,
-  Orientation as SharedOrientation
+  Orientation as SharedOrientation,
+  PerformanceMetrics,
+  ValidationResult
 } from './shared';
 import { EnvironmentalMetadata } from './environmental-metadata';
+import { SerializedSceneAnalysis } from './scene-analyzer';
 
 /**
  * Configuration for the Metadata Manager
@@ -53,6 +56,7 @@ export interface ModelMetadata extends BaseMetadata {
     sceneAnalysis: PerformanceMetrics;
     environmentalAnalysis: PerformanceMetrics;
   };
+  sceneAnalysis?: SerializedSceneAnalysis;
 }
 
 /**
@@ -86,33 +90,6 @@ export interface UserPreferences {
 }
 
 /**
- * Validation result interface
- */
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-}
-
-/**
- * Performance metrics interface
- */
-export interface PerformanceMetrics {
-  startTime: number;
-  endTime: number;
-  duration: number;
-  operations: Array<{
-    name: string;
-    duration: number;
-    success: boolean;
-    error?: string;
-  }>;
-  cacheHits: number;
-  cacheMisses: number;
-  databaseQueries: number;
-  averageResponseTime: number;
-}
-
-/**
  * Main Metadata Manager interface
  */
 export interface MetadataManager {
@@ -139,7 +116,7 @@ export interface MetadataManager {
   /**
    * Retrieve environmental metadata for a model
    */
-  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata>;
+  getEnvironmentalMetadata(modelId: string): Promise<EnvironmentalMetadata | null>;
 
   /**
    * Update environmental metadata for a model

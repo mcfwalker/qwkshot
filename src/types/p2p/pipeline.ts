@@ -84,7 +84,7 @@ export interface AnimationOutput {
   keyframes: {
     position: Vector3;
     target: Vector3;
-    timestamp: number;
+    duration: number;
   }[];
   duration: number;
   metadata: {
@@ -118,7 +118,7 @@ export interface P2PPipeline {
   generatePath(
     modelId: string,
     userInput: string,
-    currentCameraState: { position: Vector3; target: Vector3 }
+    requestedDuration: number
   ): Promise<AnimationOutput>;
 
   /**

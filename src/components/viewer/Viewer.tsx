@@ -21,6 +21,7 @@ import { FloorTexture } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
+import { usePathname } from 'next/navigation';
 
 // Model component that handles GLTF/GLB loading
 function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
@@ -120,37 +121,53 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
   // --- End Lifted State ---
 
+  // ADD state for the current model ID within Viewer
+  const [currentModelId, setCurrentModelId] = useState<string | null>(null);
+
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null!);
   const { isLocked, setModelId, setLock } = useViewerStore();
+  const pathname = usePathname();
 
-  // Extract and set modelId when modelUrl changes
+  // Effect now depends on pathname and modelUrl
   useEffect(() => {
-    let modelId: string | undefined;
-    if (modelUrl) {
-      // First try to get modelId from URL pathname
-      const pathParts = window.location.pathname.split('/');
-      modelId = pathParts.find(part => 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
-      );
+    let extractedModelId: string | undefined;
+    // Use pathname from hook instead of window.location
+    const currentPath = pathname; 
+    console.log('>>> Viewer useEffect: Running. Pathname:', currentPath, 'modelUrl prop:', modelUrl);
 
-      // If not found in pathname, try to extract from modelUrl
-      if (!modelId) {
-        modelId = modelUrl.split('/').find(part => 
-          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+    // Prioritize extracting from pathname
+    if (currentPath) {
+        const pathParts = currentPath.split('/');
+        extractedModelId = pathParts.find(part => 
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
         );
-      }
-
-      console.log('Setting modelId in store:', modelId);
-      setModelId(modelId || null);
-    } else {
-      setModelId(null);
+        console.log('>>> Viewer useEffect: Extracted from path:', extractedModelId);
     }
-    // Trigger reset in child component when model changes or is cleared
-    setResetCounter(prev => prev + 1); 
-  }, [modelUrl, setModelId, setResetCounter]);
+
+    // Fallback to modelUrl prop ONLY if not found in path
+    if (!extractedModelId && modelUrl) {
+        extractedModelId = modelUrl.split('/').find(part => 
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part)
+        );
+        console.log('>>> Viewer useEffect: Extracted from modelUrl prop (fallback):', extractedModelId);
+    }
+
+    const finalModelId = extractedModelId || null;
+    console.log('>>> Viewer useEffect: Final determined modelId:', finalModelId);
+    // Avoid unnecessary state updates if ID hasn't changed
+    setCurrentModelId(prevId => {
+        if (prevId !== finalModelId) {
+            setModelId(finalModelId); // Update Zustand store
+            setResetCounter(prev => prev + 1); // Trigger reset only on change
+            return finalModelId; // Update local state
+        }
+        return prevId; // Keep existing state
+    }); 
+
+  }, [pathname, modelUrl, setModelId, setResetCounter]); // ADD pathname to dependencies
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -390,6 +407,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       {/* Camera Animation System */}
       <div className="absolute top-16 right-4 z-10">
         <CameraAnimationSystem
+          // PASS modelId as prop
+          modelId={currentModelId}
           // Pass down relevant state
           isPlaying={isPlaying}
           progress={progress}
