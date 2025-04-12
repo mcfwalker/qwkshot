@@ -79,7 +79,8 @@ export async function POST(request: Request) {
             url: process.env.NEXT_PUBLIC_SUPABASE_URL || '', 
             key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' 
         },
-        caching: { enabled: true, ttl: 300000 }, 
+        // Disable caching for this instance to test
+        caching: { enabled: false, ttl: 0 },
         validation: { strict: false, maxFeaturePoints: 100 }
       }, 
       'serviceRole' // Explicitly request the service role client
@@ -94,13 +95,13 @@ export async function POST(request: Request) {
 
     // --- Process Request Body --- 
     const body = await request.json();
-    // *** ADD LOGGING: Body Parsed ***
     logger.info('>>> Request Body Parsed'); 
-    const { instruction, sceneGeometry, duration, modelId } = body;
+    const { instruction, duration, modelId } = body; 
 
     // --- Declare Context Variables --- 
     let modelMetadata: ModelMetadata;
-    let environmentalMetadata: EnvironmentalAnalysis;
+    let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null; 
+    let environmentalAnalysis: EnvironmentalAnalysis;
     let sceneAnalysis: SceneAnalysis;
 
     // --- Fetch & Analyze Context Data --- 
@@ -108,10 +109,16 @@ export async function POST(request: Request) {
     try {
         modelMetadata = await metadataManager.getModelMetadata(modelId);
         if (!modelMetadata) throw new Error(`Model metadata not found for id: ${modelId}`);
-        
-        // *** ADD LOGGING: Model Metadata Fetched ***
         logger.info('>>> Model Metadata Fetched Successfully'); 
         
+        // Fetch Environmental Metadata from DB
+        fetchedEnvironmentalMetadata = await metadataManager.getEnvironmentalMetadata(modelId);
+        if (!fetchedEnvironmentalMetadata) {
+             logger.error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
+             throw new Error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
+        }
+        logger.info('>>> Environmental Metadata Fetched Successfully');
+
         // Create placeholder SceneAnalysis based on ModelMetadata
         const modelGeom = modelMetadata.geometry;
         sceneAnalysis = {
@@ -164,12 +171,11 @@ export async function POST(request: Request) {
             throw new Error('Failed to construct placeholder scene analysis data from model metadata.');
         }
 
-        // Analyze Environment
+        // Analyze Environment (using the fetched model/scene data)
         logger.info('Analyzing environment...');
-        environmentalMetadata = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
-        if (!environmentalMetadata) throw new Error(`Environmental analysis failed for id: ${modelId}`);
+        environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis); 
+        if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
-        // *** ADD LOGGING: Context Data Done ***
         logger.info('>>> Context Data Fetched & Analyzed Successfully'); 
         logger.debug('Successfully fetched and analyzed context data');
     } catch (error) {
@@ -179,12 +185,12 @@ export async function POST(request: Request) {
     }
 
     // --- Input Validation --- 
-    if (!instruction || !sceneGeometry || !duration || !modelId) {
+    if (!instruction || !duration || !modelId || !fetchedEnvironmentalMetadata) { 
       const missing = {
         instruction: !instruction,
-        sceneGeometry: !sceneGeometry,
         duration: !duration,
-        modelId: !modelId
+        modelId: !modelId,
+        fetchedEnvironmentalMetadata: !fetchedEnvironmentalMetadata
       };
       logger.error('Missing parameters:', missing);
       return NextResponse.json(
@@ -192,11 +198,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (!sceneGeometry.currentCamera || !sceneGeometry.currentCamera.position || !sceneGeometry.currentCamera.target) {
-        logger.error('Missing current camera state in sceneGeometry');
-        return NextResponse.json({ error: 'Missing current camera state in sceneGeometry' }, { status: 400 });
-    }
-    // *** ADD LOGGING: Input Validated ***
     logger.info('>>> Input Parameters Validated'); 
 
     // --- Get Provider & Configure --- 
@@ -225,7 +226,6 @@ export async function POST(request: Request) {
     logger.info('LLM Engine initialized with config:', engineConfig);
 
     // Configure and initialize the Scene Interpreter
-    // TODO: Source these config values properly (env vars, request body?)
     const interpreterConfig: SceneInterpreterConfig = {
       smoothingFactor: 0.5, // Default smoothing
       maxKeyframes: 100,   // Default max keyframes from LLM
@@ -236,54 +236,41 @@ export async function POST(request: Request) {
     await interpreter.initialize(interpreterConfig);
     logger.info('Scene Interpreter initialized with config:', interpreterConfig);
 
-    // Convert camera state to Vector3 and include fov
+    // Construct currentCameraState from FETCHED environmental metadata
+    if (!fetchedEnvironmentalMetadata.camera?.position || !fetchedEnvironmentalMetadata.camera?.target) {
+        logger.error('Fetched environmental metadata is missing camera position or target.');
+        return NextResponse.json({ error: 'Stored environmental metadata is incomplete (missing camera state).' }, { status: 500 });
+    }
     const currentCameraState = {
       position: new Vector3(
-        sceneGeometry.currentCamera.position.x,
-        sceneGeometry.currentCamera.position.y,
-        sceneGeometry.currentCamera.position.z
+        fetchedEnvironmentalMetadata.camera.position.x,
+        fetchedEnvironmentalMetadata.camera.position.y,
+        fetchedEnvironmentalMetadata.camera.position.z
       ),
       target: new Vector3(
-        sceneGeometry.currentCamera.target.x,
-        sceneGeometry.currentCamera.target.y,
-        sceneGeometry.currentCamera.target.z
+        fetchedEnvironmentalMetadata.camera.target.x,
+        fetchedEnvironmentalMetadata.camera.target.y,
+        fetchedEnvironmentalMetadata.camera.target.z
       ),
-      fov: sceneGeometry.currentCamera.fov ?? 50 // Add fov, default to 50 if missing
+      fov: fetchedEnvironmentalMetadata.camera.fov ?? 50 // Use fetched FOV, default to 50
     };
 
-    // *** ADD LOGGING: Received Camera State ***
-    // logger.info('>>> Received Camera State:', JSON.stringify(currentCameraState));
-
-    // logger.debug('Camera state:', { // Keep debug log?
-    //   position: currentCameraState.position.toArray(),
-    //   target: currentCameraState.target.toArray()
-    // });
-
-    // console.log('Generating path with:', { // Keep basic log?
-    //   modelId,
-    //   instruction,
-    //   currentCameraState,
-    //   duration
-    // });
+    logger.info('>>> Using Camera State From Fetched Metadata:', JSON.stringify(currentCameraState));
 
     // --- Compile Prompt --- 
-    // logger.info('Compiling prompt...'); // Keep info log?
     let compiledPrompt: CompiledPrompt;
     try {
       compiledPrompt = await promptCompiler.compilePrompt(
         instruction, 
         sceneAnalysis, 
-        environmentalMetadata, 
+        environmentalAnalysis, // Use result from analyzer
         modelMetadata, 
-        currentCameraState,
+        currentCameraState, // Use state derived from DB metadata
         duration
       );
-      // *** REMOVE LOG ***
-      // logger.info('>>> Compiled System Message:', compiledPrompt.systemMessage);
-      // logger.debug('Prompt compiled successfully'); // Keep debug log?
+      logger.debug('Prompt compiled successfully'); 
     } catch (error) {
         logger.error('Error during prompt compilation:', error);
-        // Handle unknown error type
         const errorMessage = error instanceof Error ? error.message : 'Unknown prompt compilation error';
         return NextResponse.json(
             { error: `Prompt compilation failed: ${errorMessage}` },
@@ -292,14 +279,11 @@ export async function POST(request: Request) {
     }
 
     // Generate the path using the LLM Engine (using the compiledPrompt)
-    // logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model); // Keep info log?
+    logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model); 
+    // Log the prompt being sent
+    logger.info('>>> Compiled Prompt Sent to Engine:', JSON.stringify(compiledPrompt, null, 2)); 
     try {
       const response = await engine.generatePath(compiledPrompt);
-
-      // *** REMOVE LOG ***
-      // logger.info('>>> Raw LLM Response Data:', JSON.stringify(response.data, null, 2)); // Stringify for full detail
-
-      // logger.debug('LLM Engine response:', response); // Keep debug log?
 
       // Handle potential errors from the engine
       if (response.error) {
@@ -326,93 +310,26 @@ export async function POST(request: Request) {
       // --- Interpret and Validate Path --- 
       let commands: CameraCommand[];
       try {
-        // Interpret the path (Input validation happens inside interpretPath)
         commands = interpreter.interpretPath(cameraPath);
         logger.info(`Interpretation resulted in ${commands.length} commands.`);
-
-        // Validate Generated Commands (Output validation)
         const commandValidation = interpreter.validateCommands(commands);
         if (!commandValidation.isValid) {
           logger.error('Generated commands failed validation:', commandValidation.errors);
           throw new Error(`Generated commands failed validation: ${commandValidation.errors.join(', ')}`);
         }
         logger.info('Generated commands passed validation.');
-
       } catch (interpretationError) {
           logger.error('Error during path interpretation or command validation:', interpretationError);
           const errorMessage = interpretationError instanceof Error ? interpretationError.message : 'Unknown interpretation error';
           return NextResponse.json(
               { error: `Path Interpretation Failed: ${errorMessage}` },
-              { status: 500 } // Or specific code like 422 Unprocessable Entity?
+              { status: 500 } 
           );
       }
       
-      // --- If interpretation and validation succeeded, proceed --- 
+      logger.info('>>> API ROUTE END - Success');
+      return NextResponse.json(commands);
 
-      // --- Metadata Storage --- 
-      // TODO: Review if EnvironmentalMetadata needs adjustment
-      // Make sure metadata creation uses the *actual* compiledPrompt data if needed
-      const environmentalMetadataToStore: EnvironmentalMetadata = {
-        lighting: {
-          intensity: 1.0,
-          color: '#ffffff',
-          position: {
-            x: 0,
-            y: 10,
-            z: 0
-          }
-        },
-        camera: {
-          position: {
-            x: currentCameraState.position.x,
-            y: currentCameraState.position.y,
-            z: currentCameraState.position.z
-          },
-          target: {
-            x: currentCameraState.target.x,
-            y: currentCameraState.target.y,
-            z: currentCameraState.target.z
-          },
-          fov: currentCameraState.fov
-        },
-        scene: {
-          background: '#000000',
-          ground: '#808080',
-          atmosphere: '#87CEEB'
-        },
-        shot: {
-          type: 'cinematic', // TODO: Derive from somewhere?
-          duration: cameraPath.duration, // Use original total duration
-          keyframes: cameraPath.keyframes.map(kf => ({ // Still map original keyframes for storage?
-            position: { x: kf.position.x, y: kf.position.y, z: kf.position.z },
-            target: { x: kf.target.x, y: kf.target.y, z: kf.target.z },
-            duration: kf.duration
-          }))
-        },
-        constraints: { // Use constraints from compiled prompt?
-          minDistance: compiledPrompt.constraints.minDistance,
-          maxDistance: compiledPrompt.constraints.maxDistance,
-          minHeight: compiledPrompt.constraints.minHeight ?? 0,
-          maxHeight: compiledPrompt.constraints.maxHeight ?? 100,
-          maxSpeed: compiledPrompt.constraints.maxSpeed ?? 2.0, // Default to 2.0 if undefined
-          // Add defaults for other required fields if missing from prompt constraints
-          maxAngleChange: compiledPrompt.constraints.maxAngleChange ?? 45, // Default to 45 if undefined
-          minFramingMargin: compiledPrompt.constraints.minFramingMargin ?? 0.1 // Default to 0.1 if undefined
-        },
-        performance: { // Use performance from compiled prompt?
-          startTime: compiledPrompt.metadata.performanceMetrics.startTime,
-          endTime: Date.now(), // Or get from interpreter/engine?
-          duration: Date.now() - compiledPrompt.metadata.performanceMetrics.startTime,
-          operations: compiledPrompt.metadata.performanceMetrics.operations
-        }
-      };
-
-      // Store the environmental metadata
-      await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadataToStore);
-
-      // Return the FINAL validated CameraCommand array
-      logger.info('Sending generated commands to client.');
-      return NextResponse.json(commands); 
     } catch (error) {
       // This top-level catch block in the route might still be useful for
       // catching errors *outside* the engine call (e.g., engine initialization,

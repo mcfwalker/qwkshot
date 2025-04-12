@@ -3,6 +3,7 @@ import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/Metadata
 import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { analyzeScene as analyzeSceneGeometry } from '@/lib/scene-analysis';
 import { Object3D, PerspectiveCamera } from 'three';
+import { NotFoundError } from '@/types/p2p/metadata-manager';
 
 // Create MetadataManagerFactory instance
 const metadataManagerFactory = new MetadataManagerFactory({
@@ -69,15 +70,11 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       throw new Error('No model ID available');
     }
 
+    // Construct the metadata object first
+    let environmentalMetadata: EnvironmentalMetadata;
     try {
-      console.log('Storing environmental metadata for model:', modelId);
-      
-      // Analyze the current scene
       const sceneGeometry = analyzeSceneGeometry(modelRef);
-      console.log('Scene geometry analyzed:', sceneGeometry);
-      
-      // Create environmental metadata
-      const environmentalMetadata: EnvironmentalMetadata = {
+      environmentalMetadata = {
         lighting: {
           intensity: 1.0,
           color: '#ffffff',
@@ -115,25 +112,54 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
           minFramingMargin: 0.1
         }
       };
-
       console.log('Created environmental metadata:', environmentalMetadata);
+    } catch (error) {
+        console.error('Failed to analyze scene or construct metadata object:', error);
+        throw new Error('Failed to prepare metadata for storage');
+    }
 
-      // Initialize and store/update metadata
-      await metadataManager.initialize();
+    // Initialize and attempt to store/update
+    try {
+      await metadataManager.initialize(); // Ensure initialized
+
       try {
         console.log('Attempting to get existing metadata...');
         await metadataManager.getEnvironmentalMetadata(modelId);
-        console.log('Existing metadata found, updating...');
-        await metadataManager.updateEnvironmentalMetadata(modelId, environmentalMetadata);
-        console.log('Metadata updated successfully');
-      } catch (error) {
-        console.log('No existing metadata found, storing new metadata...');
-        await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
-        console.log('New metadata stored successfully');
+        // If get succeeds, metadata exists, proceed to update
+        console.log('Existing metadata found, attempting update...');
+        try {
+          await metadataManager.updateEnvironmentalMetadata(modelId, environmentalMetadata);
+          console.log('Metadata updated successfully via updateEnvironmentalMetadata.');
+        } catch (updateError) {
+          console.error('Failed during updateEnvironmentalMetadata call:', updateError);
+          // Rethrow or handle specific update errors if necessary
+          throw updateError; 
+        }
+      } catch (getError) {
+        // If get fails, check if it was NotFoundError
+        console.log('getEnvironmentalMetadata failed, checking error type...');
+        if (getError instanceof NotFoundError) {
+          // Metadata doesn't exist, so store it for the first time
+          console.log('NotFoundError caught, storing new metadata...');
+          try {
+            await metadataManager.storeEnvironmentalMetadata(modelId, environmentalMetadata);
+            console.log('New metadata stored successfully via storeEnvironmentalMetadata.');
+          } catch (storeError) {
+            console.error('Failed during storeEnvironmentalMetadata call:', storeError);
+             // Rethrow or handle specific store errors if necessary
+            throw storeError;
+          }
+        } else {
+          // The error during get was something else (DB connection, RLS, etc.)
+          console.error('Failed to get existing metadata due to unexpected error:', getError);
+          throw getError; // Re-throw the unexpected error
+        }
       }
     } catch (error) {
-      console.error('Failed to store environmental metadata:', error);
-      throw error;
+      // Catch errors from initialize, or re-thrown errors from update/store/unexpected get
+      console.error('Failed to store or update environmental metadata:', error);
+      // Ensure the error is propagated
+      throw error instanceof Error ? error : new Error('Failed to save environmental metadata');
     }
   }
 }));
