@@ -264,7 +264,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
   }, [duration, inputDuration]);
 
-  const handleGeneratePath = async () => {
+  const handleGeneratePath = async (isRetry: boolean = false) => {
     if (!instruction.trim()) {
       toast.error('Please describe the camera movement you want');
       return;
@@ -346,19 +346,49 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       };
       
       // Call the API to generate camera path
-      const pathResponse = await fetch('/api/camera-path', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload: any = {
           instruction,
           duration: parseFloat(inputDuration),
           modelId
-        }),
+      };
+
+      // If it's a retry, add context
+      if (isRetry) {
+          payload.retryContext = { reason: 'bounding_box_violation' };
+          toast.info('Attempting to generate path again with feedback...');
+      }
+
+      const pathResponse = await fetch('/api/camera-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload), // Use the constructed payload
       });
 
       if (!pathResponse.ok) {
-        const error = await pathResponse.json();
-        throw new Error(error.error || 'Failed to generate camera path');
+        // --- MODIFIED ERROR HANDLING --- START
+        const errorResponse = await pathResponse.json();
+        console.error('API Error Response:', errorResponse);
+
+        // Check for specific bounding box violation code
+        if (pathResponse.status === 422 && errorResponse?.code === 'PATH_VIOLATION_BOUNDING_BOX') {
+            // Handle specific error: Show retry option
+            toast.error('Generated path needs another try!', {
+                description: 'The camera path might have entered the object. Would you like to generate it again?',
+                action: {
+                    label: 'Try Again',
+                    onClick: () => handleGeneratePath(true) // Pass flag to indicate retry
+                },
+            });
+            // Reset state without throwing a blocking error
+            setGeneratePathState('initial'); 
+            setCommands([]);
+            setIsGenerating(false); // Ensure loading state stops
+            return; // Stop further processing for this attempt
+        } else {
+            // Throw generic error for other failures
+            throw new Error(errorResponse.error || `API Error: ${pathResponse.status} ${pathResponse.statusText}`);
+        }
+        // --- MODIFIED ERROR HANDLING --- END
       }
 
       // Process the response - expecting CameraCommand[]

@@ -94,6 +94,7 @@ export interface PromptCompiler {
    * @param modelMetadata Metadata associated with the current model.
    * @param currentCameraState Current position and target of the camera.
    * @param requestedDuration The requested duration for the prompt.
+   * @param retryFeedback Optional feedback string from a previous failed attempt.
    * @returns A promise resolving to the compiled prompt object.
    */
   compilePrompt(
@@ -102,7 +103,8 @@ export interface PromptCompiler {
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
     currentCameraState: { position: Vector3; target: Vector3; fov: number },
-    requestedDuration: number
+    requestedDuration: number,
+    retryFeedback?: string
   ): Promise<CompiledPrompt>;
 
   /**

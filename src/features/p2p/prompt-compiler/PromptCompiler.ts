@@ -108,7 +108,8 @@ export class PromptCompilerImpl implements PromptCompiler {
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
-    rawCameraState: { position: Vector3; target: Vector3; fov: number } 
+    rawCameraState: { position: Vector3; target: Vector3; fov: number },
+    retryFeedback?: string
   ): string {
     this.logger.debug('[generateSystemMessage] Inputs:', { sceneAnalysis, envAnalysis, modelMetadata, rawCameraState });
     
@@ -161,7 +162,7 @@ export class PromptCompilerImpl implements PromptCompiler {
 `;
 
     // Updated system message
-    return `You are a professional cinematographer generating a camera path for a 3D scene.
+    const coreSystemMessage = `You are a professional cinematographer generating a camera path for a 3D scene.
 IMPORTANT: Respond ONLY with a valid JSON object matching the specified format. No other text.
 
 JSON OUTPUT FORMAT:
@@ -169,13 +170,13 @@ ${jsonOutputFormat}
 
 Scene Information:
 - Object dimensions: ${dimString}
-- Object Center (x,y,z): ${objectCenterString}
+- Object Center (x,y,z): ${objectCenterString} (TARGET FOR ALL FRAMES AFTER FIRST)
 - Floor offset: ${floorOffsetString} units
 - Scene complexity: ${complexityString}
 
 Current Camera State (Locked Starting Point):
-- Position (x,y,z): ${rawPosString}
-- Target (x,y,z): ${initialRawTargetString}
+- Position (x,y,z): ${rawPosString} (STARTING POSITION)
+- Initial Target (x,y,z): ${initialRawTargetString} (STARTING TARGET)
 - Distance to Object Center: ${camDistCenterString} units
 - Distance to Object Bounding Box: ${camDistBoxString} units
 - Field of view: ${camFovString} degrees
@@ -191,6 +192,13 @@ Please generate a camera path JSON based on the User Request below that:
 4. **CRITICAL FOR CORRECT FRAMING:** To keep the object centered, the 'target' value for **ALL** keyframes AFTER THE FIRST ONE must be the fixed 'Object Center' coordinates: ${objectCenterString}. Do not change the target after the first frame.
 5. Creates smooth, professional, and visually appealing camera movements appropriate for the scene and object.
 6. Interprets the User Request to define the overall motion starting from the locked camera state.`;
+
+    // Prepend feedback if it exists
+    if (retryFeedback) {
+      return `${retryFeedback}\n\n---\n\n${coreSystemMessage}`;
+    } else {
+      return coreSystemMessage;
+    }
   }
 
   async compilePrompt(
@@ -199,18 +207,20 @@ Please generate a camera path JSON based on the User Request below that:
     envAnalysis: EnvironmentalAnalysis,
     modelMetadata: ModelMetadata,
     currentCameraState: { position: Vector3; target: Vector3; fov: number }, 
-    requestedDuration: number
+    requestedDuration: number,
+    retryFeedback?: string
   ): Promise<CompiledPrompt> {
     const startTime = performance.now();
     this.logger.debug('[compilePrompt] Received envAnalysis:', envAnalysis);
     this.logger.debug('[compilePrompt] envAnalysis.cameraConstraints:', envAnalysis?.cameraConstraints);
     
-    // Pass the raw state directly to generateSystemMessage
+    // Pass the raw state AND feedback directly to generateSystemMessage
     const systemMessage = this.generateSystemMessage(
       sceneAnalysis,
       envAnalysis,
       modelMetadata,
-      currentCameraState 
+      currentCameraState,
+      retryFeedback
     );
 
     const endTime = performance.now();

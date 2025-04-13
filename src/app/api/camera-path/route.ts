@@ -290,6 +290,14 @@ export async function POST(request: Request) {
     await interpreter.initialize(interpreterConfig);
     logger.info('Scene Interpreter initialized with config:', interpreterConfig);
 
+    // --- Get Retry Context from Request Body (if any) ---
+    const retryReason = body.retryContext?.reason;
+    let retryFeedbackString: string | undefined = undefined;
+    if (retryReason === 'bounding_box_violation') {
+        retryFeedbackString = "Previous Attempt Feedback: The generated path failed because the camera position entered the object's bounding box. Ensure the new path strictly respects the object boundaries and maintains a distance greater than the 'Distance to Object Bounding Box' provided.";
+        logger.info('Generating prompt with retry feedback for bounding box violation.');
+    }
+
     // --- Compile Prompt --- 
     let compiledPrompt: CompiledPrompt;
     try {
@@ -300,7 +308,8 @@ export async function POST(request: Request) {
         environmentalAnalysis, 
         modelMetadata, 
         currentCameraState, 
-        duration
+        duration,
+        retryFeedbackString // Pass optional feedback string
       );
       logger.debug('Prompt compiled successfully'); 
     } catch (promptError) {
@@ -343,17 +352,50 @@ export async function POST(request: Request) {
       // --- Interpret and Validate Path --- 
       let commands: CameraCommand[];
       try {
+        // 1. Get object bounds from environmentalAnalysis
+        if (!environmentalAnalysis?.object?.bounds?.min || !environmentalAnalysis?.object?.bounds?.max) {
+            logger.error('Object bounds not available in environmentalAnalysis for validation.');
+            throw new Error('Object bounds missing for path validation.');
+        }
+        const objectBounds = new Box3(
+            environmentalAnalysis.object.bounds.min,
+            environmentalAnalysis.object.bounds.max
+        );
+        
+        // 2. Interpret the path
         commands = interpreter.interpretPath(cameraPath);
         logger.info(`Interpretation resulted in ${commands.length} commands.`);
-        const commandValidation = interpreter.validateCommands(commands);
+
+        // 3. Validate commands, passing the bounds
+        const commandValidation = interpreter.validateCommands(commands, objectBounds);
         if (!commandValidation.isValid) {
           logger.error('Generated commands failed validation:', commandValidation.errors);
-          throw new Error(`Generated commands failed validation: ${commandValidation.errors.join(', ')}`);
+          // Check if the specific error is bounding box violation
+          const isBoundingBoxError = commandValidation.errors.some(err => err.startsWith('PATH_VIOLATION_BOUNDING_BOX'));
+          if (isBoundingBoxError) {
+              // Return specific response for bounding box violation
+              return NextResponse.json(
+                  { error: "Validation Failed: Path enters object bounds", code: "PATH_VIOLATION_BOUNDING_BOX" },
+                  { status: 422 } // 422 Unprocessable Entity might be suitable
+              );
+          } else {
+              // Throw a generic error for other validation failures
+              throw new Error(`Generated commands failed validation: ${commandValidation.errors.join(', ')}`);
+          }
         }
         logger.info('Generated commands passed validation.');
       } catch (interpretationError) {
           logger.error('Error during path interpretation or command validation:', interpretationError);
           const errorMessage = interpretationError instanceof Error ? interpretationError.message : 'Unknown interpretation error';
+          // Avoid returning the specific bounding box error code here if it was already handled
+          if (errorMessage.includes('PATH_VIOLATION_BOUNDING_BOX')) {
+             // This case should ideally not be reached if the specific check above works,
+             // but as a fallback, return a generic server error.
+             return NextResponse.json(
+                { error: 'Path validation failed.' },
+                { status: 500 } 
+             );
+          }
           return NextResponse.json(
               { error: `Path Interpretation Failed: ${errorMessage}` },
               { status: 500 } 

@@ -1,4 +1,4 @@
-import { Vector3, Camera } from 'three';
+import { Vector3, Camera, Box3 } from 'three';
 import {
   P2PError,
   ValidationResult,
@@ -60,9 +60,12 @@ export interface SceneInterpreter {
   ): Promise<void>;
 
   /**
-   * Validate camera commands
+   * Validate camera commands against constraints like bounding box
    */
-  validateCommands(commands: CameraCommand[]): ValidationResult;
+  validateCommands(
+    commands: CameraCommand[], 
+    objectBounds: Box3
+  ): ValidationResult;
 
   /**
    * Get performance metrics
