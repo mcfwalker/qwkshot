@@ -89,6 +89,15 @@ export interface CameraConstraints {
 }
 
 /**
+ * Measurements relative to the current camera position
+ */
+export interface CameraRelativeMeasurements {
+  distanceToCenter: number; // Distance from camera position to object center
+  distanceToBoundingBox: number; // Distance from camera position to the closest point on the object's bounding box
+  // Add other relevant relative measurements here later, e.g., relative orientation vector
+}
+
+/**
  * Complete environmental analysis result
  */
 export interface EnvironmentalAnalysis {
@@ -96,6 +105,7 @@ export interface EnvironmentalAnalysis {
   object: ObjectMeasurements;
   distances: DistanceMeasurements;
   cameraConstraints: CameraConstraints;
+  cameraRelative: CameraRelativeMeasurements;
   performance: PerformanceMetrics;
 }
 
@@ -109,9 +119,12 @@ export interface EnvironmentalAnalyzer {
   initialize(config: EnvironmentalAnalyzerConfig): Promise<void>;
 
   /**
-   * Analyze the environment using scene analysis data
+   * Analyze the environment using scene analysis data AND camera state
    */
-  analyzeEnvironment(sceneAnalysis: SceneAnalysis): Promise<EnvironmentalAnalysis>;
+  analyzeEnvironment(
+    sceneAnalysis: SceneAnalysis,
+    currentCameraState: { position: Vector3; target: Vector3; fov: number }
+  ): Promise<EnvironmentalAnalysis>;
 
   /**
    * Get environment measurements

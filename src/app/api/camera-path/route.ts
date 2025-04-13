@@ -60,10 +60,6 @@ const sceneAnalyzerFactory = new SceneAnalyzerFactory(logger);
 const environmentalAnalyzerFactory = new EnvironmentalAnalyzerFactory(logger);
 
 export async function POST(request: Request) {
-  // *** ADD LOGGING: Start ***
-  console.log('>>> API ROUTE START'); 
-  logger.info('>>> API ROUTE START - Logger');
-
   try { // Outer try for the whole request
     logger.info('Starting camera path generation request');
 
@@ -96,28 +92,32 @@ export async function POST(request: Request) {
 
     // --- Process Request Body --- 
     const body = await request.json();
-    logger.info('>>> Request Body Parsed'); 
     const { instruction, duration, modelId } = body; 
 
     // --- Declare Context Variables --- 
     let modelMetadata: ModelMetadata;
-    let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null; 
+    let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null = null; // Initialize as null
     let environmentalAnalysis: EnvironmentalAnalysis;
     let sceneAnalysis: SceneAnalysis | null = null;
+    // Declare currentCameraState outside the try block
+    let currentCameraState: { position: Vector3; target: Vector3; fov: number };
 
     // --- Fetch & Analyze Context Data --- 
     logger.info(`Fetching context data for modelId: ${modelId}`);
     try { 
         modelMetadata = await metadataManager.getModelMetadata(modelId);
         if (!modelMetadata) throw new Error(`Model metadata not found for id: ${modelId}`);
-        logger.info('>>> Model Metadata Fetched Successfully'); 
         
         fetchedEnvironmentalMetadata = await metadataManager.getEnvironmentalMetadata(modelId);
         if (!fetchedEnvironmentalMetadata) {
              logger.error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
              throw new Error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
         }
-        logger.info('>>> Environmental Metadata Fetched Successfully');
+        if (!fetchedEnvironmentalMetadata.camera?.position || !fetchedEnvironmentalMetadata.camera?.target) {
+            logger.error('Fetched environmental metadata is missing essential camera position or target.');
+            throw new Error('Stored environmental metadata is incomplete (missing camera position/target).');
+        }
+        logger.info('Environmental Metadata Fetched and Validated Successfully');
 
         // --- DESERIALIZATION STEP --- 
         logger.info('Attempting to deserialize stored SceneAnalysis...');
@@ -204,20 +204,40 @@ export async function POST(request: Request) {
         if (!sceneAnalysis) {
              throw new Error('SceneAnalysis could not be obtained or constructed.');
         }
+        
+        // --- Construct Camera State --- 
+        // We already validated fetchedEnvironmentalMetadata and its camera properties above
+        // Assign to the variable declared outside the try block
+        currentCameraState = {
+            position: new Vector3(
+                fetchedEnvironmentalMetadata.camera.position.x,
+                fetchedEnvironmentalMetadata.camera.position.y,
+                fetchedEnvironmentalMetadata.camera.position.z
+            ),
+            target: new Vector3(
+                fetchedEnvironmentalMetadata.camera.target.x,
+                fetchedEnvironmentalMetadata.camera.target.y,
+                fetchedEnvironmentalMetadata.camera.target.z
+            ),
+            fov: fetchedEnvironmentalMetadata.camera.fov ?? 50 // Use fetched FOV, default to 50
+        };
+        logger.debug('Constructed currentCameraState from fetched metadata');
 
         // --- Analyze Environment --- 
-        logger.info('Analyzing environment...');
-        environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis); 
+        logger.info('Analyzing environment with scene and camera state...');
+        environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(
+            sceneAnalysis, 
+            currentCameraState // Now passing the state
+        ); 
         if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
-        logger.info('>>> Context Data Fetched & Analyzed Successfully'); 
         logger.debug('Successfully fetched and analyzed context data');
 
     } catch (contextError) { // Catch for context fetching/analysis errors
         logger.error('Error fetching/analyzing context data:', contextError);
         const errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
         return NextResponse.json({ error: `Failed to fetch context data: ${errorMessage}` }, { status: 500 });
-    } // CORRECTED try...catch block ends here
+    }
 
     // --- Input Validation --- 
     if (!instruction || !duration || !modelId || !fetchedEnvironmentalMetadata) { 
@@ -233,7 +253,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    logger.info('>>> Input Parameters Validated'); 
 
     // --- Get Provider & Configure --- 
     const provider = await getActiveProvider() as LLMProvider;
@@ -271,30 +290,10 @@ export async function POST(request: Request) {
     await interpreter.initialize(interpreterConfig);
     logger.info('Scene Interpreter initialized with config:', interpreterConfig);
 
-    // Construct currentCameraState from FETCHED environmental metadata
-    if (!fetchedEnvironmentalMetadata.camera?.position || !fetchedEnvironmentalMetadata.camera?.target) {
-        logger.error('Fetched environmental metadata is missing camera position or target.');
-        return NextResponse.json({ error: 'Stored environmental metadata is incomplete (missing camera state).' }, { status: 500 });
-    }
-    const currentCameraState = {
-      position: new Vector3(
-        fetchedEnvironmentalMetadata.camera.position.x,
-        fetchedEnvironmentalMetadata.camera.position.y,
-        fetchedEnvironmentalMetadata.camera.position.z
-      ),
-      target: new Vector3(
-        fetchedEnvironmentalMetadata.camera.target.x,
-        fetchedEnvironmentalMetadata.camera.target.y,
-        fetchedEnvironmentalMetadata.camera.target.z
-      ),
-      fov: fetchedEnvironmentalMetadata.camera.fov ?? 50 // Use fetched FOV, default to 50
-    };
-
-    logger.info('>>> Using Camera State From Fetched Metadata:', JSON.stringify(currentCameraState));
-
     // --- Compile Prompt --- 
     let compiledPrompt: CompiledPrompt;
     try {
+      // currentCameraState should now be accessible here
       compiledPrompt = await promptCompiler.compilePrompt(
         instruction, 
         sceneAnalysis, // Use non-null sceneAnalysis
@@ -316,8 +315,6 @@ export async function POST(request: Request) {
 
     // Generate the path using the LLM Engine (using the compiledPrompt)
     logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model); 
-    // Log the prompt being sent
-    logger.info('>>> Compiled Prompt Sent to Engine:', JSON.stringify(compiledPrompt, null, 2)); 
     try {
       const response = await engine.generatePath(compiledPrompt);
 
@@ -363,7 +360,6 @@ export async function POST(request: Request) {
           );
       }
       
-      logger.info('>>> API ROUTE END - Success');
       return NextResponse.json(commands);
 
     } catch (engineError) {

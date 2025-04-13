@@ -110,11 +110,6 @@ export class PromptCompilerImpl implements PromptCompiler {
     modelMetadata: ModelMetadata,
     rawCameraState: { position: Vector3; target: Vector3; fov: number } 
   ): string {
-    const llmFriendlyCameraState = this.transformCameraState(
-      rawCameraState.position,
-      rawCameraState.target,
-      rawCameraState.fov
-    );
     this.logger.debug('[generateSystemMessage] Inputs:', { sceneAnalysis, envAnalysis, modelMetadata, rawCameraState });
     
     // Safely destructure envAnalysis...
@@ -122,6 +117,7 @@ export class PromptCompilerImpl implements PromptCompiler {
         environment = {}, 
         object = { dimensions: { width: 0, height: 0, depth: 0 }, floorOffset: 0 }, 
         distances = { fromObjectToBoundary: { front: 0, back: 0 } }, 
+        cameraRelative = { distanceToCenter: 0, distanceToBoundingBox: 0 }
     } = envAnalysis || {};
 
     // Safely destructure modelMetadata...
@@ -134,11 +130,12 @@ export class PromptCompilerImpl implements PromptCompiler {
     const dimString = object?.dimensions ? `${object.dimensions.width?.toFixed(2)}x${object.dimensions.height?.toFixed(2)}x${object.dimensions.depth?.toFixed(2)} units` : 'unknown dimensions';
     const floorOffsetString = typeof object?.floorOffset === 'number' ? object.floorOffset.toFixed(2) : 'unknown';
     const complexityString = sceneAnalysis?.spatial?.complexity ?? 'unknown'; // Keep complexity?
-    const camDistString = typeof llmFriendlyCameraState?.distance === 'number' ? llmFriendlyCameraState.distance.toFixed(2) : 'unknown';
-    const camHeightString = typeof llmFriendlyCameraState?.height === 'number' ? llmFriendlyCameraState.height.toFixed(2) : 'unknown';
-    const camAngleString = typeof llmFriendlyCameraState?.angle === 'number' ? llmFriendlyCameraState.angle.toFixed(2) : 'unknown';
-    const camTiltString = typeof llmFriendlyCameraState?.tilt === 'number' ? llmFriendlyCameraState.tilt.toFixed(2) : 'unknown';
-    const camFovString = typeof llmFriendlyCameraState?.fov === 'number' ? llmFriendlyCameraState.fov.toFixed(2) : 'unknown';
+    
+    // USE new cameraRelative values
+    const camDistCenterString = typeof cameraRelative?.distanceToCenter === 'number' ? cameraRelative.distanceToCenter.toFixed(2) : 'unknown';
+    const camDistBoxString = typeof cameraRelative?.distanceToBoundingBox === 'number' ? cameraRelative.distanceToBoundingBox.toFixed(2) : 'unknown';
+    
+    const camFovString = typeof rawCameraState?.fov === 'number' ? rawCameraState.fov.toFixed(2) : 'unknown'; // Keep FOV from raw state
     const lightingString = lighting ? `- Lighting: ${lighting.intensity} intensity, ${lighting.color} color` : '';
     const sceneString = scene ? `- Background: ${scene.background}\n- Ground: ${scene.ground}\n- Atmosphere: ${scene.atmosphere}` : '';
     const rawPosString = formatVector3(rawCameraState.position);
@@ -179,10 +176,8 @@ Scene Information:
 Current Camera State (Locked Starting Point):
 - Position (x,y,z): ${rawPosString}
 - Target (x,y,z): ${initialRawTargetString}
-- Distance from object: ${camDistString} units
-- Height above object: ${camHeightString} units
-- Horizontal angle: ${camAngleString} degrees
-- Tilt angle: ${camTiltString} degrees
+- Distance to Object Center: ${camDistCenterString} units
+- Distance to Object Bounding Box: ${camDistBoxString} units
 - Field of view: ${camFovString} degrees
 
 Environmental Conditions:

@@ -7,6 +7,7 @@ import {
   ObjectMeasurements,
   DistanceMeasurements,
   CameraConstraints,
+  CameraRelativeMeasurements,
   AnalysisError,
   ValidationError,
   MeasurementError,
@@ -39,14 +40,17 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
     this.logger.info('Environmental Analyzer initialized successfully');
   }
 
-  async analyzeEnvironment(sceneAnalysis: SceneAnalysis): Promise<EnvironmentalAnalysis> {
+  async analyzeEnvironment(
+    sceneAnalysis: SceneAnalysis,
+    currentCameraState: { position: Vector3; target: Vector3; fov: number }
+  ): Promise<EnvironmentalAnalysis> {
     if (!this.initialized) {
       this.logger.error('Environmental Analyzer not initialized');
       throw new AnalysisError('Environmental Analyzer not initialized');
     }
 
     const startTime = performance.now();
-    this.logger.info('Starting environment analysis with scene:', sceneAnalysis);
+    this.logger.info('Starting environment analysis with scene:', sceneAnalysis, 'and camera:', currentCameraState);
 
     try {
       // Calculate environment bounds
@@ -64,6 +68,28 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
       // Calculate camera constraints
       const cameraConstraints = this.calculateCameraConstraints(object);
       this.logger.info('Camera constraints calculated:', cameraConstraints);
+
+      // --- Calculate Camera Relative Measurements --- START
+      const cameraPosition = currentCameraState.position;
+      const objectCenter = object.bounds.center;
+      const objectBoundingBox = new Box3(object.bounds.min, object.bounds.max);
+      
+      // 1. Distance to Center
+      const distanceToCenter = cameraPosition.distanceTo(objectCenter);
+      this.logger.debug(`Calculated distanceToCenter: ${distanceToCenter}`);
+
+      // 2. Distance to Bounding Box
+      // Create a temporary Vector3 to store the closest point
+      const closestPointOnBox = new Vector3(); 
+      objectBoundingBox.clampPoint(cameraPosition, closestPointOnBox);
+      const distanceToBoundingBox = cameraPosition.distanceTo(closestPointOnBox);
+      this.logger.debug(`Calculated distanceToBoundingBox: ${distanceToBoundingBox}`);
+
+      const cameraRelative: CameraRelativeMeasurements = {
+          distanceToCenter,
+          distanceToBoundingBox,
+      };
+      // --- Calculate Camera Relative Measurements --- END
 
       const endTime = performance.now();
       this.performanceMetrics = {
@@ -83,11 +109,12 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
         averageResponseTime: endTime - startTime
       };
 
-      const analysis = {
+      const analysis: EnvironmentalAnalysis = {
         environment,
         object,
         distances,
         cameraConstraints,
+        cameraRelative,
         performance: this.performanceMetrics,
       };
 
