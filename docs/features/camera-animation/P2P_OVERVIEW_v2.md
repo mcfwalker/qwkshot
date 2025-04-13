@@ -90,7 +90,7 @@ Scene Interpreter → API → Viewer (state) → AnimationController (execution)
 |------------------------|-------------------|--------------------------------------------------------------|
 | Path Processing        | ✅ Implemented   | Processes `CameraPath` into `CameraCommand[]`                |
 | Animation Logic        | ✅ Implemented   | Applies smoothing (Catmull-Rom), assigns easing types. (Execution is client-side) |
-| Safety Enforcement     | ✅ Implemented   | Detailed input path validation added (velocity, bounds etc) |
+| Safety Enforcement     | ✅ Implemented   | Detailed input path validation added (velocity, bounds etc). Bounding box check currently fails to detect some violations. |
 | Viewer Integration     | ✅ Complete      | Provides `CameraCommand[]` via API for client consumption    |
 - **Note:** Performs detailed validation and processing. Output format is `CameraCommand[]`.
 
@@ -120,8 +120,8 @@ To support the pipeline, model information is stored in the `models` table using
 
 3.  **`environmental_metadata` (jsonb): Dynamic User Context (On Lock)**
     *   **Purpose:** Stores the specific state of the viewer environment captured when the user locks the scene for path generation.
-    *   **Key Contents:** `camera` state (position, target, fov), `lighting` info, scene `constraints`.
-    *   **Analogy:** A photograph of the object on the table showing its position and the current conditions right before path generation.
+    *   **Key Contents:** `camera` state (position, target, fov), `lighting` info, scene `constraints`, `modelOffset` (vertical offset applied to model).
+    *   **Analogy:** A photograph of the object on the table showing its position (including vertical offset) and the current conditions right before path generation.
 
 *Note: Other top-level columns like `id`, `name`, `user_id`, `file_url`, `created_at` store essential record identifiers.*
 

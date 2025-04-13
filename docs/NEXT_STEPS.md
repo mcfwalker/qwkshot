@@ -28,14 +28,22 @@
 - ✅ Fix Environmental Metadata Capture (FOV)
 - ✅ Address UI inconsistencies (Tooltips, Create New Shot, Playback Reset)
 - ✅ **Integrate Scene Analyzer Data Pipeline:** Refactored model saving & env metadata updates to use Server Actions; added dedicated `scene_analysis` DB column; implemented serialization/deserialization; fixed related client-side state bugs.
+- ✅ Investigated P2P component architecture (`EnvironmentalAnalyzer`, `PromptCompiler`, `MetadataManager`) and data flow.
+- ✅ Refactored `EnvironmentalAnalyzer` & `PromptCompiler` to use camera-relative context (`distanceToCenter`, `distanceToBoundingBox`) in prompt.
+- ✅ Implemented backend bounding box validation check in `SceneInterpreter`.
+- ✅ Implemented client-side retry mechanism for bounding box validation failures.
+- ✅ Fixed bug where `modelOffset` was not applied during backend validation.
+- ✅ Resolved code execution issues related to singleton pattern in `getSceneInterpreter`.
+- ✅ Cleaned up debug logs in `/api/camera-path` route.
 
 ## Current Work & Future Phases
 
 ### Immediate Next Steps (Formerly Current Priorities)
-1.  **Verify Downstream Usage of `SceneAnalysis`**: Inspect internals of `EnvironmentalAnalyzer` and `PromptCompiler` to ensure they effectively use the detailed deserialized `SceneAnalysis` data.
-2.  **Code Cleanup**: Remove temporary `console.log` statements added for debugging the data pipeline refactor.
-3.  **Implement proper Authentication/Authorization** for API route data fetching.
-4.  **Address remaining TODOs** in Engine/Interpreter (Smoothing, validation details, etc. - Part of Phase 4 validation enhancements).
+1.  **Diagnose Bounding Box Validation:** Resolve the issue where `SceneInterpreter.validateCommands` (`Box3.containsPoint`) fails to detect bounding box violations despite visual confirmation. This involves fixing log visibility within the function and analyzing the check results.
+2.  **Implement Robust Clipping Prevention:** Based on the validation diagnosis, enhance clipping prevention (e.g., stronger prompt instructions, validation padding/buffer).
+3.  **Implement API Authentication/Authorization:** Secure the `/api/camera-path` route (and review Server Action auth).
+4.  **Address React Warning:** Investigate the low-priority "Cannot update a component (`SceneControls`)..." warning.
+5.  **Address remaining TODOs** in Engine/Interpreter (Further validation details, etc. - Part of Phase 4 validation enhancements).
 
 ### Phase Status Overview
 
@@ -133,17 +141,16 @@
 - Focus on clean interfaces
 
 ## Blockers and Issues
-- **Type errors currently exist on `main` branch due to previous merge (Commit `632c3b0`). Needs fixing before proceeding.**
+- Type errors currently exist on `main` branch due to previous merge (Commit `632c3b0`). Needs fixing before proceeding.
 - API route requires proper Auth strategy to work with RLS enabled.
-- `SceneAnalysis` placeholder limits accuracy -> Use of simplified SceneAnalysis data in path generation limits context accuracy.
+- **Bounding Box Validation Failing:** `SceneInterpreter.validateCommands` does not reliably detect when camera positions enter the object's bounding box, even after fixing the `modelOffset` calculation. `Box3.containsPoint` check seems insufficient or is failing silently. Debugging logs within the function are currently not appearing as expected.
 - LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
-- ~~Inconsistent disabled state styling/tooltips (esp. LockButton) due to component/event interactions.~~ (Resolved)
 - React Warning: "Cannot update a component (`SceneControls`) while rendering a different component (`Viewer`)" appears in browser console on model load/URL change. Likely due to `Viewer`'s `useEffect` updating Zustand store (`setModelId`), causing `SceneControls` (subscribed to store) to attempt an update during `Viewer`'s render. Needs investigation (React DevTools, Zustand selectors, Tooltip interaction). (Low priority if app functions correctly).
 
 ## Next Session Focus (Updated)
-1.  Verify Downstream Usage of `SceneAnalysis`.
-2.  Code Cleanup (Remove Debug Logs).
-3.  Implement API Authentication/Authorization.
+1.  Fix logging visibility within `SceneInterpreter.validateCommands`.
+2.  Diagnose and resolve the `Box3.containsPoint` validation failure.
+3.  Implement improved clipping prevention measures (prompting and/or validation refinement).
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 

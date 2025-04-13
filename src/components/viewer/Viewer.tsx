@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -131,6 +131,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const { isLocked, setModelId, setLock } = useViewerStore();
   const pathname = usePathname();
 
+  const [boundingBoxHelper, setBoundingBoxHelper] = useState<Box3Helper | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
+
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
     let extractedModelId: string | undefined;
@@ -168,6 +171,37 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     }); 
 
   }, [pathname, modelUrl, setModelId, setResetCounter]); // ADD pathname to dependencies
+
+  // --- Effect to Add/Remove Bounding Box Helper --- START
+  useEffect(() => {
+    if (modelRef.current && sceneRef.current) {
+      console.log("Viewer: Model loaded, adding bounding box helper.");
+      // Calculate bounding box
+      const box = new Box3().setFromObject(modelRef.current);
+      
+      // Create helper
+      const helper = new Box3Helper(box, 0xffff00); // Yellow color
+      setBoundingBoxHelper(helper);
+      sceneRef.current.add(helper);
+
+      // Cleanup function
+      return () => {
+        console.log("Viewer: Cleaning up bounding box helper.");
+        if (helper && sceneRef.current) {
+          sceneRef.current.remove(helper);
+        }
+        setBoundingBoxHelper(null);
+      };
+    } else {
+        // Ensure helper is removed if model becomes null
+        if (boundingBoxHelper && sceneRef.current) {
+            console.log("Viewer: Model removed, cleaning up bounding box helper.");
+            sceneRef.current.remove(boundingBoxHelper);
+            setBoundingBoxHelper(null);
+        }
+    }
+  }, [modelRef.current, modelHeight]); // Line 232: Add modelHeight dependency
+  // --- Effect to Add/Remove Bounding Box Helper --- END
 
   // Handle model height changes with validation and feedback
   const handleModelHeightChange = (newHeight: number) => {
@@ -321,6 +355,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         ref={canvasRef}
         shadows
         camera={{ position: [5, 5, 5], fov }}
+        onCreated={({ scene }) => { sceneRef.current = scene; }} // Capture scene reference
       >
         <Suspense fallback={null}>
           {/* Camera setup */}
@@ -415,6 +450,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           duration={duration} 
           playbackSpeed={playbackSpeed}
           fov={fov}
+          modelHeight={modelHeight} // Pass modelHeight prop
           // Pass down relevant handlers/callbacks
           onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
           onStop={handleAnimationStop} // Maybe need a dedicated reset handler?

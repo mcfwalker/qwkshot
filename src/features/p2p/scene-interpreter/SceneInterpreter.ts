@@ -57,23 +57,39 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     commands: CameraCommand[],
     objectBounds: Box3
   ): ValidationResult {
+    console.log('--- VALIDATE COMMANDS ENTRY POINT ---');
     this.logger.info('Validating camera commands', { commandCount: commands.length });
     
     // --- Bounding Box Validation --- START
     if (!objectBounds) {
-      this.logger.warn('Object bounds not provided for validation. Skipping bounding box check.');
+      this.logger.warn('Object bounds NOT PROVIDED for validation.');
     } else {
-      for (const command of commands) {
-        if (objectBounds.containsPoint(command.position)) {
-          const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
-          this.logger.warn(`Validation failed: ${errorMsg} at position`, command.position);
-          return {
-            isValid: false,
-            errors: [errorMsg]
-          };
+      // Log the bounds being used for validation
+      this.logger.warn(`[Interpreter] Validating against Bounds: Min/Max received.`);
+      
+      for (const [index, command] of commands.entries()) { // Use entries to get index
+        const pos = command.position;
+        // SIMPLIFIED check and log
+        try {
+            const isContained = objectBounds.containsPoint(pos);
+            this.logger.warn(`[Interpreter] Check ${index}: Contained=${isContained}`);
+
+            if (isContained) {
+              const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
+              this.logger.warn(`[Interpreter] Validation failed: ${errorMsg} at command ${index}`);
+              return {
+                isValid: false,
+                errors: [errorMsg]
+              };
+            }
+        } catch (checkError) {
+            this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError);
+            // Optionally return validation failure on check error
+            return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
         }
       }
-      this.logger.debug('Bounding box validation passed.');
+      // Use WARN temporarily for visibility
+      this.logger.warn('[Interpreter] Bounding box validation passed.');
     }
     // --- Bounding Box Validation --- END
 

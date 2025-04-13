@@ -357,14 +357,26 @@ export async function POST(request: Request) {
             logger.error('Object bounds not available in environmentalAnalysis for validation.');
             throw new Error('Object bounds missing for path validation.');
         }
-        const objectBounds = new Box3(
-            environmentalAnalysis.object.bounds.min,
-            environmentalAnalysis.object.bounds.max
-        );
-        
+        // --- >>> Get model offset from fetchedEnvironmentalMetadata <<< ---
+        const modelOffset = fetchedEnvironmentalMetadata?.modelOffset ?? 0; // Default to 0 if not present
+        logger.debug(`Using modelOffset: ${modelOffset} for bounds calculation`);
+
+        // --- >>> Adjust bounds based on offset <<< ---
+        const originalMin = environmentalAnalysis.object.bounds.min;
+        const originalMax = environmentalAnalysis.object.bounds.max;
+        const adjustedMin = originalMin.clone().setY(originalMin.y + modelOffset);
+        const adjustedMax = originalMax.clone().setY(originalMax.y + modelOffset);
+
+        const objectBounds = new Box3(adjustedMin, adjustedMax);
+
         // 2. Interpret the path
         commands = interpreter.interpretPath(cameraPath);
         logger.info(`Interpretation resulted in ${commands.length} commands.`);
+
+        // <<< ADD LOGGING BEFORE VALIDATION >>>
+        logger.warn(`[API Route] About to validate. Bounds Min: (${objectBounds.min.x}, ${objectBounds.min.y}, ${objectBounds.min.z}), Max: (${objectBounds.max.x}, ${objectBounds.max.y}, ${objectBounds.max.z})`);
+        logger.warn(`[API Route] ObjectBounds is instance of Box3: ${objectBounds instanceof Box3}`);
+        logger.warn(`[API Route] Number of commands to validate: ${commands.length}`);
 
         // 3. Validate commands, passing the bounds
         const commandValidation = interpreter.validateCommands(commands, objectBounds);

@@ -89,7 +89,7 @@ interface ViewerState {
         - Generating a signed URL for client-side file upload directly to storage.
         - Calling the server-side `MetadataManager` to store the full `ModelMetadata` (including `sceneAnalysis`) using the appropriate database adapter logic (saving to `metadata` and `scene_analysis` columns).
     - **Environmental Metadata:** The `CameraAnimationSystem.tsx` component calls the `updateEnvironmentalMetadataAction` Server Action in `src/app/actions/models.ts` when the scene is locked. This action handles:
-        - Calling the server-side `MetadataManager` to update/store the `EnvironmentalMetadata` in the `models` table (`environmental_metadata` column).
+        - Calling the server-side `MetadataManager` to update/store the `EnvironmentalMetadata` (which includes camera state and `modelOffset`) in the `models` table (`environmental_metadata` column).
     - **Other Mutations (Example):** Simpler updates like changing a model name might still use Supabase RPC functions called directly from Server Actions if complex validation/logic resides in the database.
 - **Client Usage (Server Action Example):**
 ```typescript
@@ -470,7 +470,7 @@ export async function GET(request: NextRequest) {
 - **Metadata Storage:** Model-specific metadata is stored across multiple columns for clarity and potential query performance:
     - `metadata` (jsonb): Stores general metadata fields like `orientation`, `preferences`, `geometry`, `performance_metrics` (excluding `sceneAnalysis`).
     - `scene_analysis` (jsonb): Stores the detailed, serialized `SceneAnalysis` object generated during model processing.
-    - `environmental_metadata` (jsonb): Stores the latest camera/environment state captured when the scene is locked.
+    - `environmental_metadata` (jsonb): Stores the latest camera/environment state captured when the scene is locked (including `modelOffset`).
 - **Adapter Logic (`SupabaseAdapter.ts`):
     - `storeModelMetadata`:** Separates the `sceneAnalysis` from the rest of the `ModelMetadata` object and saves them to the `scene_analysis` and `metadata` columns respectively in a single `update` call.
     - `getModelMetadata`:** Selects `id`, `created_at`, `metadata`, `scene_analysis`, `user_id`, `file_url` and reconstructs the full `ModelMetadata` object, combining data from the `metadata` and `scene_analysis` columns.
@@ -482,18 +482,23 @@ export async function GET(request: NextRequest) {
 - **Overview:** Translates user prompts into camera commands, leveraging scene and environmental context.
 - **Client Interaction:**
     - **Model Processing/Saving:** Client (`ModelLoader`) runs analysis via `P2PPipeline.processModel`, then calls `prepareModelUpload` Server Action with results and file info. Client uploads file directly to storage using signed URL from action response.
-    - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state.
-    - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID.
+    - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state and `modelHeight` (as `modelOffset`).
+    - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID (and optionally `retryContext` on subsequent tries).
 - **Backend Flow (`/api/camera-path`):**
-    1. Route handler receives request.
+    1. Route handler receives request (checks for `retryContext`).
     2. Initializes server-side components (`MetadataManager`, `PromptCompiler`, `LLMEngine`, `SceneInterpreter`, `EnvironmentalAnalyzer`).
-    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns).
+    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including `modelOffset`).
     4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data.
-    5. Calls `EnvironmentalAnalyzer.analyzeEnvironment` with deserialized `SceneAnalysis`.
-    6. Calls `PromptCompiler.compilePrompt` with scene/env analysis and other metadata.
-    7. Calls `LLMEngine.generatePath` with compiled prompt.
-    8. Calls `SceneInterpreter.interpretPath` with LLM response.
-    9. Returns final `CameraCommand[]` to client.
+    5. Constructs `currentCameraState` from fetched environmental metadata.
+    6. Calls `EnvironmentalAnalyzer.analyzeEnvironment` with deserialized `SceneAnalysis` and `currentCameraState` (to calculate camera-relative metrics).
+    7. Constructs `retryFeedback` string if applicable.
+    8. Calls `PromptCompiler.compilePrompt` with scene/env analysis, other metadata, camera state, duration, and optional `retryFeedback`.
+    9. Calls `LLMEngine.generatePath` with compiled prompt.
+   10. Calls `SceneInterpreter.interpretPath` with LLM response.
+   11. Calculates adjusted bounding box using `environmentalAnalysis` and fetched `modelOffset`.
+   12. Calls `SceneInterpreter.validateCommands` passing the generated commands and the adjusted bounding box.
+   13. If validation fails due to bounding box violation, returns specific 422 error.
+   14. Otherwise, returns final `CameraCommand[]` to client (or other error).
 
 ## 6. External Integrations
 

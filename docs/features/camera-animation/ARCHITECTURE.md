@@ -82,10 +82,10 @@ Current implementation status and detailed flow diagrams are maintained in P2P_O
   - Path processing (smoothing/easing structure added, execution is client-side)
   - Detailed input path validation (incl. speed, bounds, etc.)
   - Basic output command validation structure
-  - Safety constraint enforcement (partially implemented via validation)
+  - Safety constraint enforcement (partially implemented via validation, incl. bounding box check with known limitations)
 - **Status**: ✅ Substantially Complete (Core structure done, refinement TODOs remain)
 - **Current Implementation**: 
-    - `CoreSceneInterpreter` class.
+    - `SceneInterpreterImpl` class (Note: Previous docs referenced `CoreSceneInterpreter`).
     - `interpretPath` method processes `CameraPath` into `CameraCommand[]`.
     - `validateInputPath` performs detailed checks.
     - Integrated into API route after LLM Engine.
