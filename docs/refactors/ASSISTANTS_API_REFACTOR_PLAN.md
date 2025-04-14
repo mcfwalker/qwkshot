@@ -258,18 +258,18 @@ interface MotionStep {
 *   [X] Finalize Motion Plan JSON schema. *(Completed)*
 *   [X] Finalize Motion KB JSON structure & create initial content for core motions. *(Completed)*
 *   [X] Design `MotionPlannerService` Interface: Define the standard internal interface for generating motion plans. *(Completed)*
-*   [X] **Research & Provider Choice:** Initial research suggests Google Vertex AI (Agent Builder / Gemini+Search) offers potential advantages (cost, structured output). **Decision: Target Vertex AI for the *first* adapter implementation.** *(Research task remains open for deeper investigation)*.
-*   [ ] **Initial Provider Setup (Vertex AI):** Perform basic setup for Vertex AI (e.g., enable APIs, configure data store for KB, get project IDs/keys).
+*   [X] **Research & Provider Choice:** Initial research compared OpenAI Assistants API and Google Vertex AI. **Decision: Target OpenAI Assistants API for the *first* adapter implementation, prioritizing simplicity for the POC.** *(Vertex AI remains a future option.)*.
+*   [ ] **Initial Provider Setup (OpenAI):** Perform basic setup for OpenAI Assistants (e.g., Create Assistant, upload initial KB file, get Assistant ID/API Keys).
 *   [X] Create dedicated feature branch (`feature/assistants-pipeline-refactor`). *(Completed)*
-*   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (Vertex AI)**, basic provider setup.
+*   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (OpenAI)**, basic provider setup.
 
 ### Phase 1: LLM Engine Refactor (Adapter Implementation)
-*   [ ] Implement the **`VertexAIAdapter`** adhering to the `MotionPlannerService` interface.
-*   [ ] Include logic for sending the prompt to the Vertex AI service (Agent Builder or Gemini+Search) and handling the KB interaction.
-*   [ ] Implement parsing and validation of the Vertex AI response to ensure it conforms to the standard `MotionPlan` JSON schema (potentially using Function Calling).
-*   [ ] Set up basic error handling for Vertex AI API calls and response processing.
+*   [ ] Implement the **`OpenAIAssistantAdapter`** adhering to the `MotionPlannerService` interface.
+*   [ ] Include logic for sending the prompt to the OpenAI Assistant service (using threads, runs) and ensuring the KB file is utilized via the Retrieval tool.
+*   [ ] Implement parsing and validation of the Assistant's response to ensure it conforms to the standard `MotionPlan` JSON schema (robust prompting needed).
+*   [ ] Set up basic error handling for OpenAI API calls and response processing.
 *   [ ] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter.
-*   [ ] *Goal:* A functioning **`VertexAIAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object.
+*   [ ] *Goal:* A functioning **`OpenAIAssistantAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object.
 
 ### Phase 2: Scene Interpreter Core & Basic Execution
 *   [ ] Refactor `Scene Interpreter` interface/class structure.
