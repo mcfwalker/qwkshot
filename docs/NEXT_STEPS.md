@@ -35,12 +35,15 @@
 - ✅ Fixed bug where `modelOffset` was not applied during backend validation.
 - ✅ Resolved code execution issues related to singleton pattern in `getSceneInterpreter`.
 - ✅ Cleaned up debug logs in `/api/camera-path` route.
+- ✅ **Fixed Interpreter Logging & Validated Retry:** Resolved issue preventing SceneInterpreter logs from appearing by correcting logger instantiation in the API route; confirmed backend bounding box validation and client-side retry mechanism function correctly.
 
 ## Current Work & Future Phases
 
-### Immediate Next Steps (Formerly Current Priorities)
-1.  **Diagnose Bounding Box Validation:** Resolve the issue where `SceneInterpreter.validateCommands` (`Box3.containsPoint`) fails to detect bounding box violations despite visual confirmation. This involves fixing log visibility within the function and analyzing the check results.
-2.  **Implement Robust Clipping Prevention:** Based on the validation diagnosis, enhance clipping prevention (e.g., stronger prompt instructions, validation padding/buffer).
+> **❗ Focus Shift (2025-04-14):** Project focus has shifted to a major pipeline rearchitecture using the OpenAI Assistants API, as detailed in [`docs/refactors/ASSISTANTS_API_REFACTOR_PLAN.md`](./refactors/ASSISTANTS_API_REFACTOR_PLAN.md). The immediate next steps listed below are **paused** pending the completion and evaluation of this refactor.
+
+### Immediate Next Steps (PAUSED)
+1.  **Refactor Validation Failure UI:** Change the client-side notification for `PATH_VIOLATION_BOUNDING_BOX` from a transient toast to a persistent modal dialog, offering "Try Again".
+2.  **Implement Robust Clipping Prevention:** Enhance clipping prevention (e.g., stronger prompt instructions, explore validation padding/buffer, investigate pre-generation checks).
 3.  **Implement API Authentication/Authorization:** Secure the `/api/camera-path` route (and review Server Action auth).
 4.  **Address React Warning:** Investigate the low-priority "Cannot update a component (`SceneControls`)..." warning.
 5.  **Address remaining TODOs** in Engine/Interpreter (Further validation details, etc. - Part of Phase 4 validation enhancements).
@@ -57,7 +60,7 @@
 ### Phase 4: Pipeline Optimization (Details - Ongoing)
 - [ ] Enhance validation systems
   - [ ] Improve path validation
-  - [ ] Add comprehensive safety checks
+  - [X] Add comprehensive safety checks (Bounding box check implemented)
   - [ ] Implement advanced constraints
   - [ ] Add validation visualization
   - [ ] Implement Real-time Validation Feedback (Client-side)
@@ -143,14 +146,12 @@
 ## Blockers and Issues
 - Type errors currently exist on `main` branch due to previous merge (Commit `632c3b0`). Needs fixing before proceeding.
 - API route requires proper Auth strategy to work with RLS enabled.
-- **Bounding Box Validation Failing:** `SceneInterpreter.validateCommands` does not reliably detect when camera positions enter the object's bounding box, even after fixing the `modelOffset` calculation. `Box3.containsPoint` check seems insufficient or is failing silently. Debugging logs within the function are currently not appearing as expected.
-- LLM not consistently following prompt instructions regarding target coordinates. (Monitor)
+- LLM not consistently following prompt instructions regarding target coordinates or boundary avoidance. (Monitor, address via Prompt Engineering/Clipping Prevention task).
 - Potential conflict exists between allowing lock in any position and planned backend path validation constraints.
 - React Warning: "Cannot update a component (`SceneControls`) while rendering a different component (`Viewer`)" appears in browser console on model load/URL change. Likely due to `Viewer`'s `useEffect` updating Zustand store (`setModelId`), causing `SceneControls` (subscribed to store) to attempt an update during `Viewer`'s render. Needs investigation (React DevTools, Zustand selectors, Tooltip interaction). (Low priority if app functions correctly).
 
 ## Next Session Focus (Updated)
-1.  Fix logging visibility within `SceneInterpreter.validateCommands`.
-2.  Diagnose and resolve the `Box3.containsPoint` validation failure.
-3.  Implement improved clipping prevention measures (prompting and/or validation refinement).
+
+> Focus has shifted to the tasks outlined in [`docs/refactors/ASSISTANTS_API_REFACTOR_PLAN.md`](./refactors/ASSISTANTS_API_REFACTOR_PLAN.md), starting with Phase 0 (Planning & Design).
 
 *This document will be updated at the end of each session to reflect progress and adjust priorities.* 

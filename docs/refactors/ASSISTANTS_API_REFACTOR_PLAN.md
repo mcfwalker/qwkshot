@@ -1,0 +1,310 @@
+# Assistants API Pipeline Refactor Plan
+
+## 1. Goals & Non-Goals
+
+### Goals
+- Integrate OpenAI Assistants API for motion planning.
+- Delegate motion segmentation and high-level parameterization to the Assistant using a Knowledge Base (KB).
+- Shift deterministic geometric path generation and constraint enforcement to the `Scene Interpreter`.
+- Improve reliability and consistency of camera path generation, especially regarding constraints.
+- Reduce prompt token complexity and cost.
+- Enhance modularity and maintainability of the pipeline components.
+
+### Non-Goals (Initial Refactor)
+- Implementing *all* conceivable motion types immediately (start with core set).
+- Major UI changes beyond adapting to the new pipeline's output/errors.
+- Optimizing Assistant latency beyond basic implementation.
+
+## 1.5 Target Example Scenario
+
+To guide the design and evaluate success, we aim to reliably translate complex natural language prompts into smooth, cinematic camera movements. A benchmark example is:
+
+**"Push in rapidly as if attached to an attacking fighter jet, race past the edge of the model, then fly away while looking back at the object."**
+
+This example requires:
+- Understanding multiple sequential actions.
+- Interpreting qualitative descriptions ("rapidly", "fighter jet feel", "race past").
+- Handling specific geometric references ("edge of the model").
+- Maintaining target focus during movement ("looking back at the object").
+- Implicitly respecting constraints (like not crashing into the model).
+
+The proposed architecture aims to achieve this by having the Assistant generate a high-level plan based on its KB, and the Scene Interpreter execute the detailed geometric maneuvers reliably.
+
+## 2. High-Level Architecture
+
+```
+[ React UI ]
+    ↓ (user prompt)
+[ LLM Engine (middleware) ]
+    - Manages Assistant interaction (threads, runs)
+    - Sends user prompt to Assistant
+    - Receives structured motion plan (JSON)
+    ↓ (structured motion plan)
+[ Scene Interpreter (frontend/shared lib) ]
+    - Receives motion plan
+    - Accesses LOCAL Scene/Environmental Analysis data (from Metadata Manager)
+    - Uses geometry & analysis data to generate deterministic keyframes/commands
+    - Handles interpolation, easing, constraints during generation
+    ↓ (executable commands/keyframes)
+[ Camera Animation System (Three.js) ]
+    - Executes commands/plays animation
+```
+
+## 3. Component Roles in New Architecture
+
+*   **React UI:** Largely unchanged, provides user prompt, triggers generation, displays results/errors. Needs adaptation for potential new error modes or plan previews.
+*   **Metadata Manager:** **Retained.** Crucial role continues. Fetches model metadata, including stored `SceneAnalysis` data and `EnvironmentalMetadata` (constraints, initial camera state if applicable). Makes this data available *locally* for the Scene Interpreter.
+*   **Scene Analyzer:** **Retained.** The analysis it performs and stores (via `Metadata Manager`) provides the essential geometric understanding (bounding box, center, features, etc.) that the *Scene Interpreter* needs to execute motion plans correctly.
+*   **Environmental Analyzer:** **Retained.** Continues to analyze the relationship between the camera and the scene *locally*. Its output (`EnvironmentalAnalysis` - distances, relative positions, constraint violations) is critical context for the *Scene Interpreter* during path generation (e.g., calculating zoom distances, orbit radii, checking constraints).
+*   **Prompt Compiler:** **Likely Deprecated/Simplified.** Its main role was to bundle complex context *for the LLM*. In the new model, the LLM (Assistant) receives only the user prompt. The context is used locally by the Interpreter. May retain a minimal role for structuring the *initial* request to the LLM Engine if needed, but not for context injection.
+*   **LLM Engine:** **Refactored.** Becomes an adapter for the Assistants API. Manages threads, runs, KB files. Sends simple prompts, receives structured JSON plan. No longer deals with complex context injection.
+*   **Scene Interpreter:** **Major Refactor/Rewrite.** Becomes the core geometric engine. No longer calls LLM. Takes a *structured plan* and *local context* (Scene/Environmental Analysis) and generates executable paths deterministically. Implements motion primitives (zoom, orbit, etc.). Enforces constraints.
+*   **Camera Animation System:** Largely unchanged. Consumes the output from the `Scene Interpreter` (likely still `CameraCommand[]` or similar) and drives the Three.js camera.
+
+## 4. API Contracts / Schemas
+
+### Motion Knowledge Base (`motion_kb.json` - FINALIZED STRUCTURE)
+
+*This file will be uploaded to the OpenAI Assistant via the File API. It defines the vocabulary of motions the Assistant can plan.* 
+*The Assistant uses the `description`, `parameters` definitions, and `examples` to map user prompts to motion types and parameters.*
+*(Note: Reference external datasets like MultiCamVideo for diverse motion type definitions and parameters during KB population.)*
+
+```json
+[
+  {
+    "name": "static",
+    "description": "Holds the camera at its current position and target for a specified duration.",
+    "parameters": [
+      {
+        "name": "duration",
+        "type": "number",
+        "description": "Time in seconds to hold the position (Note: Assistant should use duration_ratio in plan, Interpreter calculates this).",
+        "required": false
+      }
+    ],
+    "examples": [
+      "Hold position for 2 seconds",
+      "Pause briefly"
+    ]
+  },
+  {
+    "name": "zoom",
+    "description": "Moves the camera closer to (zoom in) or further from (zoom out) a target point along the camera's line of sight.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["in", "out"],
+        "description": "Whether to zoom 'in' or 'out'.",
+        "required": true
+      },
+      {
+        "name": "factor",
+        "type": "number",
+        "description": "Relative amount to zoom (e.g., 0.5 for halfway towards target, 2.0 for doubling distance). Interpreter defines precise calculation.",
+        "required": true
+      },
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Reference point for zooming (e.g., 'object_center', 'current_target'). Default: 'current_target'. Interpreter resolves.",
+        "required": false,
+        "default": "current_target"
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast", "very_fast"],
+        "description": "Qualitative speed hint for easing selection.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Zoom in close",
+      "Slowly zoom out halfway",
+      "Push in fast towards the object center"
+    ]
+  },
+  {
+    "name": "orbit",
+    "description": "Rotates the camera around a central axis while keeping the target point in view.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["clockwise", "counter-clockwise"],
+        "description": "Direction of rotation.",
+        "required": true
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Total angle in degrees to rotate.",
+        "required": true
+      },
+      {
+        "name": "axis",
+        "type": "string",
+        "enum": ["x", "y", "z", "custom"],
+        "description": "Axis of rotation relative to the scene or target. Default: 'y'.",
+        "required": false,
+        "default": "y"
+      },
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Reference point to orbit around (e.g., 'object_center'). Default: 'object_center'. Interpreter resolves.",
+        "required": false,
+        "default": "object_center"
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Orbit 90 degrees clockwise",
+      "Slowly circle the object completely",
+      "Pan around the model" 
+    ]
+  }
+  // TODO: Define other core motion types: pan, tilt, dolly, truck, pedestal, fly_by, fly-away, follow_path?
+]
+```
+
+### Structured Motion Plan (Assistant Output / Interpreter Input - FINALIZED)
+
+*This defines the JSON object the Assistant is expected to return, which serves as the input for the Scene Interpreter.*
+
+```typescript
+// Overall Plan Structure
+interface MotionPlan {
+  /**
+   * An ordered list of motion steps. The Scene Interpreter will
+   * execute these steps one after the other.
+   */
+  steps: MotionStep[];
+
+  /**
+   * Optional: Extra information about the overall plan.
+   */
+  metadata?: {
+    /**
+     * The total duration (in seconds) the user originally requested.
+     * Helps the Scene Interpreter scale the duration_ratios correctly.
+     */
+    requested_duration: number;
+    // Add other metadata as needed (e.g., original prompt for debugging)
+  };
+}
+
+// Structure for a Single Step in the Plan
+interface MotionStep {
+  /**
+   * Identifies the type of camera motion for this step.
+   * This MUST match a 'name' defined in our Motion Knowledge Base (KB).
+   * Examples: "zoom", "orbit", "pan", "static", "fly_by"
+   */
+  type: string;
+
+  /**
+   * Contains the specific settings for this motion step.
+   * The keys and expected value types inside this object will depend
+   * on the 'type' of motion and should be defined in the Motion KB.
+   * Examples:
+   *   For "zoom": { "target": "object_center", "factor": 0.5, "speed": "fast" }
+   *   For "orbit": { "direction": "clockwise", "axis": "y", "angle": 90, "speed": "medium" }
+   *   For "static": {} (might have no parameters, just holds position)
+   */
+  parameters: {
+    [key: string]: string | number | boolean; // Allows string, number, or boolean values
+  };
+
+  /**
+   * Specifies what proportion of the total animation duration
+   * this step should take (value between 0.0 and 1.0).
+   * The Scene Interpreter will calculate the actual duration for this step
+   * based on this ratio and the total requested_duration from the metadata.
+   * All ratios in the plan should ideally sum to 1.0.
+   */
+  duration_ratio: number;
+}
+```
+
+## 5. Phased Rollout Plan
+
+### Phase 0: Planning & Design
+*   [ ] Finalize Motion Plan JSON schema.
+*   [ ] Finalize Motion KB JSON structure & create initial content for core motions.
+*   [ ] Research Assistants API pricing, latency, limits, and error handling.
+*   [ ] Create basic Assistant in OpenAI dashboard (upload KB, get ID).
+*   [ ] Create dedicated feature branch (`feature/assistants-pipeline-refactor`).
+*   [ ] *Goal:* Detailed plan, defined schemas, basic Assistant setup.
+
+### Phase 1: LLM Engine Refactor
+*   [ ] Rewrite `LLM Engine` service/functions to use Assistants API (threads, runs).
+*   [ ] Implement logic to send prompt and receive/parse the structured Motion Plan JSON.
+*   [ ] Set up basic error handling for Assistant interaction failures.
+*   [ ] (Mocking) Temporarily log the received plan instead of sending to Interpreter.
+*   [ ] *Goal:* Prove communication with Assistant and retrieval of structured plan.
+
+### Phase 2: Scene Interpreter Core & Basic Execution
+*   [ ] Refactor `Scene Interpreter` interface/class structure.
+*   [ ] Implement mechanism to accept Motion Plan JSON.
+*   [ ] Implement mechanism to access local Scene/Environmental analysis data (via `Metadata Manager` or passed context).
+*   [ ] Implement core loop to process plan steps sequentially.
+*   [ ] Implement 1-2 simple motion generators (e.g., `static`, basic linear `zoom` using local geometry).
+*   [ ] Connect output to `CameraAnimationSystem` (using existing `CameraCommand` format or adapting).
+*   [ ] *Goal:* Basic E2E flow working: Prompt -> Assistant Plan -> Interpreter -> Simple Animation.
+
+### Phase 3: Scene Interpreter Motion Library Expansion
+*   [ ] Implement generators for core motion types (`orbit`, `pan`, `dolly`, etc.).
+*   [ ] Implement parameter handling within generators (speed, target, direction, style).
+*   [ ] Implement various easing function applications.
+*   [ ] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators.
+*   [ ] Refine duration allocation logic across steps.
+*   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
+*   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
+
+### Phase 4: Integration, Testing & Refinement
+*   [ ] Conduct thorough E2E testing with diverse and complex prompts.
+*   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
+*   [ ] Refine Assistant instructions and Motion KB based on test results.
+*   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
+*   [ ] Update project documentation.
+*   [ ] Prepare for merge to `stable`/`main`.
+*   [ ] *Goal:* Feature-complete, stable, documented, and ready for production use.
+
+## 6. Testing Strategy
+*   **Phase 1:** Unit tests for Assistants API client logic. Manual testing of prompt->plan retrieval.
+*   **Phase 2:** Unit tests for Interpreter core logic, basic motion generators. Integration test for basic E2E flow.
+*   **Phase 3:** Unit tests for each motion generator, including parameter variations and constraint checks. Integration tests combining multiple motion steps.
+*   **Phase 4:** Comprehensive E2E testing with a suite of test prompts. Performance testing.
+
+## 7. Open Questions & Risks
+*   Assistants API costs (per-thread, retrieval, storage)?
+*   Assistants API latency vs direct completion?
+*   Robustness of Assistant correctly mapping prompts to KB and generating valid JSON?
+*   Complexity of implementing sophisticated motion generators in `Scene Interpreter`.
+*   Effort required to create and maintain a high-quality Motion KB. 
