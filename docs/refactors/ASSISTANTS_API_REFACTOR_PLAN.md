@@ -257,10 +257,10 @@ interface MotionStep {
 ### Phase 0: Planning & Design
 *   [X] Finalize Motion Plan JSON schema. *(Completed)*
 *   [X] Finalize Motion KB JSON structure & create initial content for core motions. *(Completed)*
-*   [ ] **Design `MotionPlannerService` Interface:** Define the standard internal interface for generating motion plans.
+*   [X] Design `MotionPlannerService` Interface: Define the standard internal interface for generating motion plans. *(Completed)*
 *   [X] **Research & Provider Choice:** Initial research suggests Google Vertex AI (Agent Builder / Gemini+Search) offers potential advantages (cost, structured output). **Decision: Target Vertex AI for the *first* adapter implementation.** *(Research task remains open for deeper investigation)*.
 *   [ ] **Initial Provider Setup (Vertex AI):** Perform basic setup for Vertex AI (e.g., enable APIs, configure data store for KB, get project IDs/keys).
-*   [ ] Create dedicated feature branch (`feature/assistants-pipeline-refactor`).
+*   [X] Create dedicated feature branch (`feature/assistants-pipeline-refactor`). *(Completed)*
 *   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (Vertex AI)**, basic provider setup.
 
 ### Phase 1: LLM Engine Refactor (Adapter Implementation)
