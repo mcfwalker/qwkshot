@@ -56,9 +56,9 @@ The proposed architecture aims to achieve this by having the Assistant generate 
 *   **Metadata Manager:** **Retained.** Crucial role continues. Fetches model metadata, including stored `SceneAnalysis` data and `EnvironmentalMetadata` (constraints, initial camera state if applicable). Makes this data available *locally* for the Scene Interpreter.
 *   **Scene Analyzer:** **Retained.** The analysis it performs and stores (via `Metadata Manager`) provides the essential geometric understanding (bounding box, center, features, etc.) that the *Scene Interpreter* needs to execute motion plans correctly.
 *   **Environmental Analyzer:** **Retained.** Continues to analyze the relationship between the camera and the scene *locally*. Its output (`EnvironmentalAnalysis` - distances, relative positions, constraint violations) is critical context for the *Scene Interpreter* during path generation (e.g., calculating zoom distances, orbit radii, checking constraints).
-*   **Prompt Compiler:** **Likely Deprecated/Simplified.** Its main role was to bundle complex context *for the LLM*. In the new model, the LLM (Assistant) receives only the user prompt. The context is used locally by the Interpreter. May retain a minimal role for structuring the *initial* request to the LLM Engine if needed, but not for context injection.
-*   **LLM Engine:** **Refactored.** Becomes an adapter for the Assistants API. Manages threads, runs, KB files. Sends simple prompts, receives structured JSON plan. No longer deals with complex context injection.
-*   **Scene Interpreter:** **Major Refactor/Rewrite.** Becomes the core geometric engine. No longer calls LLM. Takes a *structured plan* and *local context* (Scene/Environmental Analysis) and generates executable paths deterministically. Implements motion primitives (zoom, orbit, etc.). Enforces constraints.
+*   **Prompt Compiler:** **Likely Deprecated/Simplified.** Its main role was to bundle complex context *for the LLM*. In the new model, the LLM (Assistant/Agent) receives only the user prompt. The context is used locally by the Interpreter. May retain a minimal role for structuring the *initial* request to the LLM Engine if needed, but not for context injection.
+*   **LLM Engine:** **Refactored.** Becomes an adapter layer implementing a standardized internal `MotionPlannerService` interface. Specific implementations (e.g., `VertexAIAdapter`, `OpenAIAssistantAdapter`) will contain the provider-specific logic (API calls, KB interaction, response parsing). Manages interaction with the chosen underlying AI service (Vertex AI or OpenAI Assistants). Sends simple prompts, receives structured JSON plan, and returns it via the standard interface. No longer deals with complex context injection itself.
+*   **Scene Interpreter:** **Major Refactor/Rewrite.** Becomes the core geometric engine. No longer calls LLM. Takes a *structured plan* (via the standard `MotionPlan` schema) and *local context* (Scene/Environmental Analysis) and generates executable paths deterministically. Implements motion primitives (zoom, orbit, etc.). Enforces constraints.
 *   **Camera Animation System:** Largely unchanged. Consumes the output from the `Scene Interpreter` (likely still `CameraCommand[]` or similar) and drives the Three.js camera.
 
 ## 4. API Contracts / Schemas
@@ -255,19 +255,21 @@ interface MotionStep {
 ## 5. Phased Rollout Plan
 
 ### Phase 0: Planning & Design
-*   [ ] Finalize Motion Plan JSON schema.
-*   [ ] Finalize Motion KB JSON structure & create initial content for core motions.
-*   [ ] Research Assistants API pricing, latency, limits, and error handling.
-*   [ ] Create basic Assistant in OpenAI dashboard (upload KB, get ID).
+*   [X] Finalize Motion Plan JSON schema. *(Completed)*
+*   [X] Finalize Motion KB JSON structure & create initial content for core motions. *(Completed)*
+*   [ ] **Design `MotionPlannerService` Interface:** Define the standard internal interface for generating motion plans.
+*   [X] **Research & Provider Choice:** Initial research suggests Google Vertex AI (Agent Builder / Gemini+Search) offers potential advantages (cost, structured output). **Decision: Target Vertex AI for the *first* adapter implementation.** *(Research task remains open for deeper investigation)*.
+*   [ ] **Initial Provider Setup (Vertex AI):** Perform basic setup for Vertex AI (e.g., enable APIs, configure data store for KB, get project IDs/keys).
 *   [ ] Create dedicated feature branch (`feature/assistants-pipeline-refactor`).
-*   [ ] *Goal:* Detailed plan, defined schemas, basic Assistant setup.
+*   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (Vertex AI)**, basic provider setup.
 
-### Phase 1: LLM Engine Refactor
-*   [ ] Rewrite `LLM Engine` service/functions to use Assistants API (threads, runs).
-*   [ ] Implement logic to send prompt and receive/parse the structured Motion Plan JSON.
-*   [ ] Set up basic error handling for Assistant interaction failures.
-*   [ ] (Mocking) Temporarily log the received plan instead of sending to Interpreter.
-*   [ ] *Goal:* Prove communication with Assistant and retrieval of structured plan.
+### Phase 1: LLM Engine Refactor (Adapter Implementation)
+*   [ ] Implement the **`VertexAIAdapter`** adhering to the `MotionPlannerService` interface.
+*   [ ] Include logic for sending the prompt to the Vertex AI service (Agent Builder or Gemini+Search) and handling the KB interaction.
+*   [ ] Implement parsing and validation of the Vertex AI response to ensure it conforms to the standard `MotionPlan` JSON schema (potentially using Function Calling).
+*   [ ] Set up basic error handling for Vertex AI API calls and response processing.
+*   [ ] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter.
+*   [ ] *Goal:* A functioning **`VertexAIAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object.
 
 ### Phase 2: Scene Interpreter Core & Basic Execution
 *   [ ] Refactor `Scene Interpreter` interface/class structure.
@@ -307,4 +309,54 @@ interface MotionStep {
 *   Assistants API latency vs direct completion?
 *   Robustness of Assistant correctly mapping prompts to KB and generating valid JSON?
 *   Complexity of implementing sophisticated motion generators in `Scene Interpreter`.
-*   Effort required to create and maintain a high-quality Motion KB. 
+*   Effort required to create and maintain a high-quality Motion KB.
+
+## 8. Proposed Architecture Diagram (Mermaid)
+
+```mermaid
+graph TD
+    subgraph "User Interface"
+        UI[React UI]
+    end
+
+    subgraph "Backend / Middleware"
+        subgraph "LLM Engine (Adapter Layer)"
+            direction LR
+            MotionPlanner[MotionPlannerService Interface]
+            VertexAdapter[VertexAIAdapter implements MotionPlanner]
+            OpenAIAdapter[(OpenAI Adapter)] -- Optional --> MotionPlanner
+            MotionPlanner --> VertexAdapter
+        end
+        MetadataMgr[Metadata Manager]
+        SceneAnalyzer[Scene Analyzer Data]
+        EnvAnalyzer[Environmental Analyzer Data]
+    end
+
+    subgraph "External AI Service (Google Cloud)"
+        VertexAI[Vertex AI Agent/Gemini+Search]
+        MotionKB[Motion KB @ GCS Data Store]
+    end
+
+    subgraph "Frontend Rendering"
+        SceneInterpreter[Scene Interpreter]
+        AnimationSystem[Camera Animation System (Three.js)]
+    end
+
+    %% Data Flows
+    UI -- "User Prompt, Duration" --> MotionPlanner
+    VertexAdapter -- "Prompt, KB Config" --> VertexAI
+    VertexAI -- "Retrieves from" --> MotionKB
+    VertexAI -- "Structured Motion Plan (JSON)" --> VertexAdapter
+    MotionPlanner -- "Structured Motion Plan (JSON)" --> SceneInterpreter
+    MetadataMgr -- "Fetches" --> SceneAnalyzer
+    MetadataMgr -- "Fetches" --> EnvAnalyzer
+    MetadataMgr -- "SceneAnalysis, EnvMetadata (Local Context)" --> SceneInterpreter
+    SceneInterpreter -- "Executable Commands/Keyframes" --> AnimationSystem
+    AnimationSystem -- "Updates Camera" --> UI
+
+    %% Style (Optional)
+    classDef external fill:#f9f,stroke:#333,stroke-width:2px;
+    class VertexAI,MotionKB external;
+    classDef adapter fill:#lightgrey,stroke:#333;
+    class LLM Engine (Adapter Layer) adapter
+``` 
