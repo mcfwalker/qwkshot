@@ -34,8 +34,8 @@ export const easingFunctions = {
 
 export type EasingFunctionName = keyof typeof easingFunctions;
 
-// --- CLASS DEFINITION MOVED HERE ---
-class SceneInterpreterImpl implements SceneInterpreter {
+// --- CLASS DEFINITION MOVED HERE --- Export the class
+export class SceneInterpreterImpl implements SceneInterpreter {
   private config: SceneInterpreterConfig | null = null;
   private logger: Logger;
 
@@ -289,20 +289,25 @@ class SceneInterpreterImpl implements SceneInterpreter {
      console.log('--- VALIDATE COMMANDS ENTRY POINT ---'); 
      this.logger.info('Validating camera commands', { commandCount: commands.length });
      
-     // <<< ADD IMMEDIATE ARGUMENT CHECK >>>
-     this.logger.warn(`[Interpreter] Received objectBounds type: ${typeof objectBounds}, Is Box3: ${objectBounds instanceof Box3}, Value: ${JSON.stringify(objectBounds)}`);
+     // Simplified argument check - Avoid stringify
+     this.logger.warn(`[Interpreter] Received objectBounds type: ${typeof objectBounds}, Is Box3: ${objectBounds instanceof Box3}`);
+     if (objectBounds instanceof Box3) {
+         this.logger.warn(`[Interpreter] Bounds Min: ${JSON.stringify(objectBounds.min)}, Max: ${JSON.stringify(objectBounds.max)}`);
+     }
 
      // --- Bounding Box Validation --- START
-     if (!objectBounds) {
-       this.logger.warn('Object bounds NOT PROVIDED for validation.');
+     if (!objectBounds || !(objectBounds instanceof Box3)) { // Added instanceof check
+       this.logger.warn('Object bounds NOT PROVIDED or invalid type for validation.');
      } else {
-       this.logger.warn(`[Interpreter] Validating against Bounds: Min/Max received.`);
+       this.logger.warn(`[Interpreter] Starting validation against Bounds: Min(${objectBounds.min.x?.toFixed(2)}, ${objectBounds.min.y?.toFixed(2)}, ${objectBounds.min.z?.toFixed(2)}), Max(${objectBounds.max.x?.toFixed(2)}, ${objectBounds.max.y?.toFixed(2)}, ${objectBounds.max.z?.toFixed(2)})`);
        
        for (const [index, command] of commands.entries()) {
          const pos = command.position;
+         this.logger.warn(`[Interpreter] Checking command ${index}: Pos(${pos.x?.toFixed(2)}, ${pos.y?.toFixed(2)}, ${pos.z?.toFixed(2)})`); // Log position being checked
          try {
+             this.logger.warn(`[Interpreter] Calling containsPoint for command ${index}...`);
              const isContained = objectBounds.containsPoint(pos);
-             this.logger.warn(`[Interpreter] Check ${index}: Contained=${isContained}`); 
+             this.logger.warn(`[Interpreter] containsPoint call completed for command ${index}. Result: ${isContained}`); // Log after the call
 
              if (isContained) {
                const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
@@ -313,7 +318,7 @@ class SceneInterpreterImpl implements SceneInterpreter {
                };
              }
          } catch (checkError) {
-             this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError);
+             this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError instanceof Error ? checkError.message : checkError); // Log only error message
              return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
          }
        }

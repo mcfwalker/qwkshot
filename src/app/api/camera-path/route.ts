@@ -11,7 +11,7 @@ import { LLMEngineConfig } from '@/types/p2p/llm-engine';
 import { MetadataManagerFactory } from '@/features/p2p/metadata-manager/MetadataManagerFactory';
 import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { Logger } from '@/types/p2p/shared';
-import { getSceneInterpreter } from '@/features/p2p/scene-interpreter/interpreter';
+import { SceneInterpreterImpl } from '@/features/p2p/scene-interpreter/interpreter';
 import { SceneInterpreterConfig } from '@/types/p2p/scene-interpreter';
 import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler/PromptCompilerFactory';
 import { PromptCompilerConfig } from '@/types/p2p/prompt-compiler';
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     // --- Initialize Components --- 
     await ensureLLMSystemInitialized();
     const engine = getLLMEngine();
-    const interpreter = getSceneInterpreter();
+    const interpreter = new SceneInterpreterImpl({} as SceneInterpreterConfig, logger);
     const promptCompiler = promptCompilerFactory.create({ maxTokens: 2048, temperature: 0.7 });
     await promptCompiler.initialize({ maxTokens: 2048, temperature: 0.7 });
     const metadataManager = metadataManagerFactory.create(
@@ -416,11 +416,30 @@ export async function POST(request: Request) {
       
       return NextResponse.json(commands);
 
-    } catch (engineError) {
+    } catch (engineError: any) { // Add type annotation
       // ... engine/interpretation error handling ...
+      logger.error('Error during LLM engine path generation or subsequent processing:', engineError);
+      const errorMessage = engineError instanceof Error ? engineError.message : 'Unknown engine/processing error';
+      // Check if it's the specific validation error we handled earlier
+      if (errorMessage.includes('PATH_VIOLATION_BOUNDING_BOX')) {
+          // If somehow the specific handling failed and it bubbles up here, return the 422
+           return NextResponse.json(
+              { error: "Validation Failed: Path enters object bounds", code: "PATH_VIOLATION_BOUNDING_BOX" },
+              { status: 422 } 
+          );
+      }
+      return NextResponse.json(
+          { error: `LLM Engine or Processing Failed: ${errorMessage}` },
+          { status: 500 }
+      );
     }
 
-  } catch (requestError) { // Catch for outer request processing
+  } catch (requestError: any) { // Add type annotation
     logger.error('Unhandled error in camera path route:', requestError);
+    const errorMessage = requestError instanceof Error ? requestError.message : 'Unknown server error';
+    return NextResponse.json(
+        { error: `Internal Server Error: ${errorMessage}` },
+        { status: 500 }
+    );
   }
 } 
