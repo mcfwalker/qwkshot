@@ -127,6 +127,55 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return { isValid, errors };
   }
 
+  /**
+   * Helper method to resolve a target name string into a Vector3 position.
+   * Uses SceneAnalysis data and the current camera target.
+   */
+  private _resolveTargetPosition(
+    targetName: string,
+    sceneAnalysis: SceneAnalysis,
+    currentTarget: Vector3
+  ): Vector3 | null {
+    this.logger.debug(`Resolving target name: '${targetName}'`);
+
+    if (targetName === 'current_target') {
+      this.logger.debug('Resolved target to current_target');
+      return currentTarget.clone();
+    }
+
+    if (targetName === 'object_center') {
+      if (sceneAnalysis?.spatial?.bounds?.center) {
+        this.logger.debug('Resolved target to object_center');
+        return sceneAnalysis.spatial.bounds.center.clone();
+      } else {
+        this.logger.warn("Cannot resolve 'object_center': SceneAnalysis missing spatial.bounds.center.");
+        return null;
+      }
+    }
+
+    // Resolve named features (assuming LLM uses feature.id or feature.description)
+    if (sceneAnalysis?.features && Array.isArray(sceneAnalysis.features)) {
+      const foundFeature = sceneAnalysis.features.find(
+        (feature) => feature.id === targetName || feature.description === targetName
+      );
+      if (foundFeature?.position) {
+        // Ensure position is a Vector3 (it should be based on SceneAnalysis type)
+        if (foundFeature.position instanceof Vector3) {
+           this.logger.debug(`Resolved target to feature '${targetName}' at ${foundFeature.position.toArray()}`);
+           return foundFeature.position.clone();
+        } else {
+           this.logger.error(`Feature '${targetName}' found, but its position is not a Vector3 object.`);
+           return null;
+        }
+      }
+    }
+    
+    // TODO: Potentially add resolution for other known points like 'highest', 'lowest' from sceneAnalysis.spatial.referencePoints
+
+    this.logger.warn(`Could not resolve target name '${targetName}'.`);
+    return null; // Target not found
+  }
+
   interpretPath(
     plan: MotionPlan,
     sceneAnalysis: SceneAnalysis,
@@ -136,8 +185,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
   ): CameraCommand[] {
     this.logger.info('Interpreting motion plan...', { plan });
     if (!this.config) {
-      this.logger.error('Interpreter not initialized');
-      throw new Error('Interpreter not initialized');
+        this.logger.error('Interpreter not initialized');
+        throw new Error('Interpreter not initialized');
     }
     if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) {
         this.logger.error('Invalid or empty MotionPlan provided.');
@@ -189,13 +238,83 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'zoom': {
-          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
-          // TODO: Implement zoom logic
-          // 1. Resolve target (e.g., 'object_center' from sceneAnalysis)
-          // 2. Get direction, factor, speed, easing from step.parameters
-          // 3. Calculate new position along the line from currentPosition to target
-          // 4. Create CameraCommand with new position, current target, calculated duration, easing
-          // 5. Update currentPosition for the next step
+          // --- Start Zoom Logic (Corrected) ---
+          const {
+            direction: rawDirection,
+            factor: rawFactor,
+            target: rawTargetName = 'current_target',
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'in' || rawDirection === 'out') ? rawDirection : null;
+          const factor = typeof rawFactor === 'number' && rawFactor > 0 ? rawFactor : null;
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target'; // Default
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing zoom direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (factor === null) {
+            this.logger.error(`Invalid, missing, or non-positive zoom factor: ${rawFactor}. Skipping step.`);
+            continue;
+          }
+          if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Resolve target point
+          const zoomTargetPosition = this._resolveTargetPosition(targetName, sceneAnalysis, currentTarget);
+          if (!zoomTargetPosition) {
+            this.logger.error(`Could not resolve zoom target '${targetName}'. Skipping step.`);
+            continue;
+          }
+
+          // 2. Calculate new distance based on direction and factor
+          const vectorToTarget = new Vector3().subVectors(zoomTargetPosition, currentPosition);
+          const currentDistance = vectorToTarget.length();
+          let newDistance: number;
+
+          if (direction === 'in') {
+            // Factor determines the new distance as a ratio of the old distance
+            // e.g., factor = 0.5 means new distance is half the original
+            newDistance = currentDistance * factor;
+          } else { // direction === 'out'
+            // Factor determines the new distance as a ratio of the old distance
+            // e.g., factor = 2.0 means new distance is double the original
+            newDistance = currentDistance * factor;
+          }
+          
+          // Avoid division by zero or moving to the exact target point if already there
+          if (currentDistance < 1e-6) {
+              this.logger.warn('Zoom target is effectively at the current camera position. Cannot zoom further. Keeping position static.');
+              newDistance = currentDistance; // No change
+          }
+           // Ensure new distance is positive
+          newDistance = Math.max(1e-6, newDistance);
+
+          // 3. Calculate new position
+          // Start from the target and move back along the view vector by the newDistance
+          const viewDirectionNormalized = vectorToTarget.normalize(); // Normalize vectorToTarget
+          const newPosition = new Vector3()
+              .copy(zoomTargetPosition)
+              .addScaledVector(viewDirectionNormalized, -newDistance);
+
+          // 4. Create CameraCommand
+          const command: CameraCommand = {
+            position: newPosition.clone(),
+            target: zoomTargetPosition.clone(), // Zoom keeps looking at the resolved target
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated zoom command:', command);
+
+          // 5. Update state for the next step
+          currentPosition = newPosition.clone();
+          currentTarget = zoomTargetPosition.clone(); // Keep looking at the resolved target
+          // --- End Zoom Logic ---
           break;
         }
         case 'orbit': {
@@ -282,24 +401,6 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           
           const newPosition = new Vector3().addVectors(orbitCenter, radiusVector);
 
-          // Validate essential parameters after type checks
-          let effectiveDirection = direction;
-          if (direction === 'left') effectiveDirection = 'counter-clockwise'; // Map left/right to directions relative to Y axis
-          if (direction === 'right') effectiveDirection = 'clockwise';
-
-          if (!effectiveDirection || (effectiveDirection !== 'clockwise' && effectiveDirection !== 'counter-clockwise')) {
-            this.logger.error(`Invalid or unmappable orbit direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (angle === null) { 
-            this.logger.error(`Invalid, missing, or zero orbit angle: ${rawAngle}. Skipping step.`);
-            continue;
-          }
-          if (rawAxisName !== axisName && typeof rawAxisName === 'string') { // Log if axis was defaulted
-              this.logger.warn(`Invalid or unsupported orbit axis: ${rawAxisName}. Defaulting to '${axisName}'.`);
-          }
-          // Note: No need to log target/easing defaults as they are common fallbacks.
-          
           // 4. Create CameraCommand
           const command: CameraCommand = {
             position: newPosition.clone(),
@@ -405,251 +506,79 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             this.logger.error(`Invalid, missing, or zero tilt angle: ${rawAngle}. Skipping step.`);
             continue;
           }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+          if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
              this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
           }
 
           // 1. Determine rotation axis (Camera's local RIGHT)
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           // Assume world up is (0, 1, 0) for cross product
-          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-          // If looking straight up/down, the cross product might be zero. Need a fallback.
+          let cameraRight = new Vector3(0, 1, 0); // This line seems wrong from previous edit, should calculate right
+          if (Math.abs(viewDirection.y) > 0.999) { // Looking nearly straight up or down
+              // Use camera's local 'forward' projected onto XZ plane to find a stable 'right'
+              // const forwardXZ = new Vector3(viewDirection.x, 0, viewDirection.z).normalize();
+              // const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), forwardXZ).normalize();
+              // cameraUp.crossVectors(forwardXZ, cameraRight).normalize(); // Should give a stable 'up'
+              // Correct logic for fallback when looking up/down:
+              cameraRight.set(1, 0, 0); // Use world X as fallback right
+              this.logger.warn('Cannot reliably determine camera right vector (looking straight up/down). Using world X as fallback axis for tilt.');
+          } else {
+               // Standard case: Calculate right vector
+              cameraRight.crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+          }
+          // Check if cross product resulted in zero vector (e.g., viewDirection is aligned with world up)
           if (cameraRight.lengthSq() < 1e-6) { 
-              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Using world X as fallback axis for tilt.');
+              this.logger.warn('Calculated camera right vector is zero. Using world X as fallback axis for tilt.');
               cameraRight.set(1, 0, 0); // Fallback to world X axis
           }
           this.logger.debug(`Tilt using camera local right axis: ${cameraRight.toArray()}`);
-          const rotationAxis = cameraRight; // Axis for tilt
+          const rotationAxis = cameraRight; // CORRECT: Axis for tilt IS the camera's right vector
 
           // 2. Calculate rotation
           const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? 1 : -1); // Tilt up = positive rotation around local right
-          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad); // Use the correct rotationAxis (cameraRight)
 
           // 3. Rotate the target point around the camera position
           const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
           targetVector.applyQuaternion(quaternion);
-          
-          // Constraint check: Prevent target from going too far past vertical (e.g., > 85 degrees up/down)
-          const newTargetWorld = new Vector3().addVectors(currentPosition, targetVector);
-          const newViewDirection = new Vector3().subVectors(newTargetWorld, currentPosition).normalize();
-          const angleWithWorldUp = newViewDirection.angleTo(new Vector3(0, 1, 0)); // Angle to world Y
-          const maxTiltAngle = THREE.MathUtils.degToRad(85); // Max 85 degrees from horizontal plane
-          if (angleWithWorldUp < (Math.PI / 2 - maxTiltAngle) || angleWithWorldUp > (Math.PI / 2 + maxTiltAngle)) {
-               this.logger.warn(`Tilt angle limit reached (${angle} deg). Clamping target.`);
-               // Re-calculate target based on clamped angle (more complex, skip for now)
-               // For simplicity, we could just use the previous target if clamping is hard
-               // Or use the clamped vector direction. Let's stick to the calculated one for now, maybe add clamping later.
-               // TODO: Implement proper tilt clamping if necessary
-          }
-
-          const newTarget = newTargetWorld; // Use potentially unclamped target for now
+          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
 
           // 4. Create CameraCommand (Position stays the same, Target changes)
           const command: CameraCommand = {
-            position: currentPosition.clone(),
+            position: currentPosition.clone(), // Position does not change for tilt
             target: newTarget.clone(),
-            duration: stepDuration > 0 ? stepDuration : 0.1,
+            duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
             easing: easingName
           };
           commands.push(command);
           this.logger.debug('Generated tilt command:', command);
 
-          // 5. Update state for the next step
+          // 5. Update state for the next step (Only target changes)
           currentTarget = newTarget.clone();
           // currentPosition remains the same
           // --- End Tilt Logic ---
           break;
         }
-        case 'dolly': {
-          // --- Start Dolly Logic ---
-          const {
-            direction: rawDirection,
-            distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
-          } = step.parameters;
-
-          // Validate parameters
-          let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
-
-          // Map aliases
-          if (direction === 'in') direction = 'forward';
-          if (direction === 'out') direction = 'backward';
-
-          if (direction !== 'forward' && direction !== 'backward') {
-            this.logger.error(`Invalid or missing dolly direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
-
-          // 1. Calculate movement vector
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          const moveVector = viewDirection.multiplyScalar(distance * (direction === 'forward' ? 1 : -1));
-
-          // 2. Calculate new position
-          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
-
-          // 3. Create CameraCommand (Target stays the same, Position changes)
-          const command: CameraCommand = {
-            position: newPosition.clone(),
-            target: currentTarget.clone(), // Target does not change for dolly
-            duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated dolly command:', command);
-
-          // 4. Update state for the next step
-          currentPosition = newPosition.clone();
-          // currentTarget remains the same
-          // --- End Dolly Logic ---
-          break;
-        }
-        case 'truck': {
-          // --- Start Truck Logic ---
-          const {
-            direction: rawDirection,
-            distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
-          } = step.parameters;
-
-          // Validate parameters
-          const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
-
-          if (!direction) {
-            this.logger.error(`Invalid or missing truck direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
-
-          // 1. Calculate movement vector (Camera's local RIGHT)
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          // Assume world up is (0, 1, 0)
-          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-          // Handle looking straight up/down where cross product is zero
-           if (cameraRight.lengthSq() < 1e-6) { 
-              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Truck movement might be unpredictable. Using world X as fallback.');
-              cameraRight.set(1, 0, 0); // Fallback
-          }
-          
-          const moveVector = cameraRight.multiplyScalar(distance * (direction === 'left' ? -1 : 1)); // Truck left moves along negative right vector
-
-          // 2. Calculate new position
-          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
-
-          // 3. Create CameraCommand (Target stays the same, Position changes)
-          const command: CameraCommand = {
-            position: newPosition.clone(),
-            target: currentTarget.clone(), // Target does not change for truck
-            duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated truck command:', command);
-
-          // 4. Update state for the next step
-          currentPosition = newPosition.clone();
-          // currentTarget remains the same
-          // --- End Truck Logic ---
-          break;
-        }
-        case 'pedestal': {
-           // --- Start Pedestal Logic ---
-          const {
-            direction: rawDirection,
-            distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
-          } = step.parameters;
-
-          // Validate parameters
-          const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
-
-          if (!direction) {
-            this.logger.error(`Invalid or missing pedestal direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
-
-          // 1. Calculate movement vector (Camera's local UP)
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          // Assume world up is (0, 1, 0)
-          let cameraUp = new Vector3(0, 1, 0);
-          if (Math.abs(viewDirection.y) < 0.999) { // If not looking straight up/down
-            const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-            cameraUp.crossVectors(viewDirection, cameraRight).normalize();
-          } // else cameraUp remains world Y (0,1,0), which is correct for pedestal when looking straight up/down
-          
-          const moveVector = cameraUp.multiplyScalar(distance * (direction === 'up' ? 1 : -1));
-
-          // 2. Calculate new position
-          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
-
-          // 3. Create CameraCommand (Target stays the same, Position changes)
-          const command: CameraCommand = {
-            position: newPosition.clone(),
-            target: currentTarget.clone(), // Target does not change for pedestal
-            duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated pedestal command:', command);
-
-          // 4. Update state for the next step
-          currentPosition = newPosition.clone();
-          // currentTarget remains the same
-          // --- End Pedestal Logic ---
-          break;
-        }
-        // TODO: Add cases for fly_by, fly_away...
-        default: {
-          this.logger.warn(`Unsupported motion type '${step.type}'. Skipping step.`);
-          break;
-        }
       }
     }
-
-    this.logger.info(`Interpretation complete. Generated ${commands.length} commands.`);
-
-    // TODO: Consider running validateCommands here on the generated commands
-    // const validationResult = this.validateCommands(commands, sceneAnalysis.spatial.bounds); // Assuming bounds are needed
-    // if (!validationResult.isValid) { ... handle validation errors ... }
-
     return commands;
   }
 
+  // --- Restore Missing Methods --- 
+
   async executeCommand(camera: Camera, command: CameraCommand): Promise<void> {
-    this.logger.info('Executing command:', command);
+    this.logger.info('Executing camera command (placeholder)', { command });
+    // TODO: Implement actual command execution logic if needed on backend,
+    // or confirm this is handled purely client-side by AnimationController.
     console.warn('executeCommand is not implemented!');
     return Promise.resolve();
   }
 
   async executeCommands(camera: Camera, commands: CameraCommand[]): Promise<void> {
-    this.logger.info(`Executing ${commands.length} commands.`);
+    this.logger.info(`Executing ${commands.length} camera commands (placeholder).`);
+    // This likely won't be used if commands are sent to client for execution.
     for (const command of commands) {
-        await this.executeCommand(camera, command);
+      await this.executeCommand(camera, command);
     }
     return Promise.resolve();
   }
@@ -658,77 +587,75 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     commands: CameraCommand[],
     objectBounds: Box3
   ): ValidationResult {
-     console.log('--- VALIDATE COMMANDS ENTRY POINT ---'); 
-     this.logger.info('Validating camera commands', { commandCount: commands.length });
-     
-     // Simplified argument check - Avoid stringify
-     this.logger.warn(`[Interpreter] Received objectBounds type: ${typeof objectBounds}, Is Box3: ${objectBounds instanceof Box3}`);
-     if (objectBounds instanceof Box3) {
-         this.logger.warn(`[Interpreter] Bounds Min: ${JSON.stringify(objectBounds.min)}, Max: ${JSON.stringify(objectBounds.max)}`);
-     }
+    console.log('--- VALIDATE COMMANDS ENTRY POINT ---'); // Keep console log for debugging
+    this.logger.info('Validating camera commands', { commandCount: commands.length });
+    
+    // --- Bounding Box Validation (Restore previous logic) --- 
+    if (!objectBounds || !(objectBounds instanceof Box3)) {
+      this.logger.warn('Object bounds NOT PROVIDED or invalid type for validation.');
+    } else {
+      this.logger.warn(`[Interpreter] Starting validation against Bounds: Min(${objectBounds.min.x?.toFixed(2)}, ${objectBounds.min.y?.toFixed(2)}, ${objectBounds.min.z?.toFixed(2)}), Max(${objectBounds.max.x?.toFixed(2)}, ${objectBounds.max.y?.toFixed(2)}, ${objectBounds.max.z?.toFixed(2)})`);
+      for (const [index, command] of commands.entries()) {
+        const pos = command.position;
+        if (!pos || !(pos instanceof Vector3)) {
+            this.logger.warn(`[Interpreter] Skipping validation for command ${index}: Invalid position.`);
+            continue;
+        }
+        this.logger.warn(`[Interpreter] Checking command ${index}: Pos(${pos.x?.toFixed(2)}, ${pos.y?.toFixed(2)}, ${pos.z?.toFixed(2)})`);
+        try {
+          const isContained = objectBounds.containsPoint(pos);
+          this.logger.warn(`[Interpreter] containsPoint check completed for command ${index}. Result: ${isContained}`);
+          if (isContained) {
+            const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
+            this.logger.warn(`[Interpreter] Validation failed: ${errorMsg} at command ${index}`);
+            return {
+              isValid: false,
+              errors: [errorMsg]
+            };
+          }
+        } catch (checkError) {
+          this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError instanceof Error ? checkError.message : checkError);
+          return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
+        }
+      }
+      this.logger.warn('[Interpreter] Bounding box validation passed.');
+    }
+    // --- End Bounding Box Validation ---
 
-     // --- Bounding Box Validation --- START
-     if (!objectBounds || !(objectBounds instanceof Box3)) { // Added instanceof check
-       this.logger.warn('Object bounds NOT PROVIDED or invalid type for validation.');
-     } else {
-       this.logger.warn(`[Interpreter] Starting validation against Bounds: Min(${objectBounds.min.x?.toFixed(2)}, ${objectBounds.min.y?.toFixed(2)}, ${objectBounds.min.z?.toFixed(2)}), Max(${objectBounds.max.x?.toFixed(2)}, ${objectBounds.max.y?.toFixed(2)}, ${objectBounds.max.z?.toFixed(2)})`);
-       
-       for (const [index, command] of commands.entries()) {
-         const pos = command.position;
-         this.logger.warn(`[Interpreter] Checking command ${index}: Pos(${pos.x?.toFixed(2)}, ${pos.y?.toFixed(2)}, ${pos.z?.toFixed(2)})`); // Log position being checked
-         try {
-             this.logger.warn(`[Interpreter] Calling containsPoint for command ${index}...`);
-             const isContained = objectBounds.containsPoint(pos);
-             this.logger.warn(`[Interpreter] containsPoint call completed for command ${index}. Result: ${isContained}`); // Log after the call
-
-             if (isContained) {
-               const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
-               this.logger.warn(`[Interpreter] Validation failed: ${errorMsg} at command ${index}`);
-               return {
-                 isValid: false,
-                 errors: [errorMsg]
-               };
-             }
-         } catch (checkError) {
-             this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError instanceof Error ? checkError.message : checkError); // Log only error message
-             return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
-         }
-       }
-       this.logger.warn('[Interpreter] Bounding box validation passed.');
-     }
-     // --- Bounding Box Validation --- END
-
-     // TODO: Add other command validation checks here
-     // ... (e.g., check velocity, angle change based on command durations/positions)
-
-     const errors: string[] = []; // Initialize errors array for other checks
-     if (!commands || commands.length === 0) {
+    // TODO: Add other command validation checks here (e.g., max speed, angle change)
+    const errors: string[] = []; 
+    if (!commands || commands.length === 0) {
       this.logger.warn('Command list is empty, nothing to validate further.');
-      return { isValid: true, errors: [] }; // Valid but empty
+      // Return true if bounding box passed or wasn't checked
+      return { isValid: true, errors: [] }; 
     }
 
-    // Example other checks (can be added here):
-    // - Max speed between consecutive commands
-    // - Max angle change between commands
-    // - Duration validity (already checked in loop?)
-
+    // Return based on ALL validation checks
     const isValid = errors.length === 0;
     if (!isValid) {
         this.logger.warn('Generated command validation failed (other checks):', errors);
     }
-    // Return based on ALL validation checks
-    return { isValid, errors }; 
-   }
+    return { isValid, errors };
+  }
 
-   getPerformanceMetrics(): PerformanceMetrics {
-     this.logger.info('Getting performance metrics');
-     return { /* placeholder */ } as PerformanceMetrics;
-   }
+  getPerformanceMetrics(): PerformanceMetrics {
+    this.logger.info('Getting performance metrics (placeholder)');
+    // TODO: Implement actual performance metric collection if needed
+    return { 
+        startTime: 0, 
+        endTime: 0, 
+        duration: 0, 
+        operations: [], 
+        cacheHits: 0, 
+        cacheMisses: 0, 
+        databaseQueries: 0, 
+        averageResponseTime: 0 
+    } as PerformanceMetrics;
+  }
 
-} // --- End of SceneInterpreterImpl class ---
+} // <<< Add closing brace for the class
 
-
-// Factory function follows the class definition
+// Factory function (should be outside the class)
 export function getSceneInterpreter(): SceneInterpreter {
     const dummyLogger = { info: ()=>{}, warn: ()=>{}, error: ()=>{}, debug: ()=>{}, trace: ()=>{}, performance: ()=>{} };
     const dummyConfig: SceneInterpreterConfig = { 
@@ -738,10 +665,3 @@ export function getSceneInterpreter(): SceneInterpreter {
     };
     return new SceneInterpreterImpl(dummyConfig, dummyLogger);
 }
-
-// REMOVE OLD CLASS DEFINITION FROM DOWN HERE
-/*
-class CoreSceneInterpreter implements SceneInterpreter {
-  // ... [old implementation] ...
-}
-*/ 
