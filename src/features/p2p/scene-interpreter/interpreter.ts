@@ -283,9 +283,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const command: CameraCommand = {
             position: currentPosition.clone(),
             target: currentTarget.clone(),
-            // Use stepDuration if valid, otherwise maybe a default small duration or handle error?
-            duration: stepDuration > 0 ? stepDuration : 0.1, // Example: default 0.1s if calculation failed
-            easing: DEFAULT_EASING // Static hold is linear
+            duration: stepDuration > 0 ? stepDuration : 0.1, 
+            easing: 'linear' // Static should always be linear, ignore speed/easing params
           };
           commands.push(command);
           this.logger.debug('Generated static command:', command);

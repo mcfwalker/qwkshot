@@ -282,7 +282,7 @@ interface MotionStep {
 *   [X] *Goal:* Basic E2E backend flow working: Prompt -> Assistant Plan -> Interpreter -> API returns `CameraCommand[]`. *(Phase 2 COMPLETE as of Session End)*
 
 ### Phase 3: Scene Interpreter Motion Library Expansion
-*   [/] Implement generators for core motion types. *(In Progress)*
+*   [/] Implement generators for core motion types. *(In Progress - Core 8 Implemented)*
     *   [X] `static` (from Phase 2)
     *   [X] `zoom` (from Phase 2)
     *   [X] `orbit` (updated)
@@ -297,11 +297,12 @@ interface MotionStep {
     *   [ ] `focus_on`
     *   [ ] `arc`
     *   [ ] `reveal`
-*   [/] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started: Target resolution, speed param, direction aliases)*
-*   [/] Implement various easing function applications. *(Partially started: Speed param influences final easing selection)*
-*   [/] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Partially completed: Basic clamping, raycast for BB, velocity check)*
-*   [/] Refine duration allocation logic across steps. *(Partially completed: Added normalization based on ratios)*
-*   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
+*   [X] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Completed for core 8 types: Target resolution, speed param, direction aliases. Deferred: Custom axis, hints)*
+*   [X] Implement various easing function applications. *(Completed for core 8 types: Using d3-ease, speed influences selection)*
+*   [X] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Completed for core 8 types: Basic clamping, raycast for BB, velocity check)*
+*   [X] Refine duration allocation logic across steps. *(Completed for core 8 types: Added normalization based on ratios)*
+    *   [ ] *TODO:* Consider adjusting step duration further if constraint clamping significantly shortens the actual movement distance/angle.
+*   [X] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints. *(Completed for core 8 types)*
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
 
 ### Phase 4: Integration, Testing & Refinement
