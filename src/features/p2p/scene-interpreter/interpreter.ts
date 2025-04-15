@@ -199,88 +199,431 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'orbit': {
-          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
-          // TODO: Implement orbit logic
-          // 1. Resolve target, axis, direction, angle, speed, easing
-          // 2. Calculate new position based on rotation around axis/target
-          // 3. May need to update target as well if orbit path isn't perfectly looking at center
-          // 4. Create CameraCommand
-          // 5. Update currentPosition and currentTarget
-          break;
-        }
-        case 'zoom': {
+          // --- Start Orbit Logic ---
+          // Corrected Destructuring & Type Validation
           const { 
-            direction, 
-            factor, 
-            target: targetName = 'current_target', // Default target 
-            easing: easingName = 'easeInOutQuad' // Default easing
+            direction: rawDirection, 
+            angle: rawAngle, 
+            axis: rawAxisName = 'y', 
+            target: rawTargetName = 'object_center', 
+            easing: rawEasingName = 'easeInOutQuad' 
           } = step.parameters;
 
-          if (direction !== 'in' && direction !== 'out') {
-            this.logger.error(`Invalid zoom direction: ${direction}. Skipping step.`);
-            continue;
-          }
-          if (typeof factor !== 'number' || factor <= 0) {
-            this.logger.error(`Invalid zoom factor: ${factor}. Skipping step.`);
-            continue;
-          }
+          // Type validation and extraction
+          const direction = typeof rawDirection === 'string' && 
+                            (rawDirection === 'clockwise' || rawDirection === 'counter-clockwise' || rawDirection === 'left' || rawDirection === 'right') 
+                            ? rawDirection : null;
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          let axisName = typeof rawAxisName === 'string' && ['x', 'y', 'z', 'camera_up'].includes(rawAxisName) ? rawAxisName : 'y'; // Include camera_up, default to 'y'
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'object_center'; // Default if invalid
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad'; // Validate and default
 
-          let zoomTargetPosition: Vector3;
+          // Validate essential parameters after type checks
+          if (!direction) {
+            this.logger.error(`Invalid or missing orbit direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (angle === null) { 
+            this.logger.error(`Invalid, missing, or zero orbit angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          if (rawAxisName !== axisName && typeof rawAxisName === 'string') { // Log if axis was defaulted
+              this.logger.warn(`Invalid or unsupported orbit axis: ${rawAxisName}. Defaulting to '${axisName}'.`);
+          }
+          // Note: No need to log target/easing defaults as they are common fallbacks.
+          
+          // 1. Resolve target
+          let orbitCenter: Vector3;
           if (targetName === 'object_center' && sceneAnalysis?.spatial?.bounds?.center) {
-            zoomTargetPosition = sceneAnalysis.spatial.bounds.center.clone();
-            this.logger.debug(`Zoom target resolved to object center: ${zoomTargetPosition.toArray()}`);
+            orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
+            this.logger.debug(`Orbit target resolved to object center: ${orbitCenter.toArray()}`);
           } else {
-            zoomTargetPosition = currentTarget.clone(); // Default to current target
-            this.logger.debug(`Zoom target resolved to current target: ${zoomTargetPosition.toArray()}`);
+            // Default to object center if available, otherwise skip.
+            if (sceneAnalysis?.spatial?.bounds?.center) {
+                orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
+                this.logger.warn(`Unsupported orbit target '${targetName}', defaulting to object center.`);
+            } else {
+                this.logger.error(`Cannot resolve orbit target '${targetName}' and object center is unavailable. Skipping step.`);
+                continue;
+            }
           }
 
-          const currentDirectionVector = new Vector3().subVectors(zoomTargetPosition, currentPosition);
-          const currentDistance = currentDirectionVector.length();
+          // 2. Determine rotation axis vector
+          let rotationAxis = new Vector3(0, 1, 0); // Default World Y
+          if (axisName === 'x') rotationAxis.set(1, 0, 0);
+          else if (axisName === 'z') rotationAxis.set(0, 0, 1);
+          else if (axisName === 'camera_up') {
+            // Calculate camera's current up vector
+            // Need camera's current orientation. Let's assume standard Y-up for now.
+            // To do this properly, we might need the full camera state (or calculate from position/target)
+            const cameraDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+            const approxCamRight = new Vector3().crossVectors(new Vector3(0, 1, 0), cameraDirection).normalize(); // Assumes world Y is up
+            rotationAxis.crossVectors(cameraDirection, approxCamRight).normalize(); // Calculate local up
+             this.logger.debug(`Using camera_up axis: ${rotationAxis.toArray()}`);
+             // TODO: Refine camera_up calculation if world isn't Y-up or target changes
+          }
+          // If axisName was invalid, it defaults to Y axis (0,1,0)
+
+          // 3. Calculate rotation
+          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'clockwise' ? -1 : 1);
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
           
-          let newDistance: number;
-          if (direction === 'in') {
-              // Factor determines the *remaining* distance ratio (e.g., 0.5 means move halfway closer)
-              newDistance = currentDistance * (factor as number);
-          } else { // direction === 'out'
-              // Factor determines the *new* distance ratio (e.g., 2.0 means double the distance)
-              newDistance = currentDistance * (factor as number);
-          }
+          const radiusVector = new Vector3().subVectors(currentPosition, orbitCenter);
+          radiusVector.applyQuaternion(quaternion);
           
-          // Avoid division by zero if currentDistance is very small
-          if (currentDistance < 1e-6) {
-              this.logger.warn('Current distance for zoom is near zero. Cannot calculate new position. Keeping position static for this step.');
-              newDistance = currentDistance; // Keep distance same
+          // Apply radius factor *before* adding back to center
+          const radiusFactor = typeof step.parameters.radius_factor === 'number' ? step.parameters.radius_factor : 1.0;
+          if (radiusFactor <= 0) {
+             this.logger.warn(`Invalid radius_factor ${radiusFactor}, defaulting to 1.0.`);
+             // radiusFactor = 1.0; // Already defaulted
           }
 
-          const newPosition = new Vector3()
-              .copy(zoomTargetPosition) // Start at the target
-              .addScaledVector(currentDirectionVector.normalize(), -newDistance); // Move back along the direction vector
+          radiusVector.multiplyScalar(radiusFactor);
+          
+          const newPosition = new Vector3().addVectors(orbitCenter, radiusVector);
 
+          // Validate essential parameters after type checks
+          let effectiveDirection = direction;
+          if (direction === 'left') effectiveDirection = 'counter-clockwise'; // Map left/right to directions relative to Y axis
+          if (direction === 'right') effectiveDirection = 'clockwise';
+
+          if (!effectiveDirection || (effectiveDirection !== 'clockwise' && effectiveDirection !== 'counter-clockwise')) {
+            this.logger.error(`Invalid or unmappable orbit direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (angle === null) { 
+            this.logger.error(`Invalid, missing, or zero orbit angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          if (rawAxisName !== axisName && typeof rawAxisName === 'string') { // Log if axis was defaulted
+              this.logger.warn(`Invalid or unsupported orbit axis: ${rawAxisName}. Defaulting to '${axisName}'.`);
+          }
+          // Note: No need to log target/easing defaults as they are common fallbacks.
+          
+          // 4. Create CameraCommand
           const command: CameraCommand = {
             position: newPosition.clone(),
-            target: currentTarget.clone(), // Zoom typically keeps the same target
+            target: orbitCenter.clone(), // Orbit keeps looking at the orbit center
             duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
-            easing: (easingName as EasingFunctionName) in easingFunctions ? easingName as EasingFunctionName : 'easeInOutQuad' // Validate easing name
+            easing: easingName // Use validated easing name
           };
           commands.push(command);
-          this.logger.debug('Generated zoom command:', command);
+          this.logger.debug('Generated orbit command:', command);
 
-          // Update state for the next step
+          // 5. Update state for the next step
           currentPosition = newPosition.clone();
-          // currentTarget remains the same for zoom
+          currentTarget = orbitCenter.clone(); // Update target to the orbit center
+          // --- End Orbit Logic ---
           break;
         }
-        case 'orbit': {
-          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
-          // TODO: Implement orbit logic
-          // 1. Resolve target, axis, direction, angle, speed, easing
-          // 2. Calculate new position based on rotation around axis/target
-          // 3. May need to update target as well if orbit path isn't perfectly looking at center
-          // 4. Create CameraCommand
-          // 5. Update currentPosition and currentTarget
+        case 'pan': {
+          // --- Start Pan Logic ---
+          const {
+            direction: rawDirection,
+            angle: rawAngle,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing pan direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (angle === null) {
+            this.logger.error(`Invalid, missing, or zero pan angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Determine rotation axis (Camera's local UP)
+          // We need to calculate the camera's local up vector. 
+          // Assume world up is (0, 1, 0) for cross product calculations.
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          // Handle cases where view direction might align with world up (looking straight up/down)
+          let cameraUp = new Vector3(0, 1, 0);
+          if (Math.abs(viewDirection.y) > 0.999) { // Looking nearly straight up or down
+              // Use camera's local 'forward' projected onto XZ plane to find a stable 'right'
+              const forwardXZ = new Vector3(viewDirection.x, 0, viewDirection.z).normalize();
+              const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), forwardXZ).normalize();
+              cameraUp.crossVectors(forwardXZ, cameraRight).normalize(); // Should give a stable 'up'
+          } else {
+               // Standard case: Calculate right vector, then true up vector
+              const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+              cameraUp.crossVectors(viewDirection, cameraRight).normalize();
+          }
+          this.logger.debug(`Pan using camera local up axis: ${cameraUp.toArray()}`);
+
+          // 2. Calculate rotation
+          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'left' ? 1 : -1); // Pan left = positive rotation around local Y
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(cameraUp, angleRad);
+
+          // 3. Rotate the target point around the camera position
+          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
+          targetVector.applyQuaternion(quaternion);
+          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
+
+          // 4. Create CameraCommand (Position stays the same, Target changes)
+          const command: CameraCommand = {
+            position: currentPosition.clone(), // Position does not change for pan
+            target: newTarget.clone(),
+            duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated pan command:', command);
+
+          // 5. Update state for the next step (Only target changes)
+          currentTarget = newTarget.clone();
+          // currentPosition remains the same
+          // --- End Pan Logic ---
           break;
         }
-        // TODO: Add cases for pan, tilt, dolly, truck, pedestal, fly_by, fly_away...
+        case 'tilt': {
+          // --- Start Tilt Logic ---
+          const {
+            direction: rawDirection,
+            angle: rawAngle,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing tilt direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (angle === null) {
+            this.logger.error(`Invalid, missing, or zero tilt angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Determine rotation axis (Camera's local RIGHT)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          // Assume world up is (0, 1, 0) for cross product
+          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+          // If looking straight up/down, the cross product might be zero. Need a fallback.
+          if (cameraRight.lengthSq() < 1e-6) { 
+              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Using world X as fallback axis for tilt.');
+              cameraRight.set(1, 0, 0); // Fallback to world X axis
+          }
+          this.logger.debug(`Tilt using camera local right axis: ${cameraRight.toArray()}`);
+          const rotationAxis = cameraRight; // Axis for tilt
+
+          // 2. Calculate rotation
+          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? 1 : -1); // Tilt up = positive rotation around local right
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+
+          // 3. Rotate the target point around the camera position
+          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
+          targetVector.applyQuaternion(quaternion);
+          
+          // Constraint check: Prevent target from going too far past vertical (e.g., > 85 degrees up/down)
+          const newTargetWorld = new Vector3().addVectors(currentPosition, targetVector);
+          const newViewDirection = new Vector3().subVectors(newTargetWorld, currentPosition).normalize();
+          const angleWithWorldUp = newViewDirection.angleTo(new Vector3(0, 1, 0)); // Angle to world Y
+          const maxTiltAngle = THREE.MathUtils.degToRad(85); // Max 85 degrees from horizontal plane
+          if (angleWithWorldUp < (Math.PI / 2 - maxTiltAngle) || angleWithWorldUp > (Math.PI / 2 + maxTiltAngle)) {
+               this.logger.warn(`Tilt angle limit reached (${angle} deg). Clamping target.`);
+               // Re-calculate target based on clamped angle (more complex, skip for now)
+               // For simplicity, we could just use the previous target if clamping is hard
+               // Or use the clamped vector direction. Let's stick to the calculated one for now, maybe add clamping later.
+               // TODO: Implement proper tilt clamping if necessary
+          }
+
+          const newTarget = newTargetWorld; // Use potentially unclamped target for now
+
+          // 4. Create CameraCommand (Position stays the same, Target changes)
+          const command: CameraCommand = {
+            position: currentPosition.clone(),
+            target: newTarget.clone(),
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated tilt command:', command);
+
+          // 5. Update state for the next step
+          currentTarget = newTarget.clone();
+          // currentPosition remains the same
+          // --- End Tilt Logic ---
+          break;
+        }
+        case 'dolly': {
+          // --- Start Dolly Logic ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          // Map aliases
+          if (direction === 'in') direction = 'forward';
+          if (direction === 'out') direction = 'backward';
+
+          if (direction !== 'forward' && direction !== 'backward') {
+            this.logger.error(`Invalid or missing dolly direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          const moveVector = viewDirection.multiplyScalar(distance * (direction === 'forward' ? 1 : -1));
+
+          // 2. Calculate new position
+          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
+
+          // 3. Create CameraCommand (Target stays the same, Position changes)
+          const command: CameraCommand = {
+            position: newPosition.clone(),
+            target: currentTarget.clone(), // Target does not change for dolly
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated dolly command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = newPosition.clone();
+          // currentTarget remains the same
+          // --- End Dolly Logic ---
+          break;
+        }
+        case 'truck': {
+          // --- Start Truck Logic ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing truck direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector (Camera's local RIGHT)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          // Assume world up is (0, 1, 0)
+          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+          // Handle looking straight up/down where cross product is zero
+           if (cameraRight.lengthSq() < 1e-6) { 
+              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Truck movement might be unpredictable. Using world X as fallback.');
+              cameraRight.set(1, 0, 0); // Fallback
+          }
+          
+          const moveVector = cameraRight.multiplyScalar(distance * (direction === 'left' ? -1 : 1)); // Truck left moves along negative right vector
+
+          // 2. Calculate new position
+          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
+
+          // 3. Create CameraCommand (Target stays the same, Position changes)
+          const command: CameraCommand = {
+            position: newPosition.clone(),
+            target: currentTarget.clone(), // Target does not change for truck
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated truck command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = newPosition.clone();
+          // currentTarget remains the same
+          // --- End Truck Logic ---
+          break;
+        }
+        case 'pedestal': {
+           // --- Start Pedestal Logic ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing pedestal direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector (Camera's local UP)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          // Assume world up is (0, 1, 0)
+          let cameraUp = new Vector3(0, 1, 0);
+          if (Math.abs(viewDirection.y) < 0.999) { // If not looking straight up/down
+            const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+            cameraUp.crossVectors(viewDirection, cameraRight).normalize();
+          } // else cameraUp remains world Y (0,1,0), which is correct for pedestal when looking straight up/down
+          
+          const moveVector = cameraUp.multiplyScalar(distance * (direction === 'up' ? 1 : -1));
+
+          // 2. Calculate new position
+          const newPosition = new Vector3().addVectors(currentPosition, moveVector);
+
+          // 3. Create CameraCommand (Target stays the same, Position changes)
+          const command: CameraCommand = {
+            position: newPosition.clone(),
+            target: currentTarget.clone(), // Target does not change for pedestal
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated pedestal command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = newPosition.clone();
+          // currentTarget remains the same
+          // --- End Pedestal Logic ---
+          break;
+        }
+        // TODO: Add cases for fly_by, fly_away...
         default: {
           this.logger.warn(`Unsupported motion type '${step.type}'. Skipping step.`);
           break;

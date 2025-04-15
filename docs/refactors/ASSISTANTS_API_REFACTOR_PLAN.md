@@ -282,9 +282,23 @@ interface MotionStep {
 *   [X] *Goal:* Basic E2E backend flow working: Prompt -> Assistant Plan -> Interpreter -> API returns `CameraCommand[]`. *(Phase 2 COMPLETE as of Session End)*
 
 ### Phase 3: Scene Interpreter Motion Library Expansion
-*   [ ] Implement generators for core motion types (`orbit`, `pan`, `dolly`, etc.).
-*   [ ] Implement parameter handling within generators (speed, target, direction, style).
-*   [ ] Implement various easing function applications.
+*   [/] Implement generators for core motion types. *(In Progress)*
+    *   [X] `static` (from Phase 2)
+    *   [X] `zoom` (from Phase 2)
+    *   [X] `orbit` (updated)
+    *   [X] `pan`
+    *   [X] `tilt`
+    *   [X] `dolly`
+    *   [X] `truck`
+    *   [X] `pedestal`
+    *   [ ] `fly_by`
+    *   [ ] `fly_away`
+    *   [ ] `set_view`
+    *   [ ] `focus_on`
+    *   [ ] `arc`
+    *   [ ] `reveal`
+*   [ ] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started within generators)*
+*   [ ] Implement various easing function applications. *(Basic structure exists, needs integration)*
 *   [ ] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators.
 *   [ ] Refine duration allocation logic across steps.
 *   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
