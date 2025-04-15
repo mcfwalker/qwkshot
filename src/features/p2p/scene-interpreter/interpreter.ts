@@ -294,16 +294,65 @@ export class SceneInterpreterImpl implements SceneInterpreter {
            // Ensure new distance is positive
           newDistance = Math.max(1e-6, newDistance);
 
+          // --- Constraint Checking (Distance for Zoom) ---
+          const { cameraConstraints } = envAnalysis;
+          const { spatial } = sceneAnalysis;
+          let distanceClamped = false;
+
+          if (cameraConstraints) {
+            if (newDistance < cameraConstraints.minDistance) {
+              this.logger.warn(`Zoom: Calculated newDistance (${newDistance.toFixed(2)}) violates minDistance (${cameraConstraints.minDistance}). Clamping distance.`);
+              newDistance = cameraConstraints.minDistance;
+              distanceClamped = true;
+            }
+            if (newDistance > cameraConstraints.maxDistance) {
+              this.logger.warn(`Zoom: Calculated newDistance (${newDistance.toFixed(2)}) violates maxDistance (${cameraConstraints.maxDistance}). Clamping distance.`);
+              newDistance = cameraConstraints.maxDistance;
+              distanceClamped = true;
+            }
+          }
+          // --- End Distance Constraint Check ---
+
           // 3. Calculate new position
           // Start from the target and move back along the view vector by the newDistance
           const viewDirectionNormalized = vectorToTarget.normalize(); // Normalize vectorToTarget
-          const newPosition = new Vector3()
+          const newPositionCandidate = new Vector3()
               .copy(zoomTargetPosition)
               .addScaledVector(viewDirectionNormalized, -newDistance);
 
+          // --- Constraint Checking (Height & Bounding Box) ---
+          let finalPosition = newPositionCandidate.clone();
+          let posClamped = false;
+
+          // a) Height constraints
+          if (cameraConstraints) {
+            if (finalPosition.y < cameraConstraints.minHeight) {
+              finalPosition.y = cameraConstraints.minHeight;
+              posClamped = true;
+              this.logger.warn(`Zoom: Clamped final position to minHeight (${cameraConstraints.minHeight})`);
+            }
+            if (finalPosition.y > cameraConstraints.maxHeight) {
+              finalPosition.y = cameraConstraints.maxHeight;
+              posClamped = true;
+              this.logger.warn(`Zoom: Clamped final position to maxHeight (${cameraConstraints.maxHeight})`);
+            }
+          }
+
+          // b) Bounding box constraint
+          if (spatial?.bounds) {
+              const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+              if (objectBounds.containsPoint(finalPosition)) {
+                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+                  posClamped = true;
+                  this.logger.warn('Zoom: Clamped final position to object bounding box surface.');
+                   // TODO: Implement raycast approach for more accurate clamping.
+              }
+          }
+          // --- End Height/BB Constraint Check ---
+
           // 4. Create CameraCommand
           const command: CameraCommand = {
-            position: newPosition.clone(),
+            position: finalPosition.clone(), // Use potentially clamped position
             target: zoomTargetPosition.clone(), // Zoom keeps looking at the resolved target
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: easingName
@@ -312,7 +361,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           this.logger.debug('Generated zoom command:', command);
 
           // 5. Update state for the next step
-          currentPosition = newPosition.clone();
+          currentPosition = finalPosition.clone();
           currentTarget = zoomTargetPosition.clone(); // Keep looking at the resolved target
           // --- End Zoom Logic ---
           break;
@@ -399,11 +448,60 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           radiusVector.multiplyScalar(radiusFactor);
           
-          const newPosition = new Vector3().addVectors(orbitCenter, radiusVector);
+          const newPositionCandidate = new Vector3().addVectors(orbitCenter, radiusVector);
+          let finalPosition = newPositionCandidate.clone();
+          let clamped = false;
+
+          // --- Constraint Checking --- 
+          const { cameraConstraints } = envAnalysis;
+          const { spatial } = sceneAnalysis;
+
+          // a) Height constraints
+          if (cameraConstraints) {
+            if (finalPosition.y < cameraConstraints.minHeight) {
+              finalPosition.y = cameraConstraints.minHeight;
+              clamped = true;
+              this.logger.warn(`Orbit: Clamped position to minHeight (${cameraConstraints.minHeight})`);
+            }
+            if (finalPosition.y > cameraConstraints.maxHeight) {
+              finalPosition.y = cameraConstraints.maxHeight;
+              clamped = true;
+              this.logger.warn(`Orbit: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
+            }
+          }
+
+          // b) Distance constraints (relative to orbitCenter)
+          if (cameraConstraints) {
+            const distanceToCenter = finalPosition.distanceTo(orbitCenter);
+            if (distanceToCenter < cameraConstraints.minDistance) {
+               const directionFromCenter = new Vector3().subVectors(finalPosition, orbitCenter).normalize();
+               finalPosition.copy(orbitCenter).addScaledVector(directionFromCenter, cameraConstraints.minDistance);
+               clamped = true;
+               this.logger.warn(`Orbit: Clamped position to minDistance (${cameraConstraints.minDistance})`);
+            }
+            if (distanceToCenter > cameraConstraints.maxDistance) {
+               const directionFromCenter = new Vector3().subVectors(finalPosition, orbitCenter).normalize();
+               finalPosition.copy(orbitCenter).addScaledVector(directionFromCenter, cameraConstraints.maxDistance);
+               clamped = true;
+               this.logger.warn(`Orbit: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
+            }
+          }
+          
+          // c) Bounding box constraint (prevent entering)
+          if (spatial?.bounds) {
+              const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+              if (objectBounds.containsPoint(finalPosition)) {
+                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+                  clamped = true;
+                  this.logger.warn('Orbit: Clamped position to object bounding box surface.');
+                  // TODO: Implement raycast approach for more accurate clamping.
+              }
+          }
+          // --- End Constraint Checking ---
 
           // 4. Create CameraCommand
           const command: CameraCommand = {
-            position: newPosition.clone(),
+            position: finalPosition.clone(), // Use potentially clamped position
             target: orbitCenter.clone(), // Orbit keeps looking at the orbit center
             duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
             easing: easingName // Use validated easing name
@@ -412,7 +510,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           this.logger.debug('Generated orbit command:', command);
 
           // 5. Update state for the next step
-          currentPosition = newPosition.clone();
+          currentPosition = finalPosition.clone(); // Use potentially clamped position
           currentTarget = orbitCenter.clone(); // Update target to the orbit center
           // --- End Orbit Logic ---
           break;
@@ -557,6 +655,317 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           currentTarget = newTarget.clone();
           // currentPosition remains the same
           // --- End Tilt Logic ---
+          break;
+        }
+        case 'dolly': {
+          // --- Start Dolly Logic (Corrected Placement and Logic) ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          // Map aliases
+          if (direction === 'in') direction = 'forward';
+          if (direction === 'out') direction = 'backward';
+
+          if (direction !== 'forward' && direction !== 'backward') {
+            this.logger.error(`Invalid or missing dolly direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector along view direction
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          const moveVector = viewDirection.multiplyScalar(distance * (direction === 'forward' ? 1 : -1));
+
+          // 2. Calculate candidate position
+          const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
+          let finalPosition = newPositionCandidate.clone();
+          let clamped = false;
+
+          // --- Constraint Checking --- 
+          const { cameraConstraints } = envAnalysis;
+          const { spatial } = sceneAnalysis;
+
+          // a) Height constraints
+          if (cameraConstraints) {
+            if (finalPosition.y < cameraConstraints.minHeight) {
+              finalPosition.y = cameraConstraints.minHeight;
+              clamped = true;
+              this.logger.warn(`Dolly: Clamped position to minHeight (${cameraConstraints.minHeight})`);
+            }
+            if (finalPosition.y > cameraConstraints.maxHeight) {
+              finalPosition.y = cameraConstraints.maxHeight;
+              clamped = true;
+              this.logger.warn(`Dolly: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
+            }
+          }
+
+          // b) Distance constraints (relative to currentTarget)
+          if (cameraConstraints) {
+            const distanceToTarget = finalPosition.distanceTo(currentTarget);
+            if (distanceToTarget < cameraConstraints.minDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+               clamped = true;
+               this.logger.warn(`Dolly: Clamped position to minDistance (${cameraConstraints.minDistance})`);
+            }
+            if (distanceToTarget > cameraConstraints.maxDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+               clamped = true;
+               this.logger.warn(`Dolly: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
+            }
+          }
+          
+          // c) Bounding box constraint (prevent entering)
+          if (spatial?.bounds) {
+              const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+              if (objectBounds.containsPoint(finalPosition)) {
+                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); // Clamp to surface
+                  clamped = true;
+                  this.logger.warn('Dolly: Clamped position to object bounding box surface.');
+                  // TODO: Implement raycast approach for more accurate clamping.
+              }
+          }
+          // --- End Constraint Checking ---
+
+          // 3. Create CameraCommand
+          const command: CameraCommand = {
+            position: finalPosition.clone(),
+            target: currentTarget.clone(), 
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated dolly command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = finalPosition.clone();
+          // currentTarget remains the same
+          // --- End Dolly Logic ---
+          break;
+        }
+        case 'truck': {
+          // --- Start Truck Logic (Corrected) ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing truck direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector (Camera's local RIGHT)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+          if (cameraRight.lengthSq() < 1e-6) { 
+              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Truck movement might be unpredictable. Using world X as fallback.');
+              cameraRight.set(1, 0, 0); // Fallback
+          }
+          const moveVector = cameraRight.multiplyScalar(distance * (direction === 'left' ? -1 : 1)); 
+
+          // 2. Calculate candidate position
+          const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
+          let finalPosition = newPositionCandidate.clone();
+          let clamped = false;
+
+          // --- Constraint Checking --- 
+          const { cameraConstraints } = envAnalysis;
+          const { spatial } = sceneAnalysis;
+
+          // a) Height constraints
+          if (cameraConstraints) {
+            if (finalPosition.y < cameraConstraints.minHeight) {
+              finalPosition.y = cameraConstraints.minHeight;
+              clamped = true;
+              this.logger.warn(`Truck: Clamped position to minHeight (${cameraConstraints.minHeight})`);
+            }
+            if (finalPosition.y > cameraConstraints.maxHeight) {
+              finalPosition.y = cameraConstraints.maxHeight;
+              clamped = true;
+              this.logger.warn(`Truck: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
+            }
+          }
+
+          // b) Distance constraints (relative to currentTarget)
+          if (cameraConstraints) {
+            const distanceToTarget = finalPosition.distanceTo(currentTarget);
+            if (distanceToTarget < cameraConstraints.minDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+               clamped = true;
+               this.logger.warn(`Truck: Clamped position to minDistance (${cameraConstraints.minDistance})`);
+            }
+            if (distanceToTarget > cameraConstraints.maxDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+               clamped = true;
+               this.logger.warn(`Truck: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
+            }
+          }
+          
+          // c) Bounding box constraint (prevent entering)
+          if (spatial?.bounds) {
+              const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+              if (objectBounds.containsPoint(finalPosition)) {
+                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+                  clamped = true;
+                  this.logger.warn('Truck: Clamped position to object bounding box surface.');
+                  // TODO: Implement raycast approach for more accurate clamping.
+              }
+          }
+          // --- End Constraint Checking ---
+
+          // 3. Create CameraCommand
+          const command: CameraCommand = {
+            position: finalPosition.clone(), 
+            target: currentTarget.clone(), // Target does not change for truck
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated truck command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = finalPosition.clone();
+          // currentTarget remains the same
+          // --- End Truck Logic ---
+          break;
+        }
+        case 'pedestal': {
+           // --- Start Pedestal Logic (Corrected) ---
+          const {
+            direction: rawDirection,
+            distance: rawDistance,
+            easing: rawEasingName = 'easeInOutQuad'
+          } = step.parameters;
+
+          // Validate parameters
+          const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
+          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+
+          if (!direction) {
+            this.logger.error(`Invalid or missing pedestal direction: ${rawDirection}. Skipping step.`);
+            continue;
+          }
+          if (distance === null) {
+            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Skipping step.`);
+            continue;
+          }
+           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
+             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          }
+
+          // 1. Calculate movement vector (Camera's local UP)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          let cameraUp = new Vector3(0, 1, 0); // Start with world up
+          // Calculate local up unless looking straight up/down
+          if (Math.abs(viewDirection.y) < 0.999) { 
+            const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+            if (cameraRight.lengthSq() > 1e-6) { // Ensure right vector is valid before calculating up
+               cameraUp.crossVectors(viewDirection, cameraRight).normalize();
+            } else {
+                // If right is zero (looking up/down), world Y is already the correct pedestal axis
+                 this.logger.debug('Pedestal: Using world Y axis due to vertical view direction.');
+            }
+          }
+          const moveVector = cameraUp.multiplyScalar(distance * (direction === 'up' ? 1 : -1));
+
+          // 2. Calculate candidate position
+          const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
+          let finalPosition = newPositionCandidate.clone();
+          let clamped = false;
+
+          // --- Constraint Checking --- 
+          const { cameraConstraints } = envAnalysis;
+          const { spatial } = sceneAnalysis;
+
+          // a) Height constraints
+          if (cameraConstraints) {
+            if (finalPosition.y < cameraConstraints.minHeight) {
+              finalPosition.y = cameraConstraints.minHeight;
+              clamped = true;
+              this.logger.warn(`Pedestal: Clamped position to minHeight (${cameraConstraints.minHeight})`);
+            }
+            if (finalPosition.y > cameraConstraints.maxHeight) {
+              finalPosition.y = cameraConstraints.maxHeight;
+              clamped = true;
+              this.logger.warn(`Pedestal: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
+            }
+          }
+
+          // b) Distance constraints (relative to currentTarget)
+          if (cameraConstraints) {
+            const distanceToTarget = finalPosition.distanceTo(currentTarget);
+            if (distanceToTarget < cameraConstraints.minDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+               clamped = true;
+               this.logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance})`);
+            }
+            if (distanceToTarget > cameraConstraints.maxDistance) {
+               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+               clamped = true;
+               this.logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
+            }
+          }
+          
+          // c) Bounding box constraint (prevent entering)
+          if (spatial?.bounds) {
+              const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+              if (objectBounds.containsPoint(finalPosition)) {
+                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+                  clamped = true;
+                  this.logger.warn('Pedestal: Clamped position to object bounding box surface.');
+                  // TODO: Implement raycast approach for more accurate clamping.
+              }
+          }
+          // --- End Constraint Checking ---
+          
+          // 3. Create CameraCommand 
+          const command: CameraCommand = {
+            position: finalPosition.clone(), 
+            target: currentTarget.clone(), // Target does not change for pedestal
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: easingName
+          };
+          commands.push(command);
+          this.logger.debug('Generated pedestal command:', command);
+
+          // 4. Update state for the next step
+          currentPosition = finalPosition.clone();
+          // currentTarget remains the same
+          // --- End Pedestal Logic ---
           break;
         }
       }
