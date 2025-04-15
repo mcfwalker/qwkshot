@@ -8,7 +8,7 @@ import {
   Logger,
 } from './shared';
 import { CameraPath } from './llm-engine';
-import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
+import { EasingFunctionName } from '@/lib/easing';
 import { SceneAnalysis } from './scene-analyzer';
 import { EnvironmentalAnalysis } from './environmental-analyzer';
 import { MotionPlan } from '@/lib/motion-planning/types';
@@ -20,6 +20,7 @@ export interface SceneInterpreterConfig extends P2PConfig {
   smoothingFactor: number;
   maxKeyframes: number;
   interpolationMethod: 'linear' | 'smooth' | 'ease';
+  maxVelocity?: number; // Optional: Max allowed velocity (units/sec)
 }
 
 /**

@@ -11,6 +11,7 @@ import { CatmullRomCurve3, Vector3, Box3 } from 'three'; // Explicitly import Bo
 import { MotionPlan, MotionStep } from '@/lib/motion-planning/types'; // Added
 import { SceneAnalysis } from '@/types/p2p/scene-analyzer'; // Added
 import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer'; // Added
+import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing';
 
 // Define a simple logger for this module
 const logger = {
@@ -25,17 +26,6 @@ function isFiniteVector(v: any): boolean {
     return v && typeof v === 'object' && 
            Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
 }
-
-// Placeholder Easing Function Map (replace with actual implementations)
-export const easingFunctions = {
-  linear: (t: number) => t,
-  easeInQuad: (t: number) => t * t,
-  easeOutQuad: (t: number) => t * (2 - t),
-  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-  // Add more easing functions as needed from libraries like tween.js or implement custom ones
-};
-
-export type EasingFunctionName = keyof typeof easingFunctions;
 
 // --- CLASS DEFINITION MOVED HERE --- Export the class
 export class SceneInterpreterImpl implements SceneInterpreter {
@@ -202,9 +192,9 @@ export class SceneInterpreterImpl implements SceneInterpreter {
       
       // Check if intersection happens before reaching the intended end position
       if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
-        this.logger.warn(`Raycast: Path intersects bounding box. Clamping position.`);
-        // Return the intersection point pushed back slightly along the ray
-        return intersectionPoint.addScaledVector(ray.direction, -offset);
+        this.logger.warn(`Raycast: Path intersects bounding box. Clamping position to exact intersection.`);
+        // Return the exact intersection point
+        return intersectionPoint; // No offset needed
       }
     }
 
@@ -295,7 +285,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             target: currentTarget.clone(),
             // Use stepDuration if valid, otherwise maybe a default small duration or handle error?
             duration: stepDuration > 0 ? stepDuration : 0.1, // Example: default 0.1s if calculation failed
-            easing: 'linear' // Static hold is linear
+            easing: DEFAULT_EASING // Static hold is linear
           };
           commands.push(command);
           this.logger.debug('Generated static command:', command);
@@ -308,7 +298,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             direction: rawDirection,
             factor: rawFactor,
             target: rawTargetName = 'current_target',
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed, default to medium
           } = step.parameters;
 
@@ -316,7 +306,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const direction = typeof rawDirection === 'string' && (rawDirection === 'in' || rawDirection === 'out') ? rawDirection : null;
           const factor = typeof rawFactor === 'number' && rawFactor > 0 ? rawFactor : null;
           const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target'; // Default
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
@@ -429,11 +419,11 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           if (speed === 'very_fast') {
             effectiveEasingName = 'linear';
             this.logger.debug(`Zoom: Speed 'very_fast' overriding easing to ${effectiveEasingName}`);
-          } else if (speed === 'fast' && easingName === 'easeInOutQuad') {
+          } else if (speed === 'fast' && easingName === DEFAULT_EASING) {
             effectiveEasingName = 'easeOutQuad'; // Example: fast uses quicker stop
             this.logger.debug(`Zoom: Speed 'fast' modifying default easing to ${effectiveEasingName}`);
           } else if (speed === 'slow' && easingName === 'linear') {
-            effectiveEasingName = 'easeInOutQuad'; // Example: slow avoids linear
+            effectiveEasingName = DEFAULT_EASING; // Example: slow avoids linear
              this.logger.debug(`Zoom: Speed 'slow' overriding linear easing to ${effectiveEasingName}`);
           }
           // Other speed/easing combinations use the validated easingName directly
@@ -462,7 +452,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             angle: rawAngle, 
             axis: rawAxisName = 'y', 
             target: rawTargetName = 'object_center', 
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
@@ -473,7 +463,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
           let axisName = typeof rawAxisName === 'string' && ['x', 'y', 'z', 'camera_up'].includes(rawAxisName) ? rawAxisName : 'y'; // Include camera_up, default to 'y'
           const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'object_center'; // Default if invalid
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad'; // Validate and default
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING; // Validate and default
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // Validate essential parameters after type checks
@@ -599,8 +589,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
           if (effectiveEasingName !== easingName) {
               this.logger.debug(`Orbit: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -626,14 +616,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             angle: rawAngle,
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
@@ -678,8 +668,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
           if (effectiveEasingName !== easingName) {
               this.logger.debug(`Pan: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -705,14 +695,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             angle: rawAngle,
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
@@ -763,8 +753,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
            if (effectiveEasingName !== easingName) {
               this.logger.debug(`Tilt: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -790,14 +780,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // Map aliases
@@ -882,8 +872,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
            if (effectiveEasingName !== easingName) {
               this.logger.debug(`Dolly: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -909,14 +899,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
@@ -1002,8 +992,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
           if (effectiveEasingName !== easingName) {
               this.logger.debug(`Truck: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -1029,14 +1019,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad',
+            easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
@@ -1128,8 +1118,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
           if (effectiveEasingName !== easingName) {
               this.logger.debug(`Pedestal: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
           }
@@ -1152,10 +1142,31 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         }
       }
     }
+
+    // if (!validationResult.isValid) { ... handle validation errors ... }
+
+    // --- Velocity Check --- 
+    const maxVelocity = this.config?.maxVelocity;
+    if (maxVelocity && maxVelocity > 0 && commands.length > 0) { // Check commands.length > 0
+        // Use initialCameraState for the position before the first command
+        let previousPosition = initialCameraState.position; 
+        for (let i = 0; i < commands.length; i++) {
+            const command = commands[i];
+            const distanceMoved = command.position.distanceTo(previousPosition);
+            if (command.duration > 1e-6) { // Avoid division by zero
+                 const velocity = distanceMoved / command.duration;
+                 if (velocity > maxVelocity) {
+                    this.logger.warn(`Velocity check failed for command ${i + 1}: Velocity ${velocity.toFixed(2)} exceeds max ${maxVelocity}.`);
+                    // TODO: Optionally modify command duration or add intermediate steps?
+                 }
+            }
+            previousPosition = command.position; // Update for next iteration
+        }
+    }
+    // --- End Velocity Check ---
+
     return commands;
   }
-
-  // --- Restore Missing Methods --- 
 
   async executeCommand(camera: Camera, command: CameraCommand): Promise<void> {
     this.logger.info('Executing camera command (placeholder)', { command });

@@ -297,10 +297,10 @@ interface MotionStep {
     *   [ ] `focus_on`
     *   [ ] `arc`
     *   [ ] `reveal`
-*   [/] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started within generators)*
-*   [/] Implement various easing function applications. *(Basic structure exists, needs integration)*
-*   [/] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Basic clamping implemented)*
-*   [ ] Refine duration allocation logic across steps.
+*   [/] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started: Target resolution, speed param, direction aliases)*
+*   [/] Implement various easing function applications. *(Partially started: Speed param influences final easing selection)*
+*   [/] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Partially completed: Basic clamping, raycast for BB, velocity check)*
+*   [/] Refine duration allocation logic across steps. *(Partially completed: Added normalization based on ratios)*
 *   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
 
@@ -325,6 +325,7 @@ interface MotionStep {
 *   Robustness of Assistant correctly mapping prompts to KB and generating valid JSON?
 *   Complexity of implementing sophisticated motion generators in `Scene Interpreter`.
 *   Effort required to create and maintain a high-quality Motion KB.
+*   **Technical Debt:** Deferred `npm audit fix --force` for low severity vulnerability in `next@15.2.3` (requires update to `15.3.0`). To be addressed later.
 
 ## 8. Proposed Architecture Diagram (Mermaid)
 
