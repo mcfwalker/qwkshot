@@ -297,9 +297,9 @@ interface MotionStep {
     *   [ ] `focus_on`
     *   [ ] `arc`
     *   [ ] `reveal`
-*   [ ] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started within generators)*
-*   [ ] Implement various easing function applications. *(Basic structure exists, needs integration)*
-*   [ ] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators.
+*   [/] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Partially started within generators)*
+*   [/] Implement various easing function applications. *(Basic structure exists, needs integration)*
+*   [/] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Basic clamping implemented)*
 *   [ ] Refine duration allocation logic across steps.
 *   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*

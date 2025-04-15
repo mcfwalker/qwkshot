@@ -176,6 +176,49 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return null; // Target not found
   }
 
+  /**
+   * Helper method to clamp a position using raycasting against a bounding box.
+   * If the path from start to end intersects the box, returns the intersection point (slightly offset).
+   * Otherwise, returns the intended end position.
+   */
+  private _clampPositionWithRaycast(
+    startPosition: Vector3,
+    intendedEndPosition: Vector3,
+    objectBounds: Box3,
+    offset: number = 0.01 // Small offset to push point slightly outside the box
+  ): Vector3 {
+    const movementVector = new Vector3().subVectors(intendedEndPosition, startPosition);
+    const distanceToEnd = movementVector.length();
+
+    if (distanceToEnd < 1e-6) {
+      return startPosition.clone(); // No movement, return start
+    }
+
+    const ray = new THREE.Ray(startPosition, movementVector.normalize());
+    const intersectionPoint = new Vector3();
+
+    if (ray.intersectBox(objectBounds, intersectionPoint)) {
+      const distanceToIntersection = startPosition.distanceTo(intersectionPoint);
+      
+      // Check if intersection happens before reaching the intended end position
+      if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
+        this.logger.warn(`Raycast: Path intersects bounding box. Clamping position.`);
+        // Return the intersection point pushed back slightly along the ray
+        return intersectionPoint.addScaledVector(ray.direction, -offset);
+      }
+    }
+
+    // No intersection before the end point, or ray starts inside (intersectBox might return start)
+    // Final check: If the intended end position is *inside* the box, clamp it to the surface as fallback.
+    if (objectBounds.containsPoint(intendedEndPosition)) {
+        this.logger.warn('Raycast: Intended end position is inside bounds. Clamping to surface as fallback.');
+        return objectBounds.clampPoint(intendedEndPosition, new Vector3());
+    }
+
+    // No intersection or intersection is beyond the end point, return intended end
+    return intendedEndPosition.clone();
+  }
+
   interpretPath(
     plan: MotionPlan,
     sceneAnalysis: SceneAnalysis,
@@ -206,22 +249,44 @@ export class SceneInterpreterImpl implements SceneInterpreter {
       // throw new Error('Missing or invalid requested_duration in MotionPlan metadata');
     }
 
-    for (const step of plan.steps) {
-      this.logger.debug(`Processing step: ${step.type}`, step.parameters);
+    // --- Duration Allocation and Normalization --- 
+    let idealStepDurations: number[] = [];
+    let totalIdealDuration = 0;
+    let normalizationFactor = 1.0;
 
-      let stepDuration = 0;
-      if (totalDuration && totalDuration > 0) {
-          stepDuration = totalDuration * (step.duration_ratio ?? 0);
-          if (stepDuration <= 0) {
-              this.logger.warn(`Calculated step duration is zero or negative for step type ${step.type}. Skipping duration-based command generation for this step.`);
-              // Decide if step should be skipped or handled differently
-          }
-      } else if (step.type !== 'static') { 
-          // Only allow non-static steps if totalDuration is valid
-          this.logger.error(`Cannot process step type '${step.type}' without a valid total duration.`);
-          continue; // Skip this step
+    if (totalDuration && totalDuration > 0) {
+        // First pass: Calculate ideal durations based on ratios
+        for (const step of plan.steps) {
+            const idealDuration = totalDuration * (step.duration_ratio ?? 0);
+            idealStepDurations.push(idealDuration);
+            totalIdealDuration += idealDuration;
+        }
+
+        // Check if normalization is needed (allow small tolerance)
+        if (totalIdealDuration > 0 && Math.abs(totalIdealDuration - totalDuration) > 1e-4) {
+            normalizationFactor = totalDuration / totalIdealDuration;
+            this.logger.warn(`Total ideal step duration (${totalIdealDuration.toFixed(3)}s) differs from requested total (${totalDuration.toFixed(3)}s). Normalizing durations by factor ${normalizationFactor.toFixed(3)}.`);
+        } else if (totalIdealDuration <= 0) {
+             this.logger.warn('Sum of ideal step durations is zero or negative. Cannot allocate durations.');
+        }
+    } else {
+        this.logger.warn('Total duration not available for normalization. Using default/zero durations.');
+        idealStepDurations = plan.steps.map(() => 0);
+    }
+    // --- End Duration Allocation ---
+
+    for (const [index, step] of plan.steps.entries()) { // Use entries to get index
+      this.logger.debug(`Processing step ${index + 1}: ${step.type}`, step.parameters);
+
+      // Get the normalized duration for this step
+      let stepDuration = (idealStepDurations[index] ?? 0) * normalizationFactor;
+      stepDuration = Math.max(0, stepDuration);
+
+      if (stepDuration <= 0 && step.type !== 'static') {
+           this.logger.warn(`Normalized step duration is zero or negative for step ${index + 1} (${step.type}). Using default minimum duration in command generation.`);
       }
-
+      
+      // Pass stepDuration down to generators (already done implicitly as it's in scope)
       switch (step.type) {
         case 'static': {          
           // Hold current position and target
@@ -340,15 +405,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
 
-          // b) Bounding box constraint
+          // b) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              if (objectBounds.containsPoint(finalPosition)) {
-                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+              const clampedPosition = this._clampPositionWithRaycast(
+                  currentPosition, // Start from previous position
+                  newPositionCandidate, // Target the candidate position
+                  objectBounds
+              );
+              if (!clampedPosition.equals(newPositionCandidate)) {
+                  finalPosition.copy(clampedPosition);
                   posClamped = true;
-                  this.logger.warn('Zoom: Clamped final position to object bounding box surface.');
-                   // TODO: Implement raycast approach for more accurate clamping.
+              } else {
+                  finalPosition.copy(newPositionCandidate);
               }
+          } else {
+              finalPosition.copy(newPositionCandidate);
           }
           // --- End Height/BB Constraint Check ---
 
@@ -505,15 +577,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
           
-          // c) Bounding box constraint (prevent entering)
+          // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              if (objectBounds.containsPoint(finalPosition)) {
-                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+              const clampedPosition = this._clampPositionWithRaycast(
+                  currentPosition, 
+                  newPositionCandidate,
+                  objectBounds
+              );
+               if (!clampedPosition.equals(newPositionCandidate)) {
+                  finalPosition.copy(clampedPosition);
                   clamped = true;
-                  this.logger.warn('Orbit: Clamped position to object bounding box surface.');
-                  // TODO: Implement raycast approach for more accurate clamping.
+              } else {
+                   finalPosition.copy(newPositionCandidate);
               }
+          } else {
+              finalPosition.copy(newPositionCandidate);
           }
           // --- End Constraint Checking ---
 
@@ -691,13 +770,13 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
 
           // 4. Create CameraCommand (Position stays the same, Target changes)
-          const command: CameraCommand = {
+                const command: CameraCommand = {
             position: currentPosition.clone(),
             target: newTarget.clone(),
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
-          };
-          commands.push(command);
+                };
+                commands.push(command);
           this.logger.debug('Generated tilt command:', command);
 
           // 5. Update state for the next step (Only target changes)
@@ -781,15 +860,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
           
-          // c) Bounding box constraint (prevent entering)
+          // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              if (objectBounds.containsPoint(finalPosition)) {
-                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); // Clamp to surface
+              const clampedPosition = this._clampPositionWithRaycast(
+                  currentPosition,
+                  newPositionCandidate,
+                  objectBounds
+              );
+              if (!clampedPosition.equals(newPositionCandidate)) {
+                  finalPosition.copy(clampedPosition);
                   clamped = true;
-                  this.logger.warn('Dolly: Clamped position to object bounding box surface.');
-                  // TODO: Implement raycast approach for more accurate clamping.
+              } else {
+                  finalPosition.copy(newPositionCandidate);
               }
+          } else {
+              finalPosition.copy(newPositionCandidate);
           }
           // --- End Constraint Checking ---
 
@@ -894,15 +980,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
           
-          // c) Bounding box constraint (prevent entering)
+          // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              if (objectBounds.containsPoint(finalPosition)) {
-                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+              const clampedPosition = this._clampPositionWithRaycast(
+                  currentPosition,
+                  newPositionCandidate,
+                  objectBounds
+              );
+              if (!clampedPosition.equals(newPositionCandidate)) {
+                  finalPosition.copy(clampedPosition);
                   clamped = true;
-                  this.logger.warn('Truck: Clamped position to object bounding box surface.');
-                  // TODO: Implement raycast approach for more accurate clamping.
+              } else {
+                  finalPosition.copy(newPositionCandidate);
               }
+          } else {
+              finalPosition.copy(newPositionCandidate);
           }
           // --- End Constraint Checking ---
 
@@ -966,7 +1059,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
             if (cameraRight.lengthSq() > 1e-6) { // Ensure right vector is valid before calculating up
                cameraUp.crossVectors(viewDirection, cameraRight).normalize();
-            } else {
+    } else {
                 // If right is zero (looking up/down), world Y is already the correct pedestal axis
                  this.logger.debug('Pedestal: Using world Y axis due to vertical view direction.');
             }
@@ -1013,15 +1106,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
           
-          // c) Bounding box constraint (prevent entering)
+          // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              if (objectBounds.containsPoint(finalPosition)) {
-                  finalPosition = objectBounds.clampPoint(finalPosition, new Vector3()); 
+              const clampedPosition = this._clampPositionWithRaycast(
+                  currentPosition,
+                  newPositionCandidate,
+                  objectBounds
+              );
+              if (!clampedPosition.equals(newPositionCandidate)) {
+                  finalPosition.copy(clampedPosition);
                   clamped = true;
-                  this.logger.warn('Pedestal: Clamped position to object bounding box surface.');
-                  // TODO: Implement raycast approach for more accurate clamping.
+              } else {
+                  finalPosition.copy(newPositionCandidate);
               }
+          } else {
+               finalPosition.copy(newPositionCandidate);
           }
           // --- End Constraint Checking ---
           
@@ -1069,7 +1169,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     this.logger.info(`Executing ${commands.length} camera commands (placeholder).`);
     // This likely won't be used if commands are sent to client for execution.
     for (const command of commands) {
-      await this.executeCommand(camera, command);
+        await this.executeCommand(camera, command);
     }
     return Promise.resolve();
   }
@@ -1079,43 +1179,43 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     objectBounds: Box3
   ): ValidationResult {
     console.log('--- VALIDATE COMMANDS ENTRY POINT ---'); // Keep console log for debugging
-    this.logger.info('Validating camera commands', { commandCount: commands.length });
-    
+     this.logger.info('Validating camera commands', { commandCount: commands.length });
+     
     // --- Bounding Box Validation (Restore previous logic) --- 
     if (!objectBounds || !(objectBounds instanceof Box3)) {
-      this.logger.warn('Object bounds NOT PROVIDED or invalid type for validation.');
-    } else {
-      this.logger.warn(`[Interpreter] Starting validation against Bounds: Min(${objectBounds.min.x?.toFixed(2)}, ${objectBounds.min.y?.toFixed(2)}, ${objectBounds.min.z?.toFixed(2)}), Max(${objectBounds.max.x?.toFixed(2)}, ${objectBounds.max.y?.toFixed(2)}, ${objectBounds.max.z?.toFixed(2)})`);
-      for (const [index, command] of commands.entries()) {
-        const pos = command.position;
+       this.logger.warn('Object bounds NOT PROVIDED or invalid type for validation.');
+     } else {
+       this.logger.warn(`[Interpreter] Starting validation against Bounds: Min(${objectBounds.min.x?.toFixed(2)}, ${objectBounds.min.y?.toFixed(2)}, ${objectBounds.min.z?.toFixed(2)}), Max(${objectBounds.max.x?.toFixed(2)}, ${objectBounds.max.y?.toFixed(2)}, ${objectBounds.max.z?.toFixed(2)})`);
+       for (const [index, command] of commands.entries()) {
+         const pos = command.position;
         if (!pos || !(pos instanceof Vector3)) {
             this.logger.warn(`[Interpreter] Skipping validation for command ${index}: Invalid position.`);
             continue;
         }
         this.logger.warn(`[Interpreter] Checking command ${index}: Pos(${pos.x?.toFixed(2)}, ${pos.y?.toFixed(2)}, ${pos.z?.toFixed(2)})`);
         try {
-          const isContained = objectBounds.containsPoint(pos);
+             const isContained = objectBounds.containsPoint(pos);
           this.logger.warn(`[Interpreter] containsPoint check completed for command ${index}. Result: ${isContained}`);
-          if (isContained) {
-            const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
-            this.logger.warn(`[Interpreter] Validation failed: ${errorMsg} at command ${index}`);
-            return {
-              isValid: false,
-              errors: [errorMsg]
-            };
-          }
-        } catch (checkError) {
+             if (isContained) {
+               const errorMsg = 'PATH_VIOLATION_BOUNDING_BOX: Camera position enters object bounds';
+               this.logger.warn(`[Interpreter] Validation failed: ${errorMsg} at command ${index}`);
+               return {
+                 isValid: false,
+                 errors: [errorMsg]
+               };
+             }
+         } catch (checkError) {
           this.logger.error(`[Interpreter] Error during containsPoint check for command ${index}:`, checkError instanceof Error ? checkError.message : checkError);
-          return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
-        }
-      }
-      this.logger.warn('[Interpreter] Bounding box validation passed.');
-    }
+             return { isValid: false, errors: [`Error during validation check: ${checkError instanceof Error ? checkError.message : 'Unknown check error'}`] };
+         }
+       }
+       this.logger.warn('[Interpreter] Bounding box validation passed.');
+     }
     // --- End Bounding Box Validation ---
 
     // TODO: Add other command validation checks here (e.g., max speed, angle change)
     const errors: string[] = []; 
-    if (!commands || commands.length === 0) {
+     if (!commands || commands.length === 0) {
       this.logger.warn('Command list is empty, nothing to validate further.');
       // Return true if bounding box passed or wasn't checked
       return { isValid: true, errors: [] }; 
@@ -1126,10 +1226,10 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     if (!isValid) {
         this.logger.warn('Generated command validation failed (other checks):', errors);
     }
-    return { isValid, errors };
-  }
+    return { isValid, errors }; 
+   }
 
-  getPerformanceMetrics(): PerformanceMetrics {
+   getPerformanceMetrics(): PerformanceMetrics {
     this.logger.info('Getting performance metrics (placeholder)');
     // TODO: Implement actual performance metric collection if needed
     return { 
