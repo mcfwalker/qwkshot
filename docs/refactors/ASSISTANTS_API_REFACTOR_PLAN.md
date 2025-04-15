@@ -259,17 +259,18 @@ interface MotionStep {
 *   [X] Finalize Motion KB JSON structure & create initial content for core motions. *(Completed)*
 *   [X] Design `MotionPlannerService` Interface: Define the standard internal interface for generating motion plans. *(Completed)*
 *   [X] **Research & Provider Choice:** Initial research compared OpenAI Assistants API and Google Vertex AI. **Decision: Target OpenAI Assistants API for the *first* adapter implementation, prioritizing simplicity for the POC.** *(Vertex AI remains a future option.)*.
-*   [ ] **Initial Provider Setup (OpenAI):** Perform basic setup for OpenAI Assistants (e.g., Create Assistant, upload initial KB file, get Assistant ID/API Keys).
+*   [X] **Initial Provider Setup (OpenAI):** Perform basic setup for OpenAI Assistants (e.g., Create Assistant, upload initial KB file, get Assistant ID/API Keys). *(Completed)*
 *   [X] Create dedicated feature branch (`feature/assistants-pipeline-refactor`). *(Completed)*
-*   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (OpenAI)**, basic provider setup.
+*   [X] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (OpenAI)**, basic provider setup. *(Phase 0 COMPLETE)*
 
 ### Phase 1: LLM Engine Refactor (Adapter Implementation)
-*   [ ] Implement the **`OpenAIAssistantAdapter`** adhering to the `MotionPlannerService` interface.
-*   [ ] Include logic for sending the prompt to the OpenAI Assistant service (using threads, runs) and ensuring the KB file is utilized via the Retrieval tool.
-*   [ ] Implement parsing and validation of the Assistant's response to ensure it conforms to the standard `MotionPlan` JSON schema (robust prompting needed).
-*   [ ] Set up basic error handling for OpenAI API calls and response processing.
-*   [ ] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter.
-*   [ ] *Goal:* A functioning **`OpenAIAssistantAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object.
+*   [X] **Evaluate Vercel AI SDK:** Investigate if the Vercel AI SDK Core library effectively simplifies the OpenAI Assistants API workflow (threads, runs, retrieval) compared to the standard `openai` Node.js library. Decide whether to use it for the adapter. *(Decision: Use `openai` library directly for Assistants API)*.
+*   [X] Implement the **`OpenAIAssistantAdapter`** adhering to the `MotionPlannerService` interface. *(Implemented in `src/lib/motion-planning/providers/openai-assistant.ts`)*.
+*   [X] Include logic for sending the prompt to the OpenAI Assistant service (using threads, runs) and ensuring the KB file is utilized via the Retrieval tool. *(Core API flow implemented)*.
+*   [X] Implement parsing and validation of the Assistant's response to ensure it conforms to the standard `MotionPlan` JSON schema (robust prompting needed). *(Basic parsing/validation implemented)*.
+*   [X] Set up basic error handling for OpenAI API calls and response processing. *(Implemented basic try/catch and error reporting)*.
+*   [X] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter. *(API Route `src/app/api/camera-path/route.ts` updated to return raw MotionPlan)*.
+*   [X] *Goal:* A functioning **`OpenAIAssistantAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object. *(Phase 1 COMPLETE as of 2025-04-14)*
 
 ### Phase 2: Scene Interpreter Core & Basic Execution
 *   [ ] Refactor `Scene Interpreter` interface/class structure.
