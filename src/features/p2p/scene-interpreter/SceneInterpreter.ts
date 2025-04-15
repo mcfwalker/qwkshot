@@ -2,6 +2,9 @@ import { SceneInterpreter, SceneInterpreterConfig, CameraCommand } from '@/types
 import { Logger, PerformanceMetrics, ValidationResult } from '@/types/p2p/shared';
 import { CameraPath } from '@/types/p2p/llm-engine';
 import { Camera, Box3 } from 'three';
+import { MotionPlan } from '@/lib/motion-planning/types';
+import { SceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
 
 /**
  * Implementation of the SceneInterpreter interface
@@ -28,14 +31,28 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     this.logger.info('Initializing Scene Interpreter', { config });
   }
 
-  interpretPath(path: CameraPath): CameraCommand[] {
+  interpretPath(
+    plan: MotionPlan, 
+    sceneAnalysis: SceneAnalysis, 
+    envAnalysis: EnvironmentalAnalysis
+  ): CameraCommand[] {
     if (!this.config) {
       throw new Error('Scene Interpreter not initialized');
     }
 
-    this.logger.info('Interpreting camera path', { path });
+    this.logger.info('Interpreting motion plan', { 
+      plan: plan, 
+      sceneAnalysis: sceneAnalysis.spatial.bounds,
+      envAnalysis: envAnalysis.cameraConstraints
+    });
     
-    // TODO: Implement actual path interpretation logic
+    // TODO: Implement actual plan interpretation logic using plan, sceneAnalysis, envAnalysis
+    // - Loop through plan.steps
+    // - For each step, call the appropriate motion generator (zoom, orbit, etc.)
+    // - Pass relevant step parameters and context (scene/env analysis) to the generator
+    // - Accumulate CameraCommands
+    // - Handle duration_ratio and total duration
+
     return [];
   }
 

@@ -301,14 +301,39 @@ export async function POST(request: Request) {
 
     // --- Generate the Motion Plan using the Adapter --- 
     logger.info(`Generating motion plan via ${adapterConfig.type} adapter (ID: ${adapterConfig.assistantId})...`); 
+    let motionPlan: MotionPlan;
     try {
-      const motionPlan: MotionPlan = await motionPlanner.generatePlan(instruction, duration);
+      motionPlan = await motionPlanner.generatePlan(instruction, duration);
 
       logger.info(`Motion Plan received from Assistant Adapter with ${motionPlan.steps.length} steps.`);
 
-      // --- Return the raw MotionPlan for now --- 
-      logger.info('Returning raw MotionPlan (SceneInterpreter integration pending Phase 2/3).');
-      return NextResponse.json(motionPlan);
+      // --- >>> NEW: Interpret the Motion Plan <<< ---
+      logger.info('Interpreting the generated Motion Plan...');
+      try {
+        // Ensure necessary context is available
+        if (!sceneAnalysis || !environmentalAnalysis || !currentCameraState) {
+          throw new Error('Interpreter context (SceneAnalysis, EnvironmentalAnalysis, or CameraState) is missing.');
+        }
+
+        const cameraCommands: CameraCommand[] = interpreter.interpretPath(
+          motionPlan,
+          sceneAnalysis,
+          environmentalAnalysis,
+          { position: currentCameraState.position, target: currentCameraState.target } // Pass initial state
+        );
+
+        logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
+        return NextResponse.json(cameraCommands); // Return the generated commands
+
+      } catch (interpreterError: any) {
+        logger.error('Error during Scene Interpreter execution:', interpreterError);
+        const errorMessage = interpreterError instanceof Error ? interpreterError.message : 'Unknown interpretation error';
+        return NextResponse.json(
+            { error: `Scene Interpretation Failed: ${errorMessage}` },
+            { status: 500 }
+        );
+      }
+      // --- End Scene Interpreter Call ---
 
     } catch (plannerError: any) { // Catch errors from the adapter
       // --- NEW: Log specific error type --- 

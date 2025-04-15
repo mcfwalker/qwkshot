@@ -273,13 +273,13 @@ interface MotionStep {
 *   [X] *Goal:* A functioning **`OpenAIAssistantAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object. *(Phase 1 COMPLETE as of 2025-04-14)*
 
 ### Phase 2: Scene Interpreter Core & Basic Execution
-*   [ ] Refactor `Scene Interpreter` interface/class structure.
-*   [ ] Implement mechanism to accept Motion Plan JSON.
-*   [ ] Implement mechanism to access local Scene/Environmental analysis data (via `Metadata Manager` or passed context).
-*   [ ] Implement core loop to process plan steps sequentially.
-*   [ ] Implement 1-2 simple motion generators (e.g., `static`, basic linear `zoom` using local geometry).
-*   [ ] Connect output to `CameraAnimationSystem` (using existing `CameraCommand` format or adapting).
-*   [ ] *Goal:* Basic E2E flow working: Prompt -> Assistant Plan -> Interpreter -> Simple Animation.
+*   [X] Refactor `Scene Interpreter` interface/class structure (`interpretPath` signature updated). *(Completed)*
+*   [X] Implement mechanism to accept Motion Plan object (from adapter). *(Completed)*
+*   [X] Implement mechanism to access local Scene/Environmental analysis data (passed as parameters to `interpretPath`). *(Completed)*
+*   [X] Implement core loop to process plan steps sequentially. *(Completed)*
+*   [X] Implement 2 simple motion generators (`static`, `zoom`). *(Completed)*
+*   [X] Connect output to `CameraAnimationSystem` (Interpreter returns `CameraCommand[]`, API route updated). *(Completed)*
+*   [X] *Goal:* Basic E2E backend flow working: Prompt -> Assistant Plan -> Interpreter -> API returns `CameraCommand[]`. *(Phase 2 COMPLETE as of Session End)*
 
 ### Phase 3: Scene Interpreter Motion Library Expansion
 *   [ ] Implement generators for core motion types (`orbit`, `pan`, `dolly`, etc.).

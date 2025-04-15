@@ -8,6 +8,9 @@ import { CameraPath } from '@/types/p2p/llm-engine';
 import { ValidationResult, PerformanceMetrics, Logger } from '@/types/p2p/shared';
 import * as THREE from 'three'; // Import THREE namespace for easing functions potentially
 import { CatmullRomCurve3, Vector3, Box3 } from 'three'; // Explicitly import Box3
+import { MotionPlan, MotionStep } from '@/lib/motion-planning/types'; // Added
+import { SceneAnalysis } from '@/types/p2p/scene-analyzer'; // Added
+import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer'; // Added
 
 // Define a simple logger for this module
 const logger = {
@@ -124,147 +127,173 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return { isValid, errors };
   }
 
-  interpretPath(path: CameraPath): CameraCommand[] {
-    this.logger.info('Interpreting path:', path);
+  interpretPath(
+    plan: MotionPlan,
+    sceneAnalysis: SceneAnalysis,
+    envAnalysis: EnvironmentalAnalysis,
+    // Add initial state, crucial for the first step
+    initialCameraState: { position: Vector3; target: Vector3 }
+  ): CameraCommand[] {
+    this.logger.info('Interpreting motion plan...', { plan });
     if (!this.config) {
-        this.logger.error('Interpreter not initialized');
-        throw new Error('Interpreter not initialized');
+      this.logger.error('Interpreter not initialized');
+      throw new Error('Interpreter not initialized');
     }
-
-    const validation = this.validateInputPath(path);
-    if (!validation.isValid) {
-      this.logger.error('Path interpretation failed due to invalid input path:', validation.errors);
-      throw new Error(`Input path validation failed: ${validation.errors.join(', ')}`);
+    if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) {
+        this.logger.error('Invalid or empty MotionPlan provided.');
+        throw new Error('Invalid or empty MotionPlan provided.');
     }
-    this.logger.info('Input path passed validation.');
-
-    const interpolationMethod = this.config.interpolationMethod;
-    const smoothingFactor = this.config.smoothingFactor;
-    this.logger.debug(`Processing path with interpolation: ${interpolationMethod}, smoothingFactor: ${smoothingFactor}`);
 
     const commands: CameraCommand[] = [];
-    const keyframes = path.keyframes;
+    let currentPosition = initialCameraState.position.clone();
+    let currentTarget = initialCameraState.target.clone();
 
-    if (interpolationMethod === 'smooth') {
-        this.logger.info('Applying Catmull-Rom smoothing...');
+    // Determine total duration
+    const totalDuration = plan.metadata?.requested_duration;
+    if (totalDuration === undefined || totalDuration <= 0) {
+      this.logger.warn('Total duration not provided or invalid in plan metadata. Cannot calculate step durations accurately.');
+      // TODO: Decide how to handle this - default duration? Error?
+      // For now, we might not be able to generate commands requiring duration.
+      // throw new Error('Missing or invalid requested_duration in MotionPlan metadata');
+    }
 
-        if (keyframes.length < 2) {
-            this.logger.warn('Need at least 2 keyframes for smoothing. Falling back to linear.');
-             for (const kf of keyframes) {
-                 commands.push({
-                     position: kf.position,
-                     target: kf.target,
-                     duration: kf.duration,
-                     easing: 'linear'
-                 });
-             }
-             return commands;
-        }
+    for (const step of plan.steps) {
+      this.logger.debug(`Processing step: ${step.type}`, step.parameters);
 
-        const positions = keyframes.map(kf => kf.position);
-        const positionCurve = new THREE.CatmullRomCurve3(positions, false, 'catmullrom'); 
-
-        const minPoints = 2;
-        const maxPoints = 10;
-        const pointsPerSegment = Math.max(minPoints, Math.round(minPoints + (this.config.smoothingFactor ?? 0.5) * (maxPoints - minPoints)));
-        this.logger.debug(`Using ${pointsPerSegment} points per segment based on smoothingFactor ${this.config.smoothingFactor?.toFixed(2)}`);
-
-        const totalGeneratedPoints = (keyframes.length - 1) * pointsPerSegment + 1;
-        const curvePoints = positionCurve.getPoints(totalGeneratedPoints - 1); 
-
-        let accumulatedDuration = 0;
-        let originalKfIndex = 0;
-
-        for (let i = 0; i < curvePoints.length - 1; i++) {
-            const segmentStartTime = (i / (totalGeneratedPoints - 1)) * path.duration;
-            const segmentEndTime = ((i + 1) / (totalGeneratedPoints - 1)) * path.duration;
-            const segmentDuration = segmentEndTime - segmentStartTime;
-
-            originalKfIndex = 0;
-            accumulatedDuration = 0;
-            while (originalKfIndex < keyframes.length - 1 && accumulatedDuration + keyframes[originalKfIndex].duration < segmentStartTime) {
-                accumulatedDuration += keyframes[originalKfIndex].duration;
-                originalKfIndex++;
-            }
-
-            const kf1 = keyframes[originalKfIndex];
-            const kf2 = keyframes[Math.min(originalKfIndex + 1, keyframes.length - 1)];
-            const localProgressStart = Math.max(0, Math.min(1, kf1.duration > 0 ? (segmentStartTime - accumulatedDuration) / kf1.duration : 0));
-
-            const interpolatedTarget = new THREE.Vector3().lerpVectors(kf1.target, kf2.target, localProgressStart);
-
-            let segmentEasingName: EasingFunctionName = 'linear'; 
-            if (i === 0) {
-                segmentEasingName = 'easeOutQuad';
-                this.logger.debug('Applying easeOutQuad to first smoothed segment');
-            }
-
-            if (segmentDuration > 1e-6) { 
-                const command: CameraCommand = {
-                    position: curvePoints[i],
-                    target: interpolatedTarget, 
-                    duration: segmentDuration,
-                    easing: segmentEasingName 
-                };
-                commands.push(command);
-            }
-        }
-
-         const lastKf = keyframes[keyframes.length - 1];
-         const lastCurvePoint = curvePoints[curvePoints.length - 1];
-         const secondLastSegmentEndTime = curvePoints.length > 1 ? ((curvePoints.length - 2) / (totalGeneratedPoints - 1)) * path.duration : 0;
-         const finalSegmentDuration = path.duration - secondLastSegmentEndTime;
-
-         if (finalSegmentDuration > 1e-6) { 
-             const finalCommand: CameraCommand = {
-                 position: lastCurvePoint, 
-                 target: lastKf.target,   
-                 duration: finalSegmentDuration,
-                 easing: 'easeInQuad' 
-             };
-             commands.push(finalCommand);
-             this.logger.debug('Assigning easeInQuad to final smoothed segment');
-         } else if (commands.length === 0 && keyframes.length === 1) {
-             const singleCommand: CameraCommand = {
-                  position: keyframes[0].position,
-                  target: keyframes[0].target,
-                  duration: keyframes[0].duration,
-                  easing: 'linear' 
-             };
-             commands.push(singleCommand);
-         }
-
-    } else {
-      for (let i = 0; i < keyframes.length; i++) {
-          const kf = keyframes[i];
-          let easingName: EasingFunctionName | undefined = undefined;
-
-          if (interpolationMethod === 'ease') {
-             if (i === 0 && keyframes.length > 1) {
-                 easingName = 'easeOutQuad';
-             } else if (i === keyframes.length - 1 && keyframes.length > 1) {
-                 easingName = 'easeInQuad';
-             } else if (keyframes.length === 1) {
-                  easingName = 'linear';
-             } else {
-                 easingName = 'easeInOutQuad';
-             }
-              this.logger.debug(`Assigning ${easingName} easing for keyframe ${i}`);
-          } else { 
-              easingName = 'linear';
+      let stepDuration = 0;
+      if (totalDuration && totalDuration > 0) {
+          stepDuration = totalDuration * (step.duration_ratio ?? 0);
+          if (stepDuration <= 0) {
+              this.logger.warn(`Calculated step duration is zero or negative for step type ${step.type}. Skipping duration-based command generation for this step.`);
+              // Decide if step should be skipped or handled differently
           }
+      } else if (step.type !== 'static') { 
+          // Only allow non-static steps if totalDuration is valid
+          this.logger.error(`Cannot process step type '${step.type}' without a valid total duration.`);
+          continue; // Skip this step
+      }
 
+      switch (step.type) {
+        case 'static': {          
+          // Hold current position and target
           const command: CameraCommand = {
-              position: kf.position,
-              target: kf.target,
-              duration: kf.duration,
-              easing: easingName 
+            position: currentPosition.clone(),
+            target: currentTarget.clone(),
+            // Use stepDuration if valid, otherwise maybe a default small duration or handle error?
+            duration: stepDuration > 0 ? stepDuration : 0.1, // Example: default 0.1s if calculation failed
+            easing: 'linear' // Static hold is linear
           };
           commands.push(command);
+          this.logger.debug('Generated static command:', command);
+          // State update: Position and target remain the same for the next step
+          break;
+        }
+        case 'zoom': {
+          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
+          // TODO: Implement zoom logic
+          // 1. Resolve target (e.g., 'object_center' from sceneAnalysis)
+          // 2. Get direction, factor, speed, easing from step.parameters
+          // 3. Calculate new position along the line from currentPosition to target
+          // 4. Create CameraCommand with new position, current target, calculated duration, easing
+          // 5. Update currentPosition for the next step
+          break;
+        }
+        case 'orbit': {
+          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
+          // TODO: Implement orbit logic
+          // 1. Resolve target, axis, direction, angle, speed, easing
+          // 2. Calculate new position based on rotation around axis/target
+          // 3. May need to update target as well if orbit path isn't perfectly looking at center
+          // 4. Create CameraCommand
+          // 5. Update currentPosition and currentTarget
+          break;
+        }
+        case 'zoom': {
+          const { 
+            direction, 
+            factor, 
+            target: targetName = 'current_target', // Default target 
+            easing: easingName = 'easeInOutQuad' // Default easing
+          } = step.parameters;
+
+          if (direction !== 'in' && direction !== 'out') {
+            this.logger.error(`Invalid zoom direction: ${direction}. Skipping step.`);
+            continue;
+          }
+          if (typeof factor !== 'number' || factor <= 0) {
+            this.logger.error(`Invalid zoom factor: ${factor}. Skipping step.`);
+            continue;
+          }
+
+          let zoomTargetPosition: Vector3;
+          if (targetName === 'object_center' && sceneAnalysis?.spatial?.bounds?.center) {
+            zoomTargetPosition = sceneAnalysis.spatial.bounds.center.clone();
+            this.logger.debug(`Zoom target resolved to object center: ${zoomTargetPosition.toArray()}`);
+          } else {
+            zoomTargetPosition = currentTarget.clone(); // Default to current target
+            this.logger.debug(`Zoom target resolved to current target: ${zoomTargetPosition.toArray()}`);
+          }
+
+          const currentDirectionVector = new Vector3().subVectors(zoomTargetPosition, currentPosition);
+          const currentDistance = currentDirectionVector.length();
+          
+          let newDistance: number;
+          if (direction === 'in') {
+              // Factor determines the *remaining* distance ratio (e.g., 0.5 means move halfway closer)
+              newDistance = currentDistance * (factor as number);
+          } else { // direction === 'out'
+              // Factor determines the *new* distance ratio (e.g., 2.0 means double the distance)
+              newDistance = currentDistance * (factor as number);
+          }
+          
+          // Avoid division by zero if currentDistance is very small
+          if (currentDistance < 1e-6) {
+              this.logger.warn('Current distance for zoom is near zero. Cannot calculate new position. Keeping position static for this step.');
+              newDistance = currentDistance; // Keep distance same
+          }
+
+          const newPosition = new Vector3()
+              .copy(zoomTargetPosition) // Start at the target
+              .addScaledVector(currentDirectionVector.normalize(), -newDistance); // Move back along the direction vector
+
+          const command: CameraCommand = {
+            position: newPosition.clone(),
+            target: currentTarget.clone(), // Zoom typically keeps the same target
+            duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
+            easing: (easingName as EasingFunctionName) in easingFunctions ? easingName as EasingFunctionName : 'easeInOutQuad' // Validate easing name
+          };
+          commands.push(command);
+          this.logger.debug('Generated zoom command:', command);
+
+          // Update state for the next step
+          currentPosition = newPosition.clone();
+          // currentTarget remains the same for zoom
+          break;
+        }
+        case 'orbit': {
+          this.logger.warn(`Motion type '${step.type}' not implemented yet.`);
+          // TODO: Implement orbit logic
+          // 1. Resolve target, axis, direction, angle, speed, easing
+          // 2. Calculate new position based on rotation around axis/target
+          // 3. May need to update target as well if orbit path isn't perfectly looking at center
+          // 4. Create CameraCommand
+          // 5. Update currentPosition and currentTarget
+          break;
+        }
+        // TODO: Add cases for pan, tilt, dolly, truck, pedestal, fly_by, fly_away...
+        default: {
+          this.logger.warn(`Unsupported motion type '${step.type}'. Skipping step.`);
+          break;
+        }
       }
     }
 
     this.logger.info(`Interpretation complete. Generated ${commands.length} commands.`);
+
+    // TODO: Consider running validateCommands here on the generated commands
+    // const validationResult = this.validateCommands(commands, sceneAnalysis.spatial.bounds); // Assuming bounds are needed
+    // if (!validationResult.isValid) { ... handle validation errors ... }
+
     return commands;
   }
 
