@@ -243,7 +243,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             direction: rawDirection,
             factor: rawFactor,
             target: rawTargetName = 'current_target',
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed, default to medium
           } = step.parameters;
 
           // Validate parameters
@@ -251,6 +252,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const factor = typeof rawFactor === 'number' && rawFactor > 0 ? rawFactor : null;
           const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target'; // Default
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
             this.logger.error(`Invalid or missing zoom direction: ${rawDirection}. Skipping step.`);
@@ -350,12 +352,26 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
           // --- End Height/BB Constraint Check ---
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') {
+            effectiveEasingName = 'linear';
+            this.logger.debug(`Zoom: Speed 'very_fast' overriding easing to ${effectiveEasingName}`);
+          } else if (speed === 'fast' && easingName === 'easeInOutQuad') {
+            effectiveEasingName = 'easeOutQuad'; // Example: fast uses quicker stop
+            this.logger.debug(`Zoom: Speed 'fast' modifying default easing to ${effectiveEasingName}`);
+          } else if (speed === 'slow' && easingName === 'linear') {
+            effectiveEasingName = 'easeInOutQuad'; // Example: slow avoids linear
+             this.logger.debug(`Zoom: Speed 'slow' overriding linear easing to ${effectiveEasingName}`);
+          }
+          // Other speed/easing combinations use the validated easingName directly
+
           // 4. Create CameraCommand
           const command: CameraCommand = {
             position: finalPosition.clone(), // Use potentially clamped position
             target: zoomTargetPosition.clone(), // Zoom keeps looking at the resolved target
             duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
+            easing: effectiveEasingName // Use the effective easing
           };
           commands.push(command);
           this.logger.debug('Generated zoom command:', command);
@@ -374,7 +390,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             angle: rawAngle, 
             axis: rawAxisName = 'y', 
             target: rawTargetName = 'object_center', 
-            easing: rawEasingName = 'easeInOutQuad' 
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Type validation and extraction
@@ -385,6 +402,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           let axisName = typeof rawAxisName === 'string' && ['x', 'y', 'z', 'camera_up'].includes(rawAxisName) ? rawAxisName : 'y'; // Include camera_up, default to 'y'
           const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'object_center'; // Default if invalid
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad'; // Validate and default
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // Validate essential parameters after type checks
           if (!direction) {
@@ -499,12 +517,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
           // --- End Constraint Checking ---
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Orbit: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 4. Create CameraCommand
           const command: CameraCommand = {
             position: finalPosition.clone(), // Use potentially clamped position
             target: orbitCenter.clone(), // Orbit keeps looking at the orbit center
-            duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
-            easing: easingName // Use validated easing name
+            duration: stepDuration > 0 ? stepDuration : 0.1, 
+            easing: effectiveEasingName // Use effective easing
           };
           commands.push(command);
           this.logger.debug('Generated orbit command:', command);
@@ -520,13 +547,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             angle: rawAngle,
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
             this.logger.error(`Invalid or missing pan direction: ${rawDirection}. Skipping step.`);
@@ -567,12 +596,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           targetVector.applyQuaternion(quaternion);
           const newTarget = new Vector3().addVectors(currentPosition, targetVector);
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Pan: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 4. Create CameraCommand (Position stays the same, Target changes)
           const command: CameraCommand = {
             position: currentPosition.clone(), // Position does not change for pan
             target: newTarget.clone(),
             duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
-            easing: easingName
+            easing: effectiveEasingName
           };
           commands.push(command);
           this.logger.debug('Generated pan command:', command);
@@ -588,13 +626,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             angle: rawAngle,
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
             this.logger.error(`Invalid or missing tilt direction: ${rawDirection}. Skipping step.`);
@@ -641,12 +681,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           targetVector.applyQuaternion(quaternion);
           const newTarget = new Vector3().addVectors(currentPosition, targetVector);
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+           if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Tilt: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 4. Create CameraCommand (Position stays the same, Target changes)
           const command: CameraCommand = {
-            position: currentPosition.clone(), // Position does not change for tilt
+            position: currentPosition.clone(),
             target: newTarget.clone(),
-            duration: stepDuration > 0 ? stepDuration : 0.1, // Use calculated duration
-            easing: easingName
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: effectiveEasingName
           };
           commands.push(command);
           this.logger.debug('Generated tilt command:', command);
@@ -662,13 +711,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // Map aliases
           if (direction === 'in') direction = 'forward';
@@ -742,12 +793,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
           // --- End Constraint Checking ---
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+           if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Dolly: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 3. Create CameraCommand
           const command: CameraCommand = {
             position: finalPosition.clone(),
             target: currentTarget.clone(), 
             duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
+            easing: effectiveEasingName
           };
           commands.push(command);
           this.logger.debug('Generated dolly command:', command);
@@ -763,13 +823,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
             this.logger.error(`Invalid or missing truck direction: ${rawDirection}. Skipping step.`);
@@ -844,12 +906,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
           // --- End Constraint Checking ---
 
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Truck: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 3. Create CameraCommand
           const command: CameraCommand = {
             position: finalPosition.clone(), 
-            target: currentTarget.clone(), // Target does not change for truck
+            target: currentTarget.clone(), 
             duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
+            easing: effectiveEasingName
           };
           commands.push(command);
           this.logger.debug('Generated truck command:', command);
@@ -865,13 +936,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             distance: rawDistance,
-            easing: rawEasingName = 'easeInOutQuad'
+            easing: rawEasingName = 'easeInOutQuad',
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : 'easeInOutQuad';
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           if (!direction) {
             this.logger.error(`Invalid or missing pedestal direction: ${rawDirection}. Skipping step.`);
@@ -952,12 +1025,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           }
           // --- End Constraint Checking ---
           
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
+          else if (speed === 'fast' && easingName === 'easeInOutQuad') { effectiveEasingName = 'easeOutQuad'; }
+          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = 'easeInOutQuad'; }
+          if (effectiveEasingName !== easingName) {
+              this.logger.debug(`Pedestal: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          }
+
           // 3. Create CameraCommand 
           const command: CameraCommand = {
             position: finalPosition.clone(), 
-            target: currentTarget.clone(), // Target does not change for pedestal
+            target: currentTarget.clone(), 
             duration: stepDuration > 0 ? stepDuration : 0.1,
-            easing: easingName
+            easing: effectiveEasingName
           };
           commands.push(command);
           this.logger.debug('Generated pedestal command:', command);
