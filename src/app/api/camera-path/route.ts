@@ -311,10 +311,14 @@ export async function POST(request: Request) {
       return NextResponse.json(motionPlan);
 
     } catch (plannerError: any) { // Catch errors from the adapter
-      logger.error('Error during motion planning:', plannerError);
+      // --- NEW: Log specific error type --- 
+      const errorName = plannerError instanceof Error ? plannerError.name : 'UnknownError';
       const errorMessage = plannerError instanceof Error ? plannerError.message : 'Unknown motion planning error';
+      logger.error(`Error during Motion Planner execution (${errorName}):`, plannerError);
+      
+      // Keep generic 500 response for now, but could customize based on errorName later
       return NextResponse.json(
-          { error: `Motion Planning Failed: ${errorMessage}` },
+          { error: `Motion Planning Failed: ${errorMessage}`, code: errorName }, // Include error name/code
           { status: 500 }
       );
     }

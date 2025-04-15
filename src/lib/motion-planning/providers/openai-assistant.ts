@@ -4,6 +4,21 @@ import {
     MotionPlannerService,
     OpenAIAssistantProviderConfig 
 } from "../types";
+import { 
+    MotionPlannerError, 
+    AssistantInteractionError, 
+    MotionPlanParsingError, 
+    ConfigurationError 
+} from '../errors';
+
+// --- EXPORT Type --- 
+export type TimerDelayFunction = (ms: number) => Promise<void>;
+
+/**
+ * Default timer delay using setTimeout.
+ */
+const defaultTimerDelay: TimerDelayFunction = (ms: number) => 
+    new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * MotionPlannerService implementation using the OpenAI Assistants API.
@@ -18,11 +33,13 @@ import {
 export class OpenAIAssistantAdapter implements MotionPlannerService {
     private config: OpenAIAssistantProviderConfig;
     private openai: OpenAI; // Now initialized
+    private timerDelayFn: TimerDelayFunction; // Added for testable delays
 
-    constructor(config: OpenAIAssistantProviderConfig) {
+    constructor(config: OpenAIAssistantProviderConfig, timerDelayFn?: TimerDelayFunction) {
         this.config = config;
         // Initialize OpenAI client using config.apiKey
         this.openai = new OpenAI({ apiKey: config.apiKey });
+        this.timerDelayFn = timerDelayFn || defaultTimerDelay; // Use provided or default
         console.log("OpenAIAssistantAdapter initialized with Assistant ID:", config.assistantId);
     }
 
@@ -31,132 +48,113 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
      */
     async generatePlan(userPrompt: string, requestedDuration?: number): Promise<MotionPlan> {
         console.log(`Generating plan with prompt: "${userPrompt}", duration: ${requestedDuration}`);
-        
+        let threadId: string | null = null; // Keep track for potential cleanup/logging
+        let runId: string | null = null;
+
         try {
             // 1. Create a Thread
             const thread = await this.openai.beta.threads.create();
-            console.log('Created thread:', thread.id);
+            threadId = thread.id;
+            console.log('Created thread:', threadId);
 
-            // 2. Add User Message to Thread
-            await this.openai.beta.threads.messages.create(thread.id, {
+            // 2. Add User Message
+            await this.openai.beta.threads.messages.create(threadId, {
                 role: "user",
                 content: userPrompt,
             });
-            console.log('Added user message to thread:', thread.id);
+            console.log('Added user message to thread:', threadId);
 
             // 3. Create a Run
-            const run = await this.openai.beta.threads.runs.create(thread.id, {
+            const run = await this.openai.beta.threads.runs.create(threadId, {
                 assistant_id: this.config.assistantId,
-                // TODO: Add instructions or model overrides if necessary
-                // instructions: "Your instructions here...",
-                // model: "gpt-4-turbo-preview" // Or another compatible model
             });
-            console.log(`Created run ${run.id} for thread ${thread.id}`);
+            runId = run.id;
+            console.log(`Created run ${runId} for thread ${threadId}`);
 
-            // === Step 4: Poll the Run status ===
-            const pollingIntervalMs = this.config.pollingIntervalMs || 1000; // Default 1 second
-            const timeoutMs = this.config.timeoutMs || 60000; // Default 60 seconds
+            // 4. Poll Run Status
+            const pollingIntervalMs = this.config.pollingIntervalMs || 1000; 
+            const timeoutMs = this.config.timeoutMs || 60000; 
             const startTime = Date.now();
-
             let retrievedRun = run;
+
             while (
                 retrievedRun.status === 'queued' || 
                 retrievedRun.status === 'in_progress' ||
-                retrievedRun.status === 'requires_action' // Handle potential tool calls later if needed
+                retrievedRun.status === 'requires_action' 
             ) {
                 if (Date.now() - startTime > timeoutMs) {
-                    // Attempt to cancel the run before throwing timeout error
                     try {
-                        await this.openai.beta.threads.runs.cancel(thread.id, retrievedRun.id);
-                        console.log(`Run ${retrievedRun.id} cancelled due to timeout.`);
-                    } catch (cancelError) {
-                        console.error(`Failed to cancel run ${retrievedRun.id} after timeout:`, cancelError);
-                    }
-                    throw new Error(`Run timed out after ${timeoutMs / 1000} seconds.`);
+                        await this.openai.beta.threads.runs.cancel(threadId, retrievedRun.id);
+                    } catch (cancelError) { /* Ignore cancel error */ }
+                    throw new AssistantInteractionError(`Run timed out after ${timeoutMs / 1000} seconds.`, 'TIMEOUT', { threadId, runId });
                 }
 
-                console.log(`Run status: ${retrievedRun.status}, polling again in ${pollingIntervalMs}ms...`);
-                await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
-                retrievedRun = await this.openai.beta.threads.runs.retrieve(thread.id, retrievedRun.id);
+                // --- Use injected timer delay function --- 
+                await this.timerDelayFn(pollingIntervalMs); 
+                // --- End timer handling --- 
+                
+                retrievedRun = await this.openai.beta.threads.runs.retrieve(threadId, retrievedRun.id);
             }
-
-            console.log(`Run ${retrievedRun.id} finished with status: ${retrievedRun.status}`);
 
             // Check for unsuccessful terminal states
             if (retrievedRun.status !== 'completed') {
                  const errorDetails = retrievedRun.last_error ? 
-                    `Error: ${retrievedRun.last_error.code} - ${retrievedRun.last_error.message}` : 
+                    `${retrievedRun.last_error.code} - ${retrievedRun.last_error.message}` : 
                     'No error details provided.';
-                throw new Error(`Run failed or was cancelled. Final status: ${retrievedRun.status}. ${errorDetails}`);
+                throw new AssistantInteractionError(`Run failed or was cancelled. Final status: ${retrievedRun.status}. ${errorDetails}`, retrievedRun.status, { threadId, runId, lastError: retrievedRun.last_error });
             }
 
-            // === Run Completed Successfully ===
-
-            // === Step 5: Retrieve Assistant message ===
-            const messages = await this.openai.beta.threads.messages.list(thread.id, {
-                order: "desc", // Get newest messages first
-                limit: 10 // Limit retrieval for efficiency
-            });
-
-            // Find the latest message from the assistant
+            // 5. Retrieve Assistant Message
+            const messages = await this.openai.beta.threads.messages.list(threadId, { order: "desc", limit: 1 });
             const assistantMessage = messages.data.find(m => m.role === 'assistant');
 
             if (!assistantMessage) {
-                throw new Error('Assistant did not respond in the thread.');
+                throw new AssistantInteractionError('Assistant did not respond in the thread.', 'NO_RESPONSE', { threadId, runId });
             }
 
-            // Log the raw assistant message content (useful for debugging)
-            console.log("Raw Assistant Message Content:", JSON.stringify(assistantMessage.content, null, 2));
-
-            // === Step 6: Parse JSON from message content ===
+            // 6. Parse JSON
             let motionPlan: MotionPlan | null = null;
-            let parseError: string | null = null;
+            let jsonParseError: string | null = null;
+            let rawJsonString: string | null = null;
 
             if (assistantMessage.content.length > 0 && assistantMessage.content[0].type === 'text') {
-                const jsonString = assistantMessage.content[0].text.value;
+                rawJsonString = assistantMessage.content[0].text.value;
                 try {
-                    const parsedJson = JSON.parse(jsonString);
+                    const parsedJson = JSON.parse(rawJsonString);
                     
-                    // === Step 7: Validate JSON Structure ===
-                    // Basic validation: Check if it has a 'steps' array.
-                    // More robust validation (e.g., using Zod) could be added here.
+                    // 7. Validate JSON Structure
                     if (parsedJson && Array.isArray(parsedJson.steps)) {
                         motionPlan = parsedJson as MotionPlan;
-                        console.log("Successfully parsed and validated MotionPlan.");
                     } else {
-                        parseError = "Parsed JSON does not conform to MotionPlan structure (missing 'steps' array).";
+                        jsonParseError = "Parsed JSON does not conform to MotionPlan structure (missing 'steps' array).";
                     }
                 } catch (e) {
-                    parseError = `Failed to parse JSON from Assistant response: ${e instanceof Error ? e.message : String(e)}. Raw content: ${jsonString}`;
+                    jsonParseError = `Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`;
                 }
             } else {
-                parseError = "Assistant message content is empty or not in the expected text format.";
+                jsonParseError = "Assistant message content is empty or not in the expected text format.";
             }
 
             if (!motionPlan) {
-                // Throw the parsing/validation error
-                throw new Error(parseError || "Unknown error parsing MotionPlan.");
+                throw new MotionPlanParsingError(jsonParseError || "Unknown error parsing MotionPlan.", { threadId, runId, rawContent: rawJsonString });
             }
 
-            // === Step 8: Add metadata ===
-            // Ensure metadata object exists
-            if (!motionPlan.metadata) {
-                motionPlan.metadata = {};
-            }
-            // Add optional metadata from the request
-            if (requestedDuration !== undefined) {
-                motionPlan.metadata.requested_duration = requestedDuration;
-            }
+            // 8. Add metadata
+            if (!motionPlan.metadata) motionPlan.metadata = {};
+            if (requestedDuration !== undefined) motionPlan.metadata.requested_duration = requestedDuration;
             motionPlan.metadata.original_prompt = userPrompt;
 
-            // === Step 9: Return MotionPlan ===
-            console.log("Returning final MotionPlan:", JSON.stringify(motionPlan, null, 2));
+            // 9. Return MotionPlan
             return motionPlan;
 
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Error during Assistant API interaction:", error);
-            // TODO: Implement more specific error handling (e.g., wrap in a custom error type)
-            throw error; // Re-throw for now
+            if (error instanceof MotionPlannerError) {
+                throw error;
+            }
+            const message = error instanceof Error ? error.message : 'Unknown error during assistant interaction';
+            const statusCode = (error as any)?.status; 
+            throw new AssistantInteractionError(message, statusCode, { threadId, runId, originalError: error });
         }
     }
 
@@ -166,7 +164,6 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
     async validateConfiguration?(): Promise<boolean> {
         try {
             await this.openai.beta.assistants.retrieve(this.config.assistantId);
-            console.log(`Successfully validated configuration for Assistant ID: ${this.config.assistantId}`);
             return true;
         } catch (error) {
             console.error(`Configuration validation failed for Assistant ID ${this.config.assistantId}:`, error);
