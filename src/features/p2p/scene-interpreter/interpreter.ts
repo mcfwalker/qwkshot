@@ -174,38 +174,58 @@ export class SceneInterpreterImpl implements SceneInterpreter {
   private _clampPositionWithRaycast(
     startPosition: Vector3,
     intendedEndPosition: Vector3,
-    objectBounds: Box3,
-    offset: number = 0.01 // Small offset to push point slightly outside the box
+    objectBounds: Box3
   ): Vector3 {
     const movementVector = new Vector3().subVectors(intendedEndPosition, startPosition);
     const distanceToEnd = movementVector.length();
+    const movementDirection = movementVector.normalize(); // Store normalized direction
+
+    // --- Calculate Dynamic Offset --- START ---
+    let dynamicOffset = 0.1; // Default minimum offset
+    try {
+        const objectSize = objectBounds.getSize(new Vector3()).length(); // Diagonal size
+        // Use a small fraction of object size, but ensure a minimum absolute offset, and cap maximum reasonable offset
+        dynamicOffset = Math.max(0.1, Math.min(objectSize * 0.05, 0.5)); // E.g., 5% of size, min 0.1, max 0.5
+        this.logger.debug(`Using dynamic offset: ${dynamicOffset.toFixed(3)} (based on object size: ${objectSize.toFixed(2)})`);
+    } catch (sizeError) {
+        this.logger.error("Error calculating object size for dynamic offset, using default 0.1:", sizeError);
+        dynamicOffset = 0.1; // Fallback to default minimum if size calculation fails
+    }
+    // --- Calculate Dynamic Offset --- END ---
 
     if (distanceToEnd < 1e-6) {
       return startPosition.clone(); // No movement, return start
     }
 
-    const ray = new THREE.Ray(startPosition, movementVector.normalize());
+    const ray = new THREE.Ray(startPosition, movementDirection); // Use normalized direction
     const intersectionPoint = new Vector3();
 
     if (ray.intersectBox(objectBounds, intersectionPoint)) {
       const distanceToIntersection = startPosition.distanceTo(intersectionPoint);
       
-      // Check if intersection happens before reaching the intended end position
       if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
-        this.logger.warn(`Raycast: Path intersects bounding box. Clamping position to exact intersection.`);
-        // Return the exact intersection point
-        return intersectionPoint; // No offset needed
+        this.logger.warn(`Raycast: Path intersects bounding box at distance ${distanceToIntersection.toFixed(2)}. Clamping position with dynamic offset.`);
+        const finalClampedPosition = new Vector3()
+            .copy(intersectionPoint)
+            .addScaledVector(movementDirection, -dynamicOffset); // Use dynamicOffset
+        return finalClampedPosition;
       }
     }
 
-    // No intersection before the end point, or ray starts inside (intersectBox might return start)
-    // Final check: If the intended end position is *inside* the box, clamp it to the surface as fallback.
     if (objectBounds.containsPoint(intendedEndPosition)) {
-        this.logger.warn('Raycast: Intended end position is inside bounds. Clamping to surface as fallback.');
-        return objectBounds.clampPoint(intendedEndPosition, new Vector3());
+        this.logger.warn('Raycast: Intended end position is inside bounds. Clamping to surface as fallback with dynamic offset.');
+        const clampedToSurface = objectBounds.clampPoint(intendedEndPosition, new Vector3());
+        // Calculate outward normal (approximate)
+        const outwardNormal = new Vector3().subVectors(intendedEndPosition, objectBounds.getCenter(new Vector3())).normalize();
+        // Ensure normal is valid before applying offset
+        if (Number.isFinite(outwardNormal.x) && Number.isFinite(outwardNormal.y) && Number.isFinite(outwardNormal.z) && outwardNormal.lengthSq() > 1e-6) {
+             return clampedToSurface.addScaledVector(outwardNormal, dynamicOffset); // Use dynamicOffset
+        } else {
+             this.logger.warn('Could not determine valid outward normal for offset, returning clamped surface point.');
+             return clampedToSurface; // Return point on surface if normal is invalid
+        }
     }
 
-    // No intersection or intersection is beyond the end point, return intended end
     return intendedEndPosition.clone();
   }
 
@@ -896,36 +916,76 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // --- Start Dolly Logic (Corrected Placement and Logic) ---
           const {
             direction: rawDirection,
-            distance: rawDistance,
+            distance: rawDistance, // Can be number or string
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
-          // Validate parameters
+          // Validate direction and map aliases
           let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
-
-          // Map aliases
           if (direction === 'in') direction = 'forward';
           if (direction === 'out') direction = 'backward';
-
           if (direction !== 'forward' && direction !== 'backward') {
             this.logger.error(`Invalid or missing dolly direction: ${rawDirection}. Skipping step.`);
             continue;
           }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
+          
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // 1. Calculate movement vector along view direction
+          // --- Calculate Effective Distance ---
+          let effectiveDistance: number | null = null;
+          if (typeof rawDistance === 'number' && rawDistance > 0) {
+            effectiveDistance = rawDistance;
+          } else if (typeof rawDistance === 'string') {
+            const distStr = rawDistance.toLowerCase().replace(/_/g, ''); // Normalize
+            const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
+            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1, 1); // Use bounding box diagonal or 1
+            const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1;
+
+            this.logger.debug(`Calculating dolly distance for qualitative term: '${distStr}' (currentDist: ${currentDistanceToTarget.toFixed(2)}, objectSize: ${objectSizeFactor.toFixed(2)}, minDist: ${minConstraintDist.toFixed(2)})`);
+
+            switch (distStr) {
+              case 'veryclose':
+              case 'extremelyclose':
+                // Move almost to the minimum allowed distance
+                effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSizeFactor * 0.1)); 
+                break;
+              case 'close':
+              case 'closer':
+                // Move 60% of the way towards the target
+                effectiveDistance = currentDistanceToTarget * 0.6; 
+                break;
+              case 'abit':
+              case 'alittle':
+              case 'smallamount':
+              case 'slightly':
+                 // Move by a fixed amount or small fraction of current distance
+                effectiveDistance = Math.min(currentDistanceToTarget * 0.2, objectSizeFactor * 0.5, 2.0); 
+                break;
+              case 'medium':
+                 // Move 40% of the way
+                 effectiveDistance = currentDistanceToTarget * 0.4;
+                 break; 
+              // Add cases for "far", "further", "largeamount" if needed for dolly backward?
+              default:
+                this.logger.warn(`Unknown qualitative dolly distance: '${rawDistance}'. Defaulting to 1 unit.`);
+                effectiveDistance = 1.0;
+            }
+            // Ensure calculated distance is positive
+             effectiveDistance = Math.max(1e-6, effectiveDistance);
+             this.logger.debug(`Calculated effective dolly distance: ${effectiveDistance.toFixed(2)}`);
+          }
+          
+          if (effectiveDistance === null) {
+            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Defaulting to 1 unit.`);
+            effectiveDistance = 1.0; // Default if calculation failed or input invalid
+          }
+          // --- End Calculate Effective Distance ---
+
+          // 1. Calculate movement vector using effectiveDistance
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          const moveVector = viewDirection.multiplyScalar(distance * (direction === 'forward' ? 1 : -1));
+          const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1));
 
           // 2. Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
@@ -1023,40 +1083,63 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'truck': {
-          // --- Start Truck Logic (Corrected) ---
           const {
             direction: rawDirection,
-            distance: rawDistance,
+            distance: rawDistance, // Can be number or string
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed
+            speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate parameters
+          // Validate direction
           const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+          if (!direction) { /* error handling */ continue; }
+          
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          if (!direction) {
-            this.logger.error(`Invalid or missing truck direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
+          // --- Calculate Effective Distance ---
+          let effectiveDistance: number | null = null;
+          if (typeof rawDistance === 'number' && rawDistance > 0) {
+            effectiveDistance = rawDistance;
+          } else if (typeof rawDistance === 'string') {
+            const distStr = rawDistance.toLowerCase().replace(/_/g, '');
+            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1, 1); 
+            this.logger.debug(`Calculating truck distance for qualitative term: '${distStr}' (objectSize: ${objectSizeFactor.toFixed(2)})`);
+            switch (distStr) {
+              case 'abit':
+              case 'alittle':
+              case 'smallamount':
+              case 'slightly':
+                 // Move by a fixed amount or fraction of object size
+                effectiveDistance = Math.min(objectSizeFactor * 0.5, 2.0);
+                break;
+              case 'medium':
+                 effectiveDistance = Math.min(objectSizeFactor * 1.0, 4.0);
+                 break;
+              case 'far':
+              case 'largeamount':
+              case 'significantly':
+                 effectiveDistance = Math.min(objectSizeFactor * 2.0, 6.0);
+                 break;
+              default:
+                this.logger.warn(`Unknown qualitative truck distance: '${rawDistance}'. Defaulting to 1 unit.`);
+                effectiveDistance = 1.0;
+            }
+            effectiveDistance = Math.max(1e-6, effectiveDistance);
+            this.logger.debug(`Calculated effective truck distance: ${effectiveDistance.toFixed(2)}`);
           }
 
-          // 1. Calculate movement vector (Camera's local RIGHT)
+          if (effectiveDistance === null) {
+            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Defaulting to 1 unit.`);
+            effectiveDistance = 1.0;
+          }
+          // --- End Calculate Effective Distance ---
+
+          // 1. Calculate movement vector using effectiveDistance
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-          if (cameraRight.lengthSq() < 1e-6) { 
-              this.logger.warn('Cannot determine camera right vector (likely looking straight up/down). Truck movement might be unpredictable. Using world X as fallback.');
-              cameraRight.set(1, 0, 0); // Fallback
-          }
-          const moveVector = cameraRight.multiplyScalar(distance * (direction === 'left' ? -1 : 1)); 
+          if (cameraRight.lengthSq() < 1e-6) { /* fallback handling */ cameraRight.set(1, 0, 0); }
+          const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'left' ? -1 : 1)); 
 
           // 2. Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
@@ -1154,46 +1237,62 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'pedestal': {
-           // --- Start Pedestal Logic (Corrected) ---
           const {
             direction: rawDirection,
-            distance: rawDistance,
+            distance: rawDistance, // Can be number or string
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed
+            speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate parameters
+          // Validate direction
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
-          const distance = typeof rawDistance === 'number' && rawDistance > 0 ? rawDistance : null;
+           if (!direction) { /* error handling */ continue; }
+          
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          if (!direction) {
-            this.logger.error(`Invalid or missing pedestal direction: ${rawDirection}. Skipping step.`);
-            continue;
-          }
-          if (distance === null) {
-            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Skipping step.`);
-            continue;
-          }
-           if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
-
-          // 1. Calculate movement vector (Camera's local UP)
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          let cameraUp = new Vector3(0, 1, 0); // Start with world up
-          // Calculate local up unless looking straight up/down
-          if (Math.abs(viewDirection.y) < 0.999) { 
-            const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-            if (cameraRight.lengthSq() > 1e-6) { // Ensure right vector is valid before calculating up
-               cameraUp.crossVectors(viewDirection, cameraRight).normalize();
-    } else {
-                // If right is zero (looking up/down), world Y is already the correct pedestal axis
-                 this.logger.debug('Pedestal: Using world Y axis due to vertical view direction.');
+          // --- Calculate Effective Distance ---
+          let effectiveDistance: number | null = null;
+          if (typeof rawDistance === 'number' && rawDistance > 0) {
+            effectiveDistance = rawDistance;
+          } else if (typeof rawDistance === 'string') {
+            const distStr = rawDistance.toLowerCase().replace(/_/g, '');
+            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.y ?? 0.5, 0.5); // Use object height or 0.5
+             this.logger.debug(`Calculating pedestal distance for qualitative term: '${distStr}' (objectHeight: ${objectSizeFactor.toFixed(2)})`);
+            switch (distStr) {
+              case 'abit':
+              case 'alittle':
+              case 'smallamount':
+              case 'slightly':
+                 effectiveDistance = Math.min(objectSizeFactor * 0.5, 1.0);
+                 break;
+              case 'medium':
+                 effectiveDistance = Math.min(objectSizeFactor * 1.0, 2.0);
+                 break;
+              case 'far': // "far" for pedestal might mean a larger vertical move
+              case 'largeamount':
+              case 'significantly':
+                 effectiveDistance = Math.min(objectSizeFactor * 1.5, 3.0);
+                 break;
+              default:
+                this.logger.warn(`Unknown qualitative pedestal distance: '${rawDistance}'. Defaulting to 0.5 units.`);
+                effectiveDistance = 0.5;
             }
+            effectiveDistance = Math.max(1e-6, effectiveDistance);
+            this.logger.debug(`Calculated effective pedestal distance: ${effectiveDistance.toFixed(2)}`);
           }
-          const moveVector = cameraUp.multiplyScalar(distance * (direction === 'up' ? 1 : -1));
+
+          if (effectiveDistance === null) {
+            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Defaulting to 0.5 units.`);
+            effectiveDistance = 0.5;
+          }
+          // --- End Calculate Effective Distance ---
+          
+          // 1. Calculate movement vector using effectiveDistance
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          let cameraUp = new Vector3(0, 1, 0); 
+          if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
+          const moveVector = cameraUp.multiplyScalar(effectiveDistance * (direction === 'up' ? 1 : -1));
 
           // 2. Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
