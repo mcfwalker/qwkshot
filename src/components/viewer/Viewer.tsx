@@ -163,7 +163,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     // Avoid unnecessary state updates if ID hasn't changed
     setCurrentModelId(prevId => {
         if (prevId !== finalModelId) {
-            setModelId(finalModelId); // Update Zustand store
+            // Defer the Zustand store update slightly
+            setTimeout(() => setModelId(finalModelId), 0); 
             setResetCounter(prev => prev + 1); // Trigger reset only on change
             return finalModelId; // Update local state
         }

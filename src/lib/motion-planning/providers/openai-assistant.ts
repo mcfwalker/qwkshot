@@ -119,8 +119,29 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
 
             if (assistantMessage.content.length > 0 && assistantMessage.content[0].type === 'text') {
                 rawJsonString = assistantMessage.content[0].text.value;
+                let cleanedJsonString = rawJsonString;
+                
+                // --- ADDED: Remove comments before parsing ---
                 try {
-                    const parsedJson = JSON.parse(rawJsonString);
+                    // Remove single-line comments (//...)
+                    cleanedJsonString = rawJsonString.replace(/\/\/.*$/gm, '');
+                    // Optional: Remove multi-line comments (/*...*/) - less likely but safer
+                    // cleanedJsonString = cleanedJsonString.replace(/\/\*[\s\S]*?\*\//g, '');
+                    // Remove trailing commas which can also cause issues (optional but good practice)
+                    // cleanedJsonString = cleanedJsonString.replace(/,\s*([}\]])/g, '$1');
+                    
+                    console.log("Cleaned JSON string before parsing:", cleanedJsonString); // Log cleaned string
+                } catch (cleanError) {
+                    console.error("Error during JSON string cleaning:", cleanError);
+                    // Proceed with original string if cleaning fails?
+                    // cleanedJsonString = rawJsonString; 
+                }
+                // --- END ADDED ---
+                
+                try {
+                    // --- MODIFIED: Parse the cleaned string --- 
+                    const parsedJson = JSON.parse(cleanedJsonString);
+                    // --- END MODIFIED --- 
                     
                     // 7. Validate JSON Structure
                     if (parsedJson && Array.isArray(parsedJson.steps)) {
@@ -130,6 +151,10 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                     }
                 } catch (e) {
                     jsonParseError = `Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`;
+                    console.error("JSON Parsing Error within Adapter. Raw content received from OpenAI:");
+                    console.error("---");
+                    console.error(rawJsonString); // Log the original raw string
+                    console.error("---");
                 }
             } else {
                 jsonParseError = "Assistant message content is empty or not in the expected text format.";

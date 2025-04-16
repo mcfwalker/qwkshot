@@ -253,9 +253,11 @@ export async function POST(request: Request) {
         
         logger.debug('Successfully fetched and analyzed context data');
 
-    } catch (contextError) { // Catch for context fetching/analysis errors
+    } catch (contextError: any) { // Catch for context fetching/analysis errors
         logger.error('Error fetching/analyzing context data:', contextError);
-        const errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
+        // Sanitize the error message
+        let errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
+        errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns
         return NextResponse.json({ error: `Failed to fetch context data: ${errorMessage}` }, { status: 500 });
     }
 
@@ -323,7 +325,17 @@ export async function POST(request: Request) {
         );
 
         logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
-        return NextResponse.json(cameraCommands); // Return the generated commands
+        
+        // --- ADDED: Serialize Vector3 before sending --- 
+        const serializableCommands = cameraCommands.map(cmd => ({
+            position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
+            target: { x: cmd.target.x, y: cmd.target.y, z: cmd.target.z },
+            duration: cmd.duration,
+            easing: cmd.easing
+        }));
+        // --- END ADDED ---
+        
+        return NextResponse.json(serializableCommands); // Return the serialized commands
 
       } catch (interpreterError: any) {
         logger.error('Error during Scene Interpreter execution:', interpreterError);
@@ -338,8 +350,14 @@ export async function POST(request: Request) {
     } catch (plannerError: any) { // Catch errors from the adapter
       // --- NEW: Log specific error type --- 
       const errorName = plannerError instanceof Error ? plannerError.name : 'UnknownError';
-      const errorMessage = plannerError instanceof Error ? plannerError.message : 'Unknown motion planning error';
-      logger.error(`Error during Motion Planner execution (${errorName}):`, plannerError);
+      // Sanitize the error message: replace newlines with spaces
+      let errorMessage = plannerError instanceof Error ? plannerError.message : 'Unknown motion planning error';
+      errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns with spaces
+      
+      // Log the FULL error object for detailed debugging
+      logger.error(`Error during Motion Planner execution (${errorName}):`, plannerError); 
+      // Also log the sanitized message just to be sure
+      logger.error(`Sanitized error message for response: ${errorMessage}`);
       
       // Keep generic 500 response for now, but could customize based on errorName later
       return NextResponse.json(
