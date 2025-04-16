@@ -121,20 +121,30 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                 rawJsonString = assistantMessage.content[0].text.value;
                 let cleanedJsonString = rawJsonString;
                 
-                // --- ADDED: Remove comments before parsing ---
+                // --- ADDED: Remove comments and markdown fences before parsing ---
                 try {
-                    // Remove single-line comments (//...)
-                    cleanedJsonString = rawJsonString.replace(/\/\/.*$/gm, '');
-                    // Optional: Remove multi-line comments (/*...*/) - less likely but safer
-                    // cleanedJsonString = cleanedJsonString.replace(/\/\*[\s\S]*?\*\//g, '');
-                    // Remove trailing commas which can also cause issues (optional but good practice)
-                    // cleanedJsonString = cleanedJsonString.replace(/,\s*([}\]])/g, '$1');
+                    // 1. Remove markdown code fences (```json ... ``` or ``` ... ```)
+                    // Matches optional language specifier and captures content within
+                    const codeBlockMatch = cleanedJsonString.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
+                    if (codeBlockMatch && codeBlockMatch[1]) {
+                        cleanedJsonString = codeBlockMatch[1]; // Use the captured content
+                        console.log('Removed markdown fences. Content inside:', cleanedJsonString);
+                    } else {
+                        // Attempt to remove just the fence markers if full block match fails
+                        cleanedJsonString = cleanedJsonString.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
+                    }
+                    
+                    // 2. Remove single-line comments (//...)
+                    cleanedJsonString = cleanedJsonString.replace(/\/\/.*$/gm, '');
+                    
+                    // Trim whitespace just in case
+                    cleanedJsonString = cleanedJsonString.trim();
                     
                     console.log("Cleaned JSON string before parsing:", cleanedJsonString); // Log cleaned string
                 } catch (cleanError) {
                     console.error("Error during JSON string cleaning:", cleanError);
-                    // Proceed with original string if cleaning fails?
-                    // cleanedJsonString = rawJsonString; 
+                    // Fallback to original string if cleaning fails?
+                    cleanedJsonString = rawJsonString; 
                 }
                 // --- END ADDED ---
                 
