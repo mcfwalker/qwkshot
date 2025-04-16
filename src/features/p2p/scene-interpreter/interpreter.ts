@@ -988,22 +988,33 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
-          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
-           if (effectiveEasingName !== easingName) {
-              this.logger.debug(`Dolly: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          if (speed === 'very_fast') {
+            effectiveEasingName = 'linear';
+            if (effectiveEasingName !== easingName) this.logger.debug(`Dolly: Speed 'very_fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'fast') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Dolly: Speed 'fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'slow') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Dolly: Speed 'slow' selected easing '${effectiveEasingName}' (original: ${easingName})`);
           }
 
-          // 3. Create CameraCommand
-          const command: CameraCommand = {
-            position: finalPosition.clone(),
+          // 3. Create CameraCommands
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+            position: currentPosition.clone(),
             target: currentTarget.clone(), 
+            duration: 0,
+            easing: effectiveEasingName
+          });
+          commandsList.push({
+            position: finalPosition.clone(),
+            target: currentTarget.clone(), // Target doesn't change for dolly
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated dolly command:', command);
+          });
+          this.logger.debug('Generated dolly commands:', commandsList);
+          commands.push(...commandsList);
 
           // 4. Update state for the next step
           currentPosition = finalPosition.clone();
@@ -1108,22 +1119,33 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
-          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
-          if (effectiveEasingName !== easingName) {
-              this.logger.debug(`Truck: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          if (speed === 'very_fast') {
+            effectiveEasingName = 'linear';
+            if (effectiveEasingName !== easingName) this.logger.debug(`Truck: Speed 'very_fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'fast') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Truck: Speed 'fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'slow') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Truck: Speed 'slow' selected easing '${effectiveEasingName}' (original: ${easingName})`);
           }
 
-          // 3. Create CameraCommand
-          const command: CameraCommand = {
-            position: finalPosition.clone(), 
+          // 3. Create CameraCommands
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+            position: currentPosition.clone(),
             target: currentTarget.clone(), 
+            duration: 0,
+            easing: effectiveEasingName
+          });
+          commandsList.push({
+            position: finalPosition.clone(), 
+            target: currentTarget.clone(), // Target doesn't change for truck
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated truck command:', command);
+          });
+          this.logger.debug('Generated truck commands:', commandsList);
+          commands.push(...commandsList);
 
           // 4. Update state for the next step
           currentPosition = finalPosition.clone();
@@ -1234,22 +1256,33 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
-          if (speed === 'very_fast') { effectiveEasingName = 'linear'; }
-          else if (speed === 'fast' && easingName === DEFAULT_EASING) { effectiveEasingName = 'easeOutQuad'; }
-          else if (speed === 'slow' && easingName === 'linear') { effectiveEasingName = DEFAULT_EASING; }
-          if (effectiveEasingName !== easingName) {
-              this.logger.debug(`Pedestal: Speed '${speed}' changing easing from '${easingName}' to '${effectiveEasingName}'`);
+          if (speed === 'very_fast') {
+            effectiveEasingName = 'linear';
+            if (effectiveEasingName !== easingName) this.logger.debug(`Pedestal: Speed 'very_fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'fast') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Pedestal: Speed 'fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+          } else if (speed === 'slow') {
+            effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+            if (effectiveEasingName !== easingName) this.logger.debug(`Pedestal: Speed 'slow' selected easing '${effectiveEasingName}' (original: ${easingName})`);
           }
 
-          // 3. Create CameraCommand 
-          const command: CameraCommand = {
-            position: finalPosition.clone(), 
+          // 3. Create CameraCommands
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+            position: currentPosition.clone(),
             target: currentTarget.clone(), 
+            duration: 0,
+            easing: effectiveEasingName
+          });
+          commandsList.push({
+            position: finalPosition.clone(), 
+            target: currentTarget.clone(), // Target doesn't change for pedestal
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
-          };
-          commands.push(command);
-          this.logger.debug('Generated pedestal command:', command);
+          });
+          this.logger.debug('Generated pedestal commands:', commandsList);
+          commands.push(...commandsList);
 
           // 4. Update state for the next step
           currentPosition = finalPosition.clone();
