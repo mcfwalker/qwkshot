@@ -298,7 +298,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             factor: rawFactor,
             target: rawTargetName = 'current_target',
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed, default to medium
+            speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
           // Validate parameters
@@ -604,25 +604,104 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             if (effectiveEasingName !== easingName) this.logger.debug(`Orbit: Speed 'slow' selected easing '${effectiveEasingName}' (original: ${easingName})`);
           }
 
-          // 4. Create CameraCommand
+          // --- MODIFIED: Generate Intermediate Keyframes --- 
           const commandsList: CameraCommand[] = [];
-          commandsList.push({
-            position: currentPosition.clone(),
-            target: currentTarget.clone(), // Target *might* change to orbitCenter at the start
-            duration: 0,
-            easing: effectiveEasingName
-          });
-          commandsList.push({
-            position: finalPosition.clone(), // Use potentially clamped position
-            target: orbitCenter.clone(), // Orbit keeps looking at the orbit center
-            duration: stepDuration > 0 ? stepDuration : 0.1, 
-            easing: effectiveEasingName // Easing applies to the transition reaching this state
-          });
-          this.logger.debug('Generated orbit commands:', commandsList);
-          commands.push(...commandsList);
+          // --- DECREASED ANGLE STEP for smoother curve ---
+          const anglePerStep = 2; // <<< Use smaller angle step (e.g., 2 degrees)
+          const numSteps = Math.max(2, Math.ceil(Math.abs(angle) / anglePerStep)); 
+          // --- END DECREASE ---
+          const angleStep = angle / (numSteps - 1);
+          const durationStep = (stepDuration > 0 ? stepDuration : 0.1) / (numSteps - 1);
+          
+          this.logger.debug(`Orbit: Generating ${numSteps} steps for ${angle} degrees (target ~${anglePerStep}deg/step).`);
 
-          // 5. Update state for the next step
-          currentPosition = finalPosition.clone(); // Use potentially clamped position
+          let previousPosition = currentPosition.clone();
+
+          // Add the initial state command
+          commandsList.push({
+              position: previousPosition.clone(),
+              target: orbitCenter.clone(), // Start looking at the orbit center immediately
+              duration: 0,
+              easing: 'linear'
+          });
+
+          for (let i = 1; i < numSteps; i++) {
+              const currentAngleRad = THREE.MathUtils.degToRad(angleStep) * (direction === 'clockwise' ? -1 : 1);
+              const quaternionStep = new THREE.Quaternion().setFromAxisAngle(rotationAxis, currentAngleRad);
+              
+              // Rotate the *previous* position around the orbit center
+              const radiusVectorStep = new Vector3().subVectors(previousPosition, orbitCenter);
+              radiusVectorStep.applyQuaternion(quaternionStep);
+              // Note: Radius factor is only applied conceptually to the whole move, not per step here
+              const newPositionCandidateStep = new Vector3().addVectors(orbitCenter, radiusVectorStep);
+              let finalPositionStep = newPositionCandidateStep.clone();
+              let clampedStep = false;
+
+              // --- Constraint Checking (Apply to each intermediate step) --- 
+              const { cameraConstraints } = envAnalysis;
+              const { spatial } = sceneAnalysis;
+
+              // a) Height constraints
+              if (cameraConstraints) {
+                if (finalPositionStep.y < cameraConstraints.minHeight) {
+                  finalPositionStep.y = cameraConstraints.minHeight;
+                  clampedStep = true;
+                  // Add specific logging for step clamping if needed
+                }
+                if (finalPositionStep.y > cameraConstraints.maxHeight) {
+                  finalPositionStep.y = cameraConstraints.maxHeight;
+                  clampedStep = true;
+                }
+              }
+              // b) Distance constraints
+              if (cameraConstraints) {
+                  const distanceToCenterStep = finalPositionStep.distanceTo(orbitCenter);
+                  if (distanceToCenterStep < cameraConstraints.minDistance) {
+                      // Clamp logic
+                      const directionFromCenter = new Vector3().subVectors(finalPositionStep, orbitCenter).normalize();
+                      finalPositionStep.copy(orbitCenter).addScaledVector(directionFromCenter, cameraConstraints.minDistance);
+                      clampedStep = true;
+                  }
+                  if (distanceToCenterStep > cameraConstraints.maxDistance) {
+                     // Clamp logic
+                      const directionFromCenter = new Vector3().subVectors(finalPositionStep, orbitCenter).normalize();
+                      finalPositionStep.copy(orbitCenter).addScaledVector(directionFromCenter, cameraConstraints.maxDistance);
+                      clampedStep = true;
+                  }
+              }
+              // c) Bounding box constraint (using raycast)
+              if (spatial?.bounds) {
+                  const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+                  const clampedPositionStep = this._clampPositionWithRaycast(
+                      previousPosition, // Raycast from previous step's position
+                      newPositionCandidateStep,
+                      objectBounds
+                  );
+                  if (!clampedPositionStep.equals(newPositionCandidateStep)) {
+                      finalPositionStep.copy(clampedPositionStep);
+                      clampedStep = true;
+                  }
+              }
+              // --- End Constraint Checking --- 
+
+              // Add the intermediate/final command for this step
+              commandsList.push({
+                  position: finalPositionStep.clone(),
+                  target: orbitCenter.clone(), // Always look at the orbit center
+                  duration: durationStep, 
+                  easing: 'linear'
+              });
+
+              // Update previous position for the next iteration
+              previousPosition = finalPositionStep.clone();
+          }
+          
+          this.logger.debug('Generated orbit commands (multi-step):', commandsList);
+          commands.push(...commandsList);
+          // --- END MODIFIED --- 
+
+          // 5. Update state for the next step (use the final calculated position)
+          currentPosition = previousPosition.clone(); // previousPosition holds the last step's final position
           currentTarget = orbitCenter.clone(); // Update target to the orbit center
           // --- End Orbit Logic ---
           break;
