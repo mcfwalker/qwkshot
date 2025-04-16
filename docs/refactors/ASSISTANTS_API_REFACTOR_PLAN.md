@@ -309,6 +309,7 @@ interface MotionStep {
 *   [ ] Conduct thorough E2E testing with diverse and complex prompts.
 *   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
 *   [ ] Refine Assistant instructions and Motion KB based on test results.
+    *   [ ] *TODO:* Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness if needed.
 *   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
 *   [ ] Update project documentation.
 *   [ ] Prepare for merge to `stable`/`main`.

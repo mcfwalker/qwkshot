@@ -137,6 +137,11 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                     // 2. Remove single-line comments (//...)
                     cleanedJsonString = cleanedJsonString.replace(/\/\/.*$/gm, '');
                     
+                    // --- ADDED: Fix invalid requested_duration value ---
+                    // Replace "requested_duration": number (with potential whitespace) with "requested_duration": null
+                    cleanedJsonString = cleanedJsonString.replace(/"requested_duration"\s*:\s*number/g, '"requested_duration": null');
+                    // --- END ADDED --- 
+                    
                     // Trim whitespace just in case
                     cleanedJsonString = cleanedJsonString.trim();
                     

@@ -848,7 +848,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const rotationAxis = cameraRight; // CORRECT: Axis for tilt IS the camera's right vector
 
           // 2. Calculate rotation
-          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? 1 : -1); // Tilt up = positive rotation around local right
+          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? -1 : 1); // Tilt up = NEGATIVE rotation around local right
           const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad); // Use the correct rotationAxis (cameraRight)
 
           // 3. Rotate the target point around the camera position
