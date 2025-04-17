@@ -307,6 +307,24 @@ interface MotionStep {
 
 ### Phase 4: Integration, Testing & Refinement
 *   [ ] Conduct thorough E2E testing with diverse and complex prompts.
+    *   **[X] Individual Motion Tests:**
+        *   [X] Static: "Just hold the camera still for 5 seconds."
+        *   [X] Zoom: "Zoom in halfway towards the object center, quickly."
+        *   [X] Orbit: "Slowly orbit 180 degrees clockwise around the object."
+        *   [X] Pan: "Pan left by 45 degrees." / "Look left 45 degrees."
+        *   [X] Tilt: "Tilt the camera up 30 degrees." / "Look up 30 degrees."
+        *   [X] Dolly: "Move the camera forward towards the object by 2 units." / "Dolly in close."
+        *   [X] Truck: "Move the camera sideways to the right by 3 units." / "Truck right a bit."
+        *   [X] Pedestal: "Move the camera straight up by 1 unit." / "Pedestal up slightly."
+    *   **[ ] Simple Sequential Tests (2-3 Steps):**
+        *   [ ] "Zoom out a little, then orbit 90 degrees counter-clockwise."
+        *   [ ] "Pedestal up slightly, then tilt down to look at the object center."
+        *   [ ] "Truck left, then dolly forward fast."
+        *   [ ] "Orbit 45 degrees clockwise, pause briefly, then zoom in close."
+    *   **[ ] Test with Qualitative Modifiers:**
+        *   [ ] "Perform a very slow, wide orbit around the entire model."
+        *   [ ] "Rapidly push in towards the object's center."
+        *   [ ] "Gently pedestal down while panning right."
 *   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
 *   [ ] Refine Assistant instructions and Motion KB based on test results.
     *   [ ] *TODO:* Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness if needed.
