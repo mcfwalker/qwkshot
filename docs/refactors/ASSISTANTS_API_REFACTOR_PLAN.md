@@ -330,7 +330,7 @@ interface MotionStep {
     *   [ ] *TODO:* Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness if needed.
     *   [ ] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1).
     *   [ ] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping.
-    *   [ ] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`.
+    *   [X] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`.
     *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close").
     *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested.
     *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values.
