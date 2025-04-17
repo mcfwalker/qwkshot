@@ -985,7 +985,17 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // 1. Calculate movement vector using effectiveDistance
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1));
+          // --- FIX: Correct cross product order for cameraRight --- 
+          // Right = Forward x Up (in a right-handed system)
+          const worldUp = new Vector3(0, 1, 0); 
+          const cameraRight = new Vector3().crossVectors(viewDirection, worldUp).normalize(); 
+          // --- END FIX ---
+          // Handle edge case where view is aligned with world up
+          if (cameraRight.lengthSq() < 1e-6) { 
+             this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
+             cameraRight.set(1, 0, 0); // Fallback to world X axis
+          }
+          const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1)); // Left = -X, Right = +X
 
           // 2. Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
@@ -1137,52 +1147,46 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // 1. Calculate movement vector using effectiveDistance
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
-          if (cameraRight.lengthSq() < 1e-6) { /* fallback handling */ cameraRight.set(1, 0, 0); }
-          const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'left' ? -1 : 1)); 
+          // --- FIX: Correct cross product order for cameraRight --- 
+          // Right = Forward x Up (in a right-handed system)
+          const worldUp = new Vector3(0, 1, 0); 
+          const cameraRight = new Vector3().crossVectors(viewDirection, worldUp).normalize(); 
+          // --- END FIX ---
+          // Handle edge case where view is aligned with world up
+          if (cameraRight.lengthSq() < 1e-6) { 
+             this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
+             cameraRight.set(1, 0, 0); // Fallback to world X axis
+          }
+          const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'left' ? -1 : 1)); // Left = -X, Right = +X
 
-          // 2. Calculate candidate position
+          // 2. Calculate candidate position AND target
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
+          const newTargetCandidate = new Vector3().addVectors(currentTarget, moveVector); // <<< ALSO SHIFT TARGET
+          
           let finalPosition = newPositionCandidate.clone();
           let clamped = false;
 
-          // --- Constraint Checking --- 
+          // --- Ensure Context is Available for Constraints --- 
           const { cameraConstraints } = envAnalysis;
           const { spatial } = sceneAnalysis;
-
+          // --- End Context ---
+          
+          // --- Constraint Checking (Apply primarily to Position) --- 
           // a) Height constraints
           if (cameraConstraints) {
-            if (finalPosition.y < cameraConstraints.minHeight) {
-              finalPosition.y = cameraConstraints.minHeight;
-              clamped = true;
-              this.logger.warn(`Truck: Clamped position to minHeight (${cameraConstraints.minHeight})`);
-            }
-            if (finalPosition.y > cameraConstraints.maxHeight) {
-              finalPosition.y = cameraConstraints.maxHeight;
-              clamped = true;
-              this.logger.warn(`Truck: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
-            }
-          }
-
-          // b) Distance constraints (relative to currentTarget)
-          if (cameraConstraints) {
-            const distanceToTarget = finalPosition.distanceTo(currentTarget);
-            if (distanceToTarget < cameraConstraints.minDistance) {
-               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
-               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+             if (finalPosition.y < cameraConstraints.minHeight) {
+               finalPosition.y = cameraConstraints.minHeight;
                clamped = true;
-               this.logger.warn(`Truck: Clamped position to minDistance (${cameraConstraints.minDistance})`);
-            }
-            if (distanceToTarget > cameraConstraints.maxDistance) {
-               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
-               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+               this.logger.warn(`Truck: Clamped position to minHeight (${cameraConstraints.minHeight})`);
+             }
+             if (finalPosition.y > cameraConstraints.maxHeight) {
+               finalPosition.y = cameraConstraints.maxHeight;
                clamped = true;
-               this.logger.warn(`Truck: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
-            }
+               this.logger.warn(`Truck: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
+             }
           }
-          
-          // c) Bounding box constraint (using raycast)
-          if (spatial?.bounds) {
+          // ... (Bounding box constraint using raycast from currentPosition to newPositionCandidate) ...
+          if (spatial?.bounds) { // <<< Make sure spatial is defined here
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
               const clampedPosition = this._clampPositionWithRaycast(
                   currentPosition,
@@ -1199,6 +1203,12 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               finalPosition.copy(newPositionCandidate);
           }
           // --- End Constraint Checking ---
+          
+          // --- Calculate final target based on actual position movement --- START ---
+          // This ensures target moves exactly parallel to how the position actually moved after clamping
+          const actualMoveVector = new Vector3().subVectors(finalPosition, currentPosition);
+          const finalTarget = new Vector3().addVectors(currentTarget, actualMoveVector);
+          // --- Calculate final target based on actual position movement --- END ---
 
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
@@ -1223,7 +1233,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           });
           commandsList.push({
             position: finalPosition.clone(), 
-            target: currentTarget.clone(), // Target doesn't change for truck
+            target: finalTarget.clone(), // <<< USE FINAL TARGET
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
           });
@@ -1232,7 +1242,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // 4. Update state for the next step
           currentPosition = finalPosition.clone();
-          // currentTarget remains the same
+          currentTarget = finalTarget.clone(); // <<< UPDATE TARGET STATE
           // --- End Truck Logic ---
           break;
         }
