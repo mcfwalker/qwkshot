@@ -1304,12 +1304,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
           const moveVector = cameraUp.multiplyScalar(effectiveDistance * (direction === 'up' ? 1 : -1));
 
-          // 2. Calculate candidate position
+          // 2. Calculate candidate position AND target
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
+          const newTargetCandidate = new Vector3().addVectors(currentTarget, moveVector); // <<< ALSO SHIFT TARGET
+
           let finalPosition = newPositionCandidate.clone();
           let clamped = false;
 
-          // --- Constraint Checking --- 
+          // --- Constraint Checking (Apply primarily to Position) --- 
           const { cameraConstraints } = envAnalysis;
           const { spatial } = sceneAnalysis;
 
@@ -1327,20 +1329,20 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             }
           }
 
-          // b) Distance constraints (relative to currentTarget)
+          // b) Distance constraints (relative to NEW target candidate)
           if (cameraConstraints) {
-            const distanceToTarget = finalPosition.distanceTo(currentTarget);
+            const distanceToTarget = finalPosition.distanceTo(newTargetCandidate);
             if (distanceToTarget < cameraConstraints.minDistance) {
-               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
-               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+               const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
+               finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
                clamped = true;
-               this.logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance})`);
+               this.logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance}) relative to shifted target`);
             }
             if (distanceToTarget > cameraConstraints.maxDistance) {
-               const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
-               finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+               const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
+               finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
                clamped = true;
-               this.logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
+               this.logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance}) relative to shifted target`);
             }
           }
           
@@ -1355,14 +1357,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
                   clamped = true;
-              } else {
-                  finalPosition.copy(newPositionCandidate);
-              }
-          } else {
-               finalPosition.copy(newPositionCandidate);
+              } // No need for else, finalPosition already holds newPositionCandidate if not clamped
           }
           // --- End Constraint Checking ---
           
+           // --- Calculate final target based on actual position movement --- START ---
+          const actualMoveVector = new Vector3().subVectors(finalPosition, currentPosition);
+          const finalTarget = new Vector3().addVectors(currentTarget, actualMoveVector);
+          // --- Calculate final target based on actual position movement --- END ---
+
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
           if (speed === 'very_fast') {
@@ -1386,7 +1389,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           });
           commandsList.push({
             position: finalPosition.clone(), 
-            target: currentTarget.clone(), // Target doesn't change for pedestal
+            target: finalTarget.clone(), // <<< USE FINAL TARGET
             duration: stepDuration > 0 ? stepDuration : 0.1,
             easing: effectiveEasingName
           });
@@ -1395,7 +1398,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           // 4. Update state for the next step
           currentPosition = finalPosition.clone();
-          // currentTarget remains the same
+          currentTarget = finalTarget.clone(); // <<< UPDATE TARGET STATE
           // --- End Pedestal Logic ---
           break;
         }
