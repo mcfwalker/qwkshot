@@ -294,8 +294,73 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
       if (stepDuration <= 0 && step.type !== 'static') {
            this.logger.warn(`Normalized step duration is zero or negative for step ${index + 1} (${step.type}). Using default minimum duration in command generation.`);
+           // Assign a small default duration if needed by the generator? Or let generator handle it.
+           // For now, let the generator handle zero/negative durations if possible.
       }
-      
+
+      // --- START Target Blending Logic ---
+      // Determine the target for the upcoming step BEFORE generating commands
+      let nextTargetName = 'current_target'; // Default assumption
+      let nextEasingName = DEFAULT_EASING; // Default easing for blend
+      let nextSpeed = 'medium'; // Default speed for easing selection
+
+      if (step.parameters) {
+          nextTargetName = typeof step.parameters.target === 'string' ? step.parameters.target : nextTargetName;
+          nextEasingName = typeof step.parameters.easing === 'string' && (step.parameters.easing in easingFunctions) ? step.parameters.easing as EasingFunctionName : DEFAULT_EASING;
+          nextSpeed = typeof step.parameters.speed === 'string' ? step.parameters.speed : 'medium';
+      }
+
+      // Special case: Orbit defaults to object_center if target not specified
+      if (step.type === 'orbit' && typeof step.parameters?.target !== 'string') {
+          nextTargetName = 'object_center';
+      }
+      // Add other motion type specific default targets here if needed
+
+      const nextTarget = this._resolveTargetPosition(nextTargetName, sceneAnalysis, currentTarget); // Pass currentTarget as fallback for 'current_target'
+
+      if (nextTarget && !currentTarget.equals(nextTarget)) {
+          this.logger.debug(`Target change detected between steps. Previous: ${currentTarget.toArray()}, Next: ${nextTarget.toArray()}. Inserting blend command.`);
+
+          // Determine easing for the blend based on the *next* step's speed/easing params
+          // --- Re-enable blend easing calculation --- 
+          let blendEasingName = nextEasingName;
+           if (nextSpeed === 'very_fast') blendEasingName = 'linear';
+           else if (nextSpeed === 'fast') blendEasingName = (nextEasingName === DEFAULT_EASING || nextEasingName === 'linear') ? 'easeOutQuad' : nextEasingName;
+           else if (nextSpeed === 'slow') blendEasingName = (nextEasingName === DEFAULT_EASING || nextEasingName === 'linear') ? 'easeInOutQuad' : nextEasingName;
+          // const blendEasingName = 'linear'; // <<< Force linear easing for blend (REVERTED)
+
+          const BLEND_DURATION = 0.15; // Small duration for the target pivot
+          
+          // Add the blend command: Pivot camera target while holding position
+          commands.push({
+              position: currentPosition.clone(), // Keep position same as end of last step
+              target: nextTarget.clone(),       // Set target to the upcoming step's target
+              duration: BLEND_DURATION,
+              easing: blendEasingName
+          });
+
+          // --- Add a tiny settling command --- 
+          const SETTLE_DURATION = 0.05; 
+          commands.push({
+              position: currentPosition.clone(), // Position still the same
+              target: nextTarget.clone(),       // Target is now the new target
+              duration: SETTLE_DURATION,        // Very short duration
+              easing: 'linear'                // Linear for a hold
+          });
+          this.logger.debug(`Settle command added after blend.`);
+          // --- End settling command ---
+
+          // Adjust the current step's duration slightly IF the blend duration is significant?
+          // For now, keep it simple and let the blend add a small fixed time.
+          // stepDuration = Math.max(0, stepDuration - BLEND_DURATION);
+
+          // Update currentTarget state *before* calling the generator
+          currentTarget = nextTarget.clone();
+          
+          this.logger.debug(`Blend command added. Updated currentTarget for step ${index + 1}.`);
+      }
+      // --- END Target Blending Logic ---
+
       // Pass stepDuration down to generators (already done implicitly as it's in scope)
       switch (step.type) {
         case 'static': {          
@@ -817,19 +882,21 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'tilt': {
-          // --- Start Tilt Logic ---
+          // --- Start Tilt Logic (REVISED to handle explicit target) ---
           const {
             direction: rawDirection,
             angle: rawAngle,
+            target: rawTargetName, // <<< Get potential explicit target name
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed
+            speed: rawSpeed = 'medium' 
           } = step.parameters;
 
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null; // Explicit target check
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
           if (!direction) {
             this.logger.error(`Invalid or missing tilt direction: ${rawDirection}. Skipping step.`);
@@ -839,45 +906,59 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             this.logger.error(`Invalid, missing, or zero tilt angle: ${rawAngle}. Skipping step.`);
             continue;
           }
-          if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
+          // We don't need to check easing/speed defaults here as they are handled later
 
-          // 1. Determine rotation axis (Camera's local RIGHT)
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          // Assume world up is (0, 1, 0) for cross product
-          let cameraRight = new Vector3(0, 1, 0); // This line seems wrong from previous edit, should calculate right
-          if (Math.abs(viewDirection.y) > 0.999) { // Looking nearly straight up or down
-              // Use camera's local 'forward' projected onto XZ plane to find a stable 'right'
-              // const forwardXZ = new Vector3(viewDirection.x, 0, viewDirection.z).normalize();
-              // const cameraRight = new Vector3().crossVectors(new Vector3(0, 1, 0), forwardXZ).normalize();
-              // cameraUp.crossVectors(forwardXZ, cameraRight).normalize(); // Should give a stable 'up'
-              // Correct logic for fallback when looking up/down:
-              cameraRight.set(1, 0, 0); // Use world X as fallback right
-              this.logger.warn('Cannot reliably determine camera right vector (looking straight up/down). Using world X as fallback axis for tilt.');
+          // Capture the target state *before* this step begins
+          const initialTarget = currentTarget.clone(); 
+
+          // --- Determine Final Target --- 
+          let finalTarget: Vector3;
+          let isAbsoluteTarget = false;
+          if (targetName) {
+              // An explicit target was specified in the step parameters
+              const resolvedExplicitTarget = this._resolveTargetPosition(targetName, sceneAnalysis, initialTarget); // Try resolving it
+              if (resolvedExplicitTarget) {
+                  finalTarget = resolvedExplicitTarget.clone();
+                  this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
+                  isAbsoluteTarget = true; 
+                  // NOTE: The provided 'angle' parameter is ignored when an absolute target is given.
+                  // We might want to log a warning or refine the KB/Assistant instructions about this.
+                  if (angle) { 
+                      this.logger.warn(`Tilt: Explicit target '${targetName}' provided, ignoring angle parameter (${angle} degrees).`);
+                  }
+              } else {
+                  this.logger.error(`Tilt: Could not resolve explicit target '${targetName}'. Skipping step.`);
+                  continue; // Cannot proceed without a valid target
+              }
           } else {
-               // Standard case: Calculate right vector
-              cameraRight.crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+              // No explicit target - perform a relative tilt by the specified angle
+              this.logger.debug(`Tilt: No explicit target provided. Performing relative tilt of ${angle} degrees ${direction}.`);
+              isAbsoluteTarget = false;
+              // Calculate rotation axis (Camera's local RIGHT)
+              const viewDirection = new Vector3().subVectors(initialTarget, currentPosition).normalize();
+              let cameraRight = new Vector3(1, 0, 0); // Default fallback
+              if (Math.abs(viewDirection.y) < 0.999) { 
+                 cameraRight.crossVectors(new Vector3(0, 1, 0), viewDirection).normalize();
+                 if (cameraRight.lengthSq() < 1e-6) { 
+                    this.logger.warn('Calculated camera right vector is zero. Using world X as fallback axis for tilt.');
+                    cameraRight.set(1, 0, 0); 
+                 }                 
+              } else {
+                 this.logger.warn('Cannot reliably determine camera right vector (looking straight up/down). Using world X as fallback axis for tilt.');
+              }
+              this.logger.debug(`Tilt using camera local right axis: ${cameraRight.toArray()}`);
+              const rotationAxis = cameraRight;
+              const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? -1 : 1); 
+              const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad); 
+              const targetVector = new Vector3().subVectors(initialTarget, currentPosition);
+              targetVector.applyQuaternion(quaternion);
+              finalTarget = new Vector3().addVectors(currentPosition, targetVector);
           }
-          // Check if cross product resulted in zero vector (e.g., viewDirection is aligned with world up)
-          if (cameraRight.lengthSq() < 1e-6) { 
-              this.logger.warn('Calculated camera right vector is zero. Using world X as fallback axis for tilt.');
-              cameraRight.set(1, 0, 0); // Fallback to world X axis
-          }
-          this.logger.debug(`Tilt using camera local right axis: ${cameraRight.toArray()}`);
-          const rotationAxis = cameraRight; // CORRECT: Axis for tilt IS the camera's right vector
-
-          // 2. Calculate rotation
-          const angleRad = THREE.MathUtils.degToRad(angle) * (direction === 'up' ? -1 : 1); // Tilt up = NEGATIVE rotation around local right
-          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad); // Use the correct rotationAxis (cameraRight)
-
-          // 3. Rotate the target point around the camera position
-          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
-          targetVector.applyQuaternion(quaternion);
-          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
+          // --- End Determine Final Target ---
 
           // Determine effective easing based on speed
           let effectiveEasingName = easingName;
+          // Restore the original easing logic block
           if (speed === 'very_fast') {
             effectiveEasingName = 'linear';
             if (effectiveEasingName !== easingName) this.logger.debug(`Tilt: Speed 'very_fast' selected easing '${effectiveEasingName}' (original: ${easingName})`);
@@ -888,28 +969,28 @@ export class SceneInterpreterImpl implements SceneInterpreter {
             effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
             if (effectiveEasingName !== easingName) this.logger.debug(`Tilt: Speed 'slow' selected easing '${effectiveEasingName}' (original: ${easingName})`);
           }
-
-          // 4. Create CameraCommand (Position stays the same, Target changes)
+          
+          // Create CameraCommands
           const commandsList: CameraCommand[] = [];
           commandsList.push({
               position: currentPosition.clone(),
-              target: currentTarget.clone(),
+              target: initialTarget.clone(), // <<< Start from the initial target state for this step
               duration: 0,
               easing: effectiveEasingName
           });
           commandsList.push({
-            position: currentPosition.clone(), // Position does not change for tilt
-            target: newTarget.clone(),
+            position: currentPosition.clone(), 
+            target: finalTarget.clone(), // <<< End with the calculated or resolved final target
             duration: stepDuration > 0 ? stepDuration : 0.1, 
             easing: effectiveEasingName
           });
           this.logger.debug('Generated tilt commands:', commandsList);
           commands.push(...commandsList);
 
-          // 5. Update state for the next step (Only target changes)
-          currentTarget = newTarget.clone();
+          // Update state for the next step 
+          currentTarget = finalTarget.clone(); // <<< Update state with the actual final target
           // currentPosition remains the same
-          // --- End Tilt Logic ---
+          // --- End Tilt Logic (REVISED) ---
           break;
         }
         case 'dolly': {
@@ -995,7 +1076,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
              this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
              cameraRight.set(1, 0, 0); // Fallback to world X axis
           }
-          const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1)); // Left = -X, Right = +X
+          const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1)); // Dolly uses viewDirection
 
           // 2. Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);

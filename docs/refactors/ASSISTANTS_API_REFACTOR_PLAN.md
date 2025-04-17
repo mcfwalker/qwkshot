@@ -317,21 +317,33 @@ interface MotionStep {
         *   [X] Truck: "Move the camera sideways to the right by 3 units." / "Truck right a bit."
         *   [X] Pedestal: "Move the camera straight up by 1 unit." / "Pedestal up slightly."
     *   **[ ] Simple Sequential Tests (2-3 Steps):**
-        *   [ ] "Zoom out a little, then orbit 90 degrees counter-clockwise."
-        *   [ ] "Pedestal up slightly, then tilt down to look at the object center."
-        *   [ ] "Truck left, then dolly forward fast."
-        *   [ ] "Orbit 45 degrees clockwise, pause briefly, then zoom in close."
+        *   [X] "Zoom out a little, then orbit 90 degrees counter-clockwise." (Functional, but observed transition jerk; Assistant zoom factor inconsistent)
+        *   [X] "Pedestal up slightly, then tilt down to look at the object center." (Functional, but Assistant failed to add target parameter for tilt)
+        *   [X] "Truck left, then dolly forward fast." (Functional after dolly fix, but slow due to Assistant duration/distance planning; highlighted lack of implicit re-centering)
+        *   [X] "Orbit 45 degrees clockwise, pause briefly, then zoom in close." (Orbit/Pause OK, Zoom failed due to invalid Assistant plan - incorrect 'factor' type)
     *   **[ ] Test with Qualitative Modifiers:**
-        *   [ ] "Perform a very slow, wide orbit around the entire model."
-        *   [ ] "Rapidly push in towards the object's center."
-        *   [ ] "Gently pedestal down while panning right."
+        *   [X] "Perform a very slow, wide orbit around the entire model." (Success, but highlighted duration override issue)
+        *   [X] "Rapidly push in towards the object's center." (Failed - Assistant generated invalid `factor: 1.0`)
+        *   [X] "Gently pedestal down while panning right." (Executed sequentially, not simultaneously)
 *   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
 *   [ ] Refine Assistant instructions and Motion KB based on test results.
     *   [ ] *TODO:* Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness if needed.
+    *   [ ] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1).
+    *   [ ] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping.
+    *   [ ] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`.
+    *   [ ] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close").
+    *   [ ] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested.
+    *   [ ] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values.
+    *   [ ] *TODO:* Enhance Assistant planning to understand implicit user intent, such as re-centering the view on the object after lateral movements (e.g., `truck left` should often be followed by a reorienting `pan` before a subsequent `dolly in`).
+    *   [ ] *TODO:* Investigate refining Assistant instructions/KB to have the LLM explicitly generate transition steps (e.g., target pivots) between motions instead of relying solely on Interpreter blending.
 *   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
 *   [ ] Update project documentation.
 *   [ ] Prepare for merge to `stable`/`main`.
 *   [ ] *Goal:* Feature-complete, stable, documented, and ready for production use.
+
+### Future Enhancements / Considerations
+*   [ ] Investigate inferring animation duration based on motion type/speed modifiers (e.g., "very slow") instead of always requiring explicit user duration input.
+*   [ ] Explore architectural changes (Assistant planning, Interpreter logic, or post-processing) to support true simultaneous motions (e.g., "pedestal down while panning right") instead of only sequential execution.
 
 ## 6. Testing Strategy
 *   **Phase 1:** Unit tests for Assistants API client logic. Manual testing of prompt->plan retrieval.
