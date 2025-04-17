@@ -298,14 +298,16 @@ export class SceneInterpreterImpl implements SceneInterpreter {
            // For now, let the generator handle zero/negative durations if possible.
       }
 
-      // --- START Target Blending Logic ---
-      // Determine the target for the upcoming step BEFORE generating commands
+      // --- START Target Blending Logic --- 
+      // Determine the target *and other params* for the upcoming step BEFORE generating commands
       let nextTargetName = 'current_target'; // Default assumption
       let nextEasingName = DEFAULT_EASING; // Default easing for blend
       let nextSpeed = 'medium'; // Default speed for easing selection
+      let currentStepExplicitTargetName: string | null = null; // <<< Define targetName here
 
       if (step.parameters) {
           nextTargetName = typeof step.parameters.target === 'string' ? step.parameters.target : nextTargetName;
+          currentStepExplicitTargetName = typeof step.parameters.target === 'string' ? step.parameters.target : null; // <<< Assign here
           nextEasingName = typeof step.parameters.easing === 'string' && (step.parameters.easing in easingFunctions) ? step.parameters.easing as EasingFunctionName : DEFAULT_EASING;
           nextSpeed = typeof step.parameters.speed === 'string' ? step.parameters.speed : 'medium';
       }
@@ -321,39 +323,51 @@ export class SceneInterpreterImpl implements SceneInterpreter {
       if (nextTarget && !currentTarget.equals(nextTarget)) {
           this.logger.debug(`Target change detected between steps. Previous: ${currentTarget.toArray()}, Next: ${nextTarget.toArray()}. Inserting blend command.`);
 
+          // Determine if the upcoming step is an absolute target tilt/pan
+          const isAbsoluteTiltOrPan = (step.type === 'tilt' || step.type === 'pan') && currentStepExplicitTargetName; // <<< Use correct variable name
+
           // Determine easing for the blend based on the *next* step's speed/easing params
-          // --- Re-enable blend easing calculation --- 
           let blendEasingName = nextEasingName;
            if (nextSpeed === 'very_fast') blendEasingName = 'linear';
            else if (nextSpeed === 'fast') blendEasingName = (nextEasingName === DEFAULT_EASING || nextEasingName === 'linear') ? 'easeOutQuad' : nextEasingName;
            else if (nextSpeed === 'slow') blendEasingName = (nextEasingName === DEFAULT_EASING || nextEasingName === 'linear') ? 'easeInOutQuad' : nextEasingName;
-          // const blendEasingName = 'linear'; // <<< Force linear easing for blend (REVERTED)
 
-          const BLEND_DURATION = 0.15; // Small duration for the target pivot
+          // --- Adjust Blend/Settle Duration based on context --- 
+          let blendDuration: number;
+          let addSettleCommand: boolean;
+
+          if (isAbsoluteTiltOrPan) {
+              // Use the step's allocated duration for the blend, skip settle
+              blendDuration = Math.max(0.1, stepDuration); // Ensure a minimum duration
+              addSettleCommand = false;
+              this.logger.debug(`Absolute ${step.type} target detected. Using step duration (${blendDuration.toFixed(2)}s) for blend, skipping settle.`);
+          } else {
+              // Use fixed short duration for blend and add settle for other transitions
+              blendDuration = 0.15; 
+              addSettleCommand = true;
+          }
+          // --- End Duration Adjustment --- 
           
           // Add the blend command: Pivot camera target while holding position
           commands.push({
               position: currentPosition.clone(), // Keep position same as end of last step
               target: nextTarget.clone(),       // Set target to the upcoming step's target
-              duration: BLEND_DURATION,
+              duration: blendDuration,          // Use calculated duration
               easing: blendEasingName
           });
 
-          // --- Add a tiny settling command --- 
-          const SETTLE_DURATION = 0.05; 
-          commands.push({
-              position: currentPosition.clone(), // Position still the same
-              target: nextTarget.clone(),       // Target is now the new target
-              duration: SETTLE_DURATION,        // Very short duration
-              easing: 'linear'                // Linear for a hold
-          });
-          this.logger.debug(`Settle command added after blend.`);
-          // --- End settling command ---
-
-          // Adjust the current step's duration slightly IF the blend duration is significant?
-          // For now, keep it simple and let the blend add a small fixed time.
-          // stepDuration = Math.max(0, stepDuration - BLEND_DURATION);
-
+          // Add a tiny settling command if needed
+          if (addSettleCommand) {
+              const SETTLE_DURATION = 0.05; 
+              commands.push({
+                  position: currentPosition.clone(), // Position still the same
+                  target: nextTarget.clone(),       // Target is now the new target
+                  duration: SETTLE_DURATION,        // Very short duration
+                  easing: 'linear'                // Linear for a hold
+              });
+              this.logger.debug(`Settle command added after blend.`);
+          }
+          
           // Update currentTarget state *before* calling the generator
           currentTarget = nextTarget.clone();
           
@@ -886,7 +900,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const {
             direction: rawDirection,
             angle: rawAngle,
-            target: rawTargetName, // <<< Get potential explicit target name
+            // target: rawTargetName, // <<< Already determined as currentStepExplicitTargetName
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' 
           } = step.parameters;
@@ -894,7 +908,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           // Validate parameters
           const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
           const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
-          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null; // Explicit target check
+          const targetName = currentStepExplicitTargetName; // <<< Use variable from outer scope
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
@@ -972,20 +986,28 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           
           // Create CameraCommands
           const commandsList: CameraCommand[] = [];
-          commandsList.push({
-              position: currentPosition.clone(),
-              target: initialTarget.clone(), // <<< Start from the initial target state for this step
-              duration: 0,
+          // --- Only add commands if it's a relative tilt --- 
+          if (!isAbsoluteTarget) {
+            this.logger.debug('Tilt: Generating relative tilt commands.');
+            commandsList.push({
+                position: currentPosition.clone(),
+                target: initialTarget.clone(), // <<< Start from the initial target state for this step
+                duration: 0,
+                easing: effectiveEasingName
+            });
+            commandsList.push({
+              position: currentPosition.clone(), 
+              target: finalTarget.clone(), // <<< End with the calculated final target
+              duration: stepDuration > 0 ? stepDuration : 0.1, 
               easing: effectiveEasingName
-          });
-          commandsList.push({
-            position: currentPosition.clone(), 
-            target: finalTarget.clone(), // <<< End with the calculated or resolved final target
-            duration: stepDuration > 0 ? stepDuration : 0.1, 
-            easing: effectiveEasingName
-          });
-          this.logger.debug('Generated tilt commands:', commandsList);
-          commands.push(...commandsList);
+            });
+            this.logger.debug('Generated relative tilt commands:', commandsList);
+            commands.push(...commandsList);
+          } else {
+             this.logger.debug('Tilt: Absolute target provided. Blend/settle commands handled orientation. Skipping tilt command generation.');
+             // No commands needed here, blend+settle already handled it.
+             // The duration allocated to this step is effectively used by blend/settle.
+          }
 
           // Update state for the next step 
           currentTarget = finalTarget.clone(); // <<< Update state with the actual final target
