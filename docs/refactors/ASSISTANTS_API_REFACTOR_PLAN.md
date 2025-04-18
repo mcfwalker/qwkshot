@@ -334,6 +334,7 @@ interface MotionStep {
     *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close").
     *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested.
     *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values.
+    *   [ ] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc.
     *   [ ] *TODO:* Enhance Assistant planning to understand implicit user intent, such as re-centering the view on the object after lateral movements (e.g., `truck left` should often be followed by a reorienting `pan` before a subsequent `dolly in`).
     *   [ ] *TODO:* Investigate refining Assistant instructions/KB to have the LLM explicitly generate transition steps (e.g., target pivots) between motions instead of relying solely on Interpreter blending.
 *   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
