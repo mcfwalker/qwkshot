@@ -36,7 +36,7 @@
       {
         "name": "target",
         "type": "string",
-        "description": "Reference point for zooming (e.g., 'object_center', 'current_target', 'feature_A'). Default: 'current_target'. Interpreter resolves.",
+        "description": "Reference point for zooming (e.g., 'object_center', 'current_target', 'object_top_center', 'feature_A'). Default: 'current_target'. Interpreter resolves.",
         "required": false,
         "default": "current_target"
       },
@@ -92,7 +92,7 @@
       {
         "name": "target",
         "type": "string",
-        "description": "Reference point to orbit around (e.g., 'object_center', 'feature_B'). Default: 'object_center'. Interpreter resolves.",
+        "description": "Reference point to orbit around (e.g., 'object_center', 'object_bottom_center', 'feature_B'). Default: 'object_center'. Interpreter resolves.",
         "required": false,
         "default": "object_center"
       },
@@ -349,7 +349,7 @@
       {
         "name": "target",
         "type": "string",
-        "description": "The primary target or region to fly past (e.g., 'object_center', 'feature_X', 'edge_of_model'). Interpreter resolves.",
+        "description": "The primary target or region to fly past (e.g., 'object_center', 'object_left_center', 'feature_X', 'edge_of_model'). Interpreter resolves.",
         "required": true
       },
       {
@@ -396,7 +396,7 @@
       {
         "name": "target",
         "type": "string",
-        "description": "Optional: The target to look back at while flying away (e.g., 'object_center', 'last_target'). If omitted, might fly straight back. Default: 'current_target'. Interpreter resolves.",
+        "description": "Optional: The target to look back at while flying away (e.g., 'object_center', 'last_target', 'object_back_center'). If omitted, might fly straight back. Default: 'current_target'. Interpreter resolves.",
         "required": false,
         "default": "current_target"
       },
@@ -464,7 +464,7 @@
       {
         "name": "target",
         "type": "string",
-        "description": "The new point of interest to look at (e.g., 'object_center', 'feature_C', 'specific_point'). Interpreter resolves.",
+        "description": "The new point of interest to look at (e.g., 'object_center', 'object_right_center', 'feature_C', 'specific_point'). Interpreter resolves.",
         "required": true
       },
       {
@@ -518,7 +518,7 @@
        {
         "name": "target",
         "type": "string",
-        "description": "Reference point to arc around (e.g., 'object_center'). Default: 'object_center'. Interpreter resolves.",
+        "description": "Reference point to arc around (e.g., 'object_center', 'object_front_center'). Default: 'object_center'. Interpreter resolves.",
         "required": false,
         "default": "object_center"
       },
