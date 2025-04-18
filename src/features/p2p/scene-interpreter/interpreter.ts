@@ -322,10 +322,22 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               effectiveDistance = Math.min(currentDistanceToTarget * 0.2, objectSize * 0.5, 2.0);
               break;
             case 'medium':
+            case 'mediumdistance': // <<< ADD THIS CASE
               // Move 40% of the way
               effectiveDistance = currentDistanceToTarget * 0.4;
               break;
             // Add cases for "far", "further", "largeamount" if needed for dolly backward?
+            // --- ADDED: Dolly backward large distance ---
+            case 'far':
+            case 'further':
+            case 'largeamount':
+            case 'largedistance':
+              // For dolly backward, move a significant distance away
+              // e.g., double the current distance or a large fixed step
+              effectiveDistance = Math.max(currentDistanceToTarget * 1.0, objectSize * 2.0, 5.0); // Double distance OR 2x object size OR 5 units, whichever is largest
+              this.logger.debug(`Dolly backward large distance interpreted as ${effectiveDistance.toFixed(2)} units away.`);
+              break;
+            // --- END ADDED ---
             default:
               this.logger.warn(`Unknown qualitative dolly distance: '${rawDistance}'. Using default.`);
               effectiveDistance = defaultDistance;
@@ -341,12 +353,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               effectiveDistance = Math.min(objectSize * 0.5, 2.0);
               break;
             case 'medium':
+            case 'mediumdistance': // <<< ADD THIS CASE
               effectiveDistance = Math.min(objectSize * 1.0, 4.0);
               break;
             case 'far':
             case 'largeamount':
             case 'significantly':
-              effectiveDistance = Math.min(objectSize * 2.0, 6.0);
+              // --- INCREASED multiplier and cap --- 
+              effectiveDistance = Math.min(objectSize * 3.0, 10.0);
               break;
             default:
               this.logger.warn(`Unknown qualitative truck distance: '${rawDistance}'. Using default.`);
@@ -363,12 +377,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               effectiveDistance = Math.min(objectHeight * 0.5, 1.0);
               break;
             case 'medium':
+            case 'mediumdistance': // <<< ADD THIS CASE
               effectiveDistance = Math.min(objectHeight * 1.0, 2.0);
               break;
             case 'far': // "far" for pedestal might mean a larger vertical move
             case 'largeamount':
             case 'significantly':
-              effectiveDistance = Math.min(objectHeight * 1.5, 3.0);
+            case 'largedistance': // <<< ADD THIS CASE
+              // --- INCREASED multiplier and cap --- 
+              effectiveDistance = Math.min(objectHeight * 2.5, 5.0);
               break;
             default:
               this.logger.warn(`Unknown qualitative pedestal distance: '${rawDistance}'. Using default.`);
