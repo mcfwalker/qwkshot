@@ -23,6 +23,11 @@ import { EnvironmentalAnalysis, EnvironmentalAnalyzerConfig } from '@/types/p2p/
 import { SceneAnalysis, SerializedSceneAnalysis } from '@/types/p2p/scene-analyzer';
 import { deserializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
 
+// --- NEW IMPORTS ---
+import { OpenAIAssistantAdapter } from '@/lib/motion-planning/providers/openai-assistant';
+import { OpenAIAssistantProviderConfig, MotionPlan } from '@/lib/motion-planning/types';
+// --- END NEW IMPORTS ---
+
 // Mark as dynamic route with increased timeout
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Increase to 60 seconds from default of 10
@@ -61,14 +66,16 @@ const environmentalAnalyzerFactory = new EnvironmentalAnalyzerFactory(logger);
 
 export async function POST(request: Request) {
   try { // Outer try for the whole request
-    logger.info('Starting camera path generation request');
+    logger.info('Starting camera path generation request (Assistants API Refactor)'); // Updated log message
 
-    // --- Initialize Components --- 
-    await ensureLLMSystemInitialized();
-    const engine = getLLMEngine();
-    const interpreter = new SceneInterpreterImpl({} as SceneInterpreterConfig, logger);
-    const promptCompiler = promptCompilerFactory.create({ maxTokens: 2048, temperature: 0.7 });
-    await promptCompiler.initialize({ maxTokens: 2048, temperature: 0.7 });
+    // --- Initialize Components (Keep existing, some might be simplified/removed later) --- 
+    // await ensureLLMSystemInitialized(); // Old LLM init might not be needed
+    // const engine = getLLMEngine(); // <<< COMMENT OUT OLD ENGINE INSTANTIATION
+    const interpreter = new SceneInterpreterImpl({} as SceneInterpreterConfig, logger); // Keep interpreter instance for now, methods commented out later
+    // const promptCompiler = promptCompilerFactory.create({ maxTokens: 2048, temperature: 0.7 }); // <<< COMMENT OUT OLD COMPILER INSTANTIATION
+    // await promptCompiler.initialize({ maxTokens: 2048, temperature: 0.7 }); // <<< COMMENT OUT OLD COMPILER INIT
+    
+    // --- Metadata Manager and Analyzers remain crucial --- 
     const metadataManager = metadataManagerFactory.create(
       { // Config object
         database: { 
@@ -76,33 +83,45 @@ export async function POST(request: Request) {
             url: process.env.NEXT_PUBLIC_SUPABASE_URL || '', 
             key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' 
         },
-        // Disable caching for this instance to test
         caching: { enabled: false, ttl: 0 },
         validation: { strict: false, maxFeaturePoints: 100 }
       }, 
-      'serviceRole' // Explicitly request the service role client
+      'serviceRole'
     );
     await metadataManager.initialize();
     logger.debug('Got and initialized Metadata Manager instance (Service Role)');
     
-    // Use default config for Env Analyzer
     const environmentalAnalyzer = environmentalAnalyzerFactory.create(defaultEnvAnalyzerConfig);
     await environmentalAnalyzer.initialize(defaultEnvAnalyzerConfig);
-    logger.debug('Initialized all components');
+    logger.debug('Initialized core components (Metadata, EnvAnalyzer, Interpreter stub)');
 
     // --- Process Request Body --- 
     const body = await request.json();
     const { instruction, duration, modelId } = body; 
 
-    // --- Declare Context Variables --- 
+    // --- Input Validation (Keep as is) --- 
+    if (!instruction || !duration || !modelId) { 
+      const missing = {
+        instruction: !instruction,
+        duration: !duration,
+        modelId: !modelId,
+      };
+      logger.error('Missing parameters:', missing);
+      return NextResponse.json(
+        { error: 'Missing required parameters', details: missing },
+        { status: 400 }
+      );
+    }
+    logger.info(`Received instruction: "${instruction}", duration: ${duration}s, modelId: ${modelId}`);
+
+    // --- Declare Context Variables (Keep as is) --- 
     let modelMetadata: ModelMetadata;
-    let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null = null; // Initialize as null
+    let fetchedEnvironmentalMetadata: EnvironmentalMetadata | null = null; 
     let environmentalAnalysis: EnvironmentalAnalysis;
     let sceneAnalysis: SceneAnalysis | null = null;
-    // Declare currentCameraState outside the try block
     let currentCameraState: { position: Vector3; target: Vector3; fov: number };
 
-    // --- Fetch & Analyze Context Data --- 
+    // --- Fetch & Analyze Context Data (Keep as is) --- 
     logger.info(`Fetching context data for modelId: ${modelId}`);
     try { 
         modelMetadata = await metadataManager.getModelMetadata(modelId);
@@ -119,7 +138,7 @@ export async function POST(request: Request) {
         }
         logger.info('Environmental Metadata Fetched and Validated Successfully');
 
-        // --- DESERIALIZATION STEP --- 
+        // --- DESERIALIZATION STEP (Keep as is) --- 
         logger.info('Attempting to deserialize stored SceneAnalysis...');
         const storedSerializedAnalysis = modelMetadata.sceneAnalysis;
         if (storedSerializedAnalysis) {
@@ -133,6 +152,7 @@ export async function POST(request: Request) {
             logger.warn('No stored SceneAnalysis found in metadata. Using placeholder.');
         }
 
+        // --- FALLBACK PLACEHOLDER LOGIC (Keep as is) --- 
         // --- FALLBACK PLACEHOLDER LOGIC --- 
         if (!sceneAnalysis) { 
             logger.info('Constructing placeholder SceneAnalysis from geometry...');
@@ -233,9 +253,11 @@ export async function POST(request: Request) {
         
         logger.debug('Successfully fetched and analyzed context data');
 
-    } catch (contextError) { // Catch for context fetching/analysis errors
+    } catch (contextError: any) { // Catch for context fetching/analysis errors
         logger.error('Error fetching/analyzing context data:', contextError);
-        const errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
+        // Sanitize the error message
+        let errorMessage = contextError instanceof Error ? contextError.message : 'Unknown error fetching context';
+        errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns
         return NextResponse.json({ error: `Failed to fetch context data: ${errorMessage}` }, { status: 500 });
     }
 
@@ -254,182 +276,92 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- Get Provider & Configure --- 
-    const provider = await getActiveProvider() as LLMProvider;
-    if (!provider) {
-      logger.error('No LLM provider available');
-      return NextResponse.json(
-        { error: 'No LLM provider available' },
-        { status: 500 }
-      );
+    // --- >>> NEW: Instantiate and Use Motion Planner Adapter <<< ---
+    logger.info('Initializing OpenAI Assistant Adapter...');
+    const apiKey = process.env.OPENAI_API_KEY;
+    const assistantId = process.env.OPENAI_ASSISTANT_ID;
+
+    if (!apiKey) {
+        logger.error('OPENAI_API_KEY environment variable is not set.');
+        return NextResponse.json({ error: 'Server configuration error: Missing OpenAI API Key.' }, { status: 500 });
     }
-    logger.info('Using provider:', provider.getProviderType());
+    if (!assistantId) {
+        logger.error('OPENAI_ASSISTANT_ID environment variable is not set.');
+        return NextResponse.json({ error: 'Server configuration error: Missing OpenAI Assistant ID.' }, { status: 500 });
+    }
 
-    // Get provider capabilities for configuration
-    const capabilities = provider.getCapabilities();
-    logger.debug('Provider capabilities:', capabilities);
-
-    // Configure and initialize the LLM Engine
-    const engineConfig: LLMEngineConfig = {
-      model: provider.getProviderType(), // Or potentially capabilities.name/model identifier?
-      maxTokens: capabilities.maxTokens,
-      temperature: capabilities.temperature,
-      // Optionally add apiKey if available/needed, maybe from environment variables or a config service
+    const adapterConfig: OpenAIAssistantProviderConfig = {
+        type: 'openai-assistant',
+        apiKey: apiKey,
+        assistantId: assistantId,
+        // Optional: Add polling/timeout overrides if needed
+        // pollingIntervalMs: 1500,
+        // timeoutMs: 90000, 
     };
-    await engine.initialize(engineConfig);
-    logger.info('LLM Engine initialized with config:', engineConfig);
 
-    // Configure and initialize the Scene Interpreter
-    const interpreterConfig: SceneInterpreterConfig = {
-      smoothingFactor: 0.5, // Default smoothing
-      maxKeyframes: 100,   // Default max keyframes from LLM
-      interpolationMethod: 'smooth', // Default to smooth
-      // Inherit debug/performance flags from engine/request if needed
-      debug: engineConfig.debug, 
-    };
-    await interpreter.initialize(interpreterConfig);
-    logger.info('Scene Interpreter initialized with config:', interpreterConfig);
+    const motionPlanner = new OpenAIAssistantAdapter(adapterConfig);
 
-    // --- Get Retry Context from Request Body (if any) ---
-    const retryReason = body.retryContext?.reason;
-    let retryFeedbackString: string | undefined = undefined;
-    if (retryReason === 'bounding_box_violation') {
-        retryFeedbackString = "Previous Attempt Feedback: The generated path failed because the camera position entered the object's bounding box. Ensure the new path strictly respects the object boundaries and maintains a distance greater than the 'Distance to Object Bounding Box' provided.";
-        logger.info('Generating prompt with retry feedback for bounding box violation.');
-    }
-
-    // --- Compile Prompt --- 
-    let compiledPrompt: CompiledPrompt;
+    // --- Generate the Motion Plan using the Adapter --- 
+    logger.info(`Generating motion plan via ${adapterConfig.type} adapter (ID: ${adapterConfig.assistantId})...`); 
+    let motionPlan: MotionPlan;
     try {
-      // currentCameraState should now be accessible here
-      compiledPrompt = await promptCompiler.compilePrompt(
-        instruction, 
-        sceneAnalysis, // Use non-null sceneAnalysis
-        environmentalAnalysis, 
-        modelMetadata, 
-        currentCameraState, 
-        duration,
-        retryFeedbackString // Pass optional feedback string
-      );
-      logger.debug('Prompt compiled successfully'); 
-    } catch (promptError) {
-       // ... prompt compilation error handling ...
-       logger.error('Error during prompt compilation:', promptError);
-       const errorMessage = promptError instanceof Error ? promptError.message : 'Unknown prompt compilation error';
-       return NextResponse.json(
-            { error: `Prompt compilation failed: ${errorMessage}` },
-            { status: 500 }
-       );
-    }
+      motionPlan = await motionPlanner.generatePlan(instruction, duration);
 
-    // Generate the path using the LLM Engine (using the compiledPrompt)
-    logger.info('Generating camera path via LLM Engine for provider:', engineConfig.model); 
-    try {
-      const response = await engine.generatePath(compiledPrompt);
+      logger.info(`Motion Plan received from Assistant Adapter with ${motionPlan.steps.length} steps.`);
 
-      // Handle potential errors from the engine
-      if (response.error) {
-        logger.error('LLM Engine returned an error:', response.error);
-        return NextResponse.json(
-          { error: response.error.message, code: response.error.code },
-          { status: 500 } // Or map specific error codes to HTTP statuses
-        );
-      }
-
-      // Check if data is null (shouldn't happen if error is null, but good practice)
-      if (!response.data) {
-        logger.error('LLM Engine returned null data without an error.');
-        return NextResponse.json(
-          { error: 'LLM Engine failed without specific error details' },
-          { status: 500 }
-        );
-      }
-
-      // Use the data from the engine response
-      const cameraPath = response.data; 
-      logger.info(`Path received from LLM Engine with ${cameraPath.keyframes.length} keyframes.`);
-
-      // --- Interpret and Validate Path --- 
-      let commands: CameraCommand[];
+      // --- >>> NEW: Interpret the Motion Plan <<< ---
+      logger.info('Interpreting the generated Motion Plan...');
       try {
-        // 1. Get object bounds from environmentalAnalysis
-        if (!environmentalAnalysis?.object?.bounds?.min || !environmentalAnalysis?.object?.bounds?.max) {
-            logger.error('Object bounds not available in environmentalAnalysis for validation.');
-            throw new Error('Object bounds missing for path validation.');
+        // Ensure necessary context is available
+        if (!sceneAnalysis || !environmentalAnalysis || !currentCameraState) {
+          throw new Error('Interpreter context (SceneAnalysis, EnvironmentalAnalysis, or CameraState) is missing.');
         }
-        // --- >>> Get model offset from fetchedEnvironmentalMetadata <<< ---
-        const modelOffset = fetchedEnvironmentalMetadata?.modelOffset ?? 0; // Default to 0 if not present
-        logger.debug(`Using modelOffset: ${modelOffset} for bounds calculation`);
 
-        // --- >>> Adjust bounds based on offset <<< ---
-        const originalMin = environmentalAnalysis.object.bounds.min;
-        const originalMax = environmentalAnalysis.object.bounds.max;
-        const adjustedMin = originalMin.clone().setY(originalMin.y + modelOffset);
-        const adjustedMax = originalMax.clone().setY(originalMax.y + modelOffset);
+        const cameraCommands: CameraCommand[] = interpreter.interpretPath(
+          motionPlan,
+          sceneAnalysis,
+          environmentalAnalysis,
+          { position: currentCameraState.position, target: currentCameraState.target } // Pass initial state
+        );
 
-        const objectBounds = new Box3(adjustedMin, adjustedMax);
+        logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
+        
+        // --- ADDED: Serialize Vector3 before sending --- 
+        const serializableCommands = cameraCommands.map(cmd => ({
+            position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
+            target: { x: cmd.target.x, y: cmd.target.y, z: cmd.target.z },
+            duration: cmd.duration,
+            easing: cmd.easing
+        }));
+        // --- END ADDED ---
+        
+        return NextResponse.json(serializableCommands); // Return the serialized commands
 
-        // 2. Interpret the path
-        commands = interpreter.interpretPath(cameraPath);
-        logger.info(`Interpretation resulted in ${commands.length} commands.`);
-
-        // <<< ADD LOGGING BEFORE VALIDATION >>>
-        logger.warn(`[API Route] About to validate. Bounds Min: (${objectBounds.min.x}, ${objectBounds.min.y}, ${objectBounds.min.z}), Max: (${objectBounds.max.x}, ${objectBounds.max.y}, ${objectBounds.max.z})`);
-        logger.warn(`[API Route] ObjectBounds is instance of Box3: ${objectBounds instanceof Box3}`);
-        logger.warn(`[API Route] Number of commands to validate: ${commands.length}`);
-
-        // 3. Validate commands, passing the bounds
-        const commandValidation = interpreter.validateCommands(commands, objectBounds);
-        if (!commandValidation.isValid) {
-          logger.error('Generated commands failed validation:', commandValidation.errors);
-          // Check if the specific error is bounding box violation
-          const isBoundingBoxError = commandValidation.errors.some(err => err.startsWith('PATH_VIOLATION_BOUNDING_BOX'));
-          if (isBoundingBoxError) {
-              // Return specific response for bounding box violation
-              return NextResponse.json(
-                  { error: "Validation Failed: Path enters object bounds", code: "PATH_VIOLATION_BOUNDING_BOX" },
-                  { status: 422 } // 422 Unprocessable Entity might be suitable
-              );
-          } else {
-              // Throw a generic error for other validation failures
-              throw new Error(`Generated commands failed validation: ${commandValidation.errors.join(', ')}`);
-          }
-        }
-        logger.info('Generated commands passed validation.');
-      } catch (interpretationError) {
-          logger.error('Error during path interpretation or command validation:', interpretationError);
-          const errorMessage = interpretationError instanceof Error ? interpretationError.message : 'Unknown interpretation error';
-          // Avoid returning the specific bounding box error code here if it was already handled
-          if (errorMessage.includes('PATH_VIOLATION_BOUNDING_BOX')) {
-             // This case should ideally not be reached if the specific check above works,
-             // but as a fallback, return a generic server error.
-             return NextResponse.json(
-                { error: 'Path validation failed.' },
-                { status: 500 } 
-             );
-          }
-          return NextResponse.json(
-              { error: `Path Interpretation Failed: ${errorMessage}` },
-              { status: 500 } 
-          );
+      } catch (interpreterError: any) {
+        logger.error('Error during Scene Interpreter execution:', interpreterError);
+        const errorMessage = interpreterError instanceof Error ? interpreterError.message : 'Unknown interpretation error';
+        return NextResponse.json(
+            { error: `Scene Interpretation Failed: ${errorMessage}` },
+            { status: 500 }
+        );
       }
+      // --- End Scene Interpreter Call ---
+
+    } catch (plannerError: any) { // Catch errors from the adapter
+      // --- NEW: Log specific error type --- 
+      const errorName = plannerError instanceof Error ? plannerError.name : 'UnknownError';
+      // Sanitize the error message: replace newlines with spaces
+      let errorMessage = plannerError instanceof Error ? plannerError.message : 'Unknown motion planning error';
+      errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns with spaces
       
-      return NextResponse.json(commands);
-
-    } catch (engineError: any) { // Add type annotation
-      // ... engine/interpretation error handling ...
-      logger.error('Error during LLM engine path generation or subsequent processing:', engineError);
-      const errorMessage = engineError instanceof Error ? engineError.message : 'Unknown engine/processing error';
-      // Check if it's the specific validation error we handled earlier
-      if (errorMessage.includes('PATH_VIOLATION_BOUNDING_BOX')) {
-          // If somehow the specific handling failed and it bubbles up here, return the 422
-           return NextResponse.json(
-              { error: "Validation Failed: Path enters object bounds", code: "PATH_VIOLATION_BOUNDING_BOX" },
-              { status: 422 } 
-          );
-      }
+      // Log the FULL error object for detailed debugging
+      logger.error(`Error during Motion Planner execution (${errorName}):`, plannerError); 
+      // Also log the sanitized message just to be sure
+      logger.error(`Sanitized error message for response: ${errorMessage}`);
+      
+      // Keep generic 500 response for now, but could customize based on errorName later
       return NextResponse.json(
-          { error: `LLM Engine or Processing Failed: ${errorMessage}` },
+          { error: `Motion Planning Failed: ${errorMessage}`, code: errorName }, // Include error name/code
           { status: 500 }
       );
     }

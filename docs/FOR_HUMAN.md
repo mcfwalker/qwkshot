@@ -2,6 +2,8 @@
 
 ## Before Starting a Session
 
+"Hi, let's continue working on the P2P pipeline refactor. Please review these documents to get up to speed: docs/LLM_CONTEXT.md, docs/refactors/ASSISTANTS_API_REFACTOR_PLAN.md, docs/refactors/P2P_OVERVIEW_v3.md. Note that for specifics on the Prompt-to-Path architecture, the refactor plan and overview documents contain the most current details, superseding the general descriptions in LLM_CONTEXT.md where they differ. Our next step is to start testing the simple sequential prompts listed in the plan..."
+
 ### Documentation to Share with LLM
 - [ ] `docs/LLM_CONTEXT.md` (universal project context)
 - [ ] Latest status report from `docs/status-reports/`

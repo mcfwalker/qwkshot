@@ -39,6 +39,11 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-17-2119 - Assistants API Refactor - Verification & Refactoring Attempt
+- M3DV-SR-2025-04-17-1309 - Assistants Pipeline E2E Testing - Sequential & Qualitative
+- M3DV-SR-2025-04-16-1723 - Assistants Pipeline E2E Testing - Individual Motions
+- M3DV-SR-2025-04-15-1211 - Scene Interpreter Refinements (Phase 3 Core)
+- M3DV-SR-2025-04-15-0656 - Assistants API Adapter Implementation (Phase 1 Complete)
 - M3DV-SR-2025-04-13-2009 - Pipeline Refactor Decision & Planning
 - M3DV-SR-2025-04-13-1220 - Bounding Box Validation & Retry Mechanism
 - M3DV-SR-2025-04-12-1423 - Scene Analysis Integration Refactor

@@ -257,46 +257,108 @@ interface MotionStep {
 ### Phase 0: Planning & Design
 *   [X] Finalize Motion Plan JSON schema. *(Completed)*
 *   [X] Finalize Motion KB JSON structure & create initial content for core motions. *(Completed)*
-*   [ ] **Design `MotionPlannerService` Interface:** Define the standard internal interface for generating motion plans.
-*   [X] **Research & Provider Choice:** Initial research suggests Google Vertex AI (Agent Builder / Gemini+Search) offers potential advantages (cost, structured output). **Decision: Target Vertex AI for the *first* adapter implementation.** *(Research task remains open for deeper investigation)*.
-*   [ ] **Initial Provider Setup (Vertex AI):** Perform basic setup for Vertex AI (e.g., enable APIs, configure data store for KB, get project IDs/keys).
-*   [ ] Create dedicated feature branch (`feature/assistants-pipeline-refactor`).
-*   [ ] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (Vertex AI)**, basic provider setup.
+*   [X] Design `MotionPlannerService` Interface: Define the standard internal interface for generating motion plans. *(Completed)*
+*   [X] **Research & Provider Choice:** Initial research compared OpenAI Assistants API and Google Vertex AI. **Decision: Target OpenAI Assistants API for the *first* adapter implementation, prioritizing simplicity for the POC.** *(Vertex AI remains a future option.)*.
+*   [X] **Initial Provider Setup (OpenAI):** Perform basic setup for OpenAI Assistants (e.g., Create Assistant, upload initial KB file, get Assistant ID/API Keys). *(Completed)*
+*   [X] Create dedicated feature branch (`feature/assistants-pipeline-refactor`). *(Completed)*
+*   [X] *Goal:* Detailed plan, defined schemas & interface, **initial provider chosen (OpenAI)**, basic provider setup. *(Phase 0 COMPLETE)*
 
 ### Phase 1: LLM Engine Refactor (Adapter Implementation)
-*   [ ] Implement the **`VertexAIAdapter`** adhering to the `MotionPlannerService` interface.
-*   [ ] Include logic for sending the prompt to the Vertex AI service (Agent Builder or Gemini+Search) and handling the KB interaction.
-*   [ ] Implement parsing and validation of the Vertex AI response to ensure it conforms to the standard `MotionPlan` JSON schema (potentially using Function Calling).
-*   [ ] Set up basic error handling for Vertex AI API calls and response processing.
-*   [ ] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter.
-*   [ ] *Goal:* A functioning **`VertexAIAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object.
+*   [X] **Evaluate Vercel AI SDK:** Investigate if the Vercel AI SDK Core library effectively simplifies the OpenAI Assistants API workflow (threads, runs, retrieval) compared to the standard `openai` Node.js library. Decide whether to use it for the adapter. *(Decision: Use `openai` library directly for Assistants API)*.
+*   [X] Implement the **`OpenAIAssistantAdapter`** adhering to the `MotionPlannerService` interface. *(Implemented in `src/lib/motion-planning/providers/openai-assistant.ts`)*.
+*   [X] Include logic for sending the prompt to the OpenAI Assistant service (using threads, runs) and ensuring the KB file is utilized via the Retrieval tool. *(Core API flow implemented)*.
+*   [X] Implement parsing and validation of the Assistant's response to ensure it conforms to the standard `MotionPlan` JSON schema (robust prompting needed). *(Basic parsing/validation implemented)*.
+*   [X] Set up basic error handling for OpenAI API calls and response processing. *(Implemented basic try/catch and error reporting)*.
+*   [X] (Mocking) Temporarily log the received `MotionPlan` object instead of sending to Interpreter. *(API Route `src/app/api/camera-path/route.ts` updated to return raw MotionPlan)*.
+*   [X] *Goal:* A functioning **`OpenAIAssistantAdapter`** for the chosen provider that implements the internal interface and returns a valid `MotionPlan` object. *(Phase 1 COMPLETE as of 2025-04-14)*
 
 ### Phase 2: Scene Interpreter Core & Basic Execution
-*   [ ] Refactor `Scene Interpreter` interface/class structure.
-*   [ ] Implement mechanism to accept Motion Plan JSON.
-*   [ ] Implement mechanism to access local Scene/Environmental analysis data (via `Metadata Manager` or passed context).
-*   [ ] Implement core loop to process plan steps sequentially.
-*   [ ] Implement 1-2 simple motion generators (e.g., `static`, basic linear `zoom` using local geometry).
-*   [ ] Connect output to `CameraAnimationSystem` (using existing `CameraCommand` format or adapting).
-*   [ ] *Goal:* Basic E2E flow working: Prompt -> Assistant Plan -> Interpreter -> Simple Animation.
+*   [X] Refactor `Scene Interpreter` interface/class structure (`interpretPath` signature updated). *(Completed)*
+*   [X] Implement mechanism to accept Motion Plan object (from adapter). *(Completed)*
+*   [X] Implement mechanism to access local Scene/Environmental analysis data (passed as parameters to `interpretPath`). *(Completed)*
+*   [X] Implement core loop to process plan steps sequentially. *(Completed)*
+*   [X] Implement 2 simple motion generators (`static`, `zoom`). *(Completed)*
+*   [X] Connect output to `CameraAnimationSystem` (Interpreter returns `CameraCommand[]`, API route updated). *(Completed)*
+*   [X] *Goal:* Basic E2E backend flow working: Prompt -> Assistant Plan -> Interpreter -> API returns `CameraCommand[]`. *(Phase 2 COMPLETE as of Session End)*
 
 ### Phase 3: Scene Interpreter Motion Library Expansion
-*   [ ] Implement generators for core motion types (`orbit`, `pan`, `dolly`, etc.).
-*   [ ] Implement parameter handling within generators (speed, target, direction, style).
-*   [ ] Implement various easing function applications.
-*   [ ] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators.
-*   [ ] Refine duration allocation logic across steps.
-*   [ ] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints.
+*   [/] Implement generators for core motion types. *(In Progress - Core 8 Implemented)*
+    *   [X] `static` (from Phase 2)
+    *   [X] `zoom` (from Phase 2)
+    *   [X] `orbit` (updated)
+    *   [X] `pan`
+    *   [X] `tilt`
+    *   [X] `dolly`
+    *   [X] `truck`
+    *   [X] `pedestal`
+    *   [ ] `fly_by`
+    *   [ ] `fly_away`
+    *   [ ] `set_view`
+    *   [ ] `focus_on`
+    *   [ ] `arc`
+    *   [ ] `reveal`
+*   [X] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Completed for core 8 types: Target resolution, speed param, direction aliases. Deferred: Custom axis, hints)*
+*   [X] Implement various easing function applications. *(Completed for core 8 types: Using d3-ease, speed influences selection)*
+*   [X] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Completed for core 8 types: Basic clamping, raycast for BB, velocity check)*
+*   [X] Refine duration allocation logic across steps. *(Completed for core 8 types: Added normalization based on ratios)*
+    *   [ ] *TODO:* Consider adjusting step duration further if constraint clamping significantly shortens the actual movement distance/angle.
+*   [X] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints. *(Completed for core 8 types)*
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
 
 ### Phase 4: Integration, Testing & Refinement
-*   [ ] Conduct thorough E2E testing with diverse and complex prompts.
-*   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
-*   [ ] Refine Assistant instructions and Motion KB based on test results.
-*   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
-*   [ ] Update project documentation.
+*   [X] Conduct thorough E2E testing with diverse and complex prompts.
+    *   **[X] Individual Motion Tests:**
+        *   [X] Static: "Just hold the camera still for 5 seconds."
+        *   [X] Zoom: "Zoom in halfway towards the object center, quickly."
+        *   [X] Orbit: "Slowly orbit 180 degrees clockwise around the object."
+        *   [X] Pan: "Pan left by 45 degrees." / "Look left 45 degrees."
+        *   [X] Tilt: "Tilt the camera up 30 degrees." / "Look up 30 degrees."
+        *   [X] Dolly: "Move the camera forward towards the object by 2 units." / "Dolly in close."
+        *   [X] Truck: "Move the camera sideways to the right by 3 units." / "Truck right a bit."
+        *   [X] Pedestal: "Move the camera straight up by 1 unit." / "Pedestal up slightly."
+    *   **[X] Simple Sequential Tests (2-3 Steps):** (Completed - Noted transition artifacts & Assistant planning issues)
+        *   [X] "Zoom out a little, then orbit 90 degrees counter-clockwise." (Functional, but observed transition jerk; Assistant zoom factor inconsistent)
+        *   [X] "Pedestal up slightly, then tilt down to look at the object center." (Functional, but Assistant failed to add target parameter for tilt)
+        *   [X] "Truck left, then dolly forward fast." (Functional after dolly fix, but slow due to Assistant duration/distance planning; highlighted lack of implicit re-centering)
+        *   [X] "Orbit 45 degrees clockwise, pause briefly, then zoom in close." (Passed after instruction refinement)
+    *   **[X] Test with Qualitative Modifiers:** (Completed - Noted Assistant planning limitations, some fixed with instruction updates)
+        *   [X] "Perform a very slow, wide orbit around the entire model." (Success, but highlighted duration override issue)
+        *   [X] "Rapidly push in towards the object's center." (Passed after instruction refinement)
+        *   [X] "Gently pedestal down while panning right." (Executed sequentially, not simultaneously)
+    *   **[X] Test Spatial Reference Targeting:** (Implemented via standardized targets + Interpreter logic)
+        *   [X] "Focus on the top of the object."
+        *   [X] "Tilt down to look at the bottom center."
+        *   [X] "Orbit 90 degrees around the left side."
+    *   **[X] Test "Move To" Destination:** (Implemented via `destination_target` + Interpreter logic)
+        *   [X] "Pedestal down to the bottom of the object."
+        *   [X] "Dolly forward to the front edge."
+    *   **[X] Test Contradictory Zoom Parameters:** (Assistant correctly adjusts plan)
+        *   [X] "Zoom out factor 0.5"
+        *   [X] "Zoom in factor 2.0"
+*   [X] Refine Assistant instructions and Motion KB based on test results.
+    *   [X] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1). (Addressed via instructions)
+    *   [X] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping. (Addressed: Refined large distances, fixed medium_distance)
+    *   [X] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`. (Done previously)
+    *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close"). (Done previously via instructions)
+    *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested. (Done previously via instructions)
+    *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values. (Done previously via instructions)
+    *   [X] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc. (Addressed via standardized targets + Interpreter logic, including `destination_target`)
+*   [X] Update project documentation. (Updated plan, P2P Overview, added reference README, regression suite)
 *   [ ] Prepare for merge to `stable`/`main`.
 *   [ ] *Goal:* Feature-complete, stable, documented, and ready for production use.
+
+### Future Enhancements / Considerations
+*   [ ] Implement remaining core motion types: `fly_by`, `fly_away`, `set_view`, `arc`, `reveal`.
+*   [ ] Implement parameter handling for advanced features (e.g., custom orbit axis, radius factor, look at target boolean during fly-by).
+*   [ ] Refine duration allocation logic: Consider adjusting step duration if constraint clamping significantly shortens the actual movement distance/angle.
+*   [ ] Investigate inferring animation duration based on motion type/speed modifiers (e.g., "very slow") instead of always requiring explicit user duration input.
+*   [ ] Explore architectural changes (Assistant planning, Interpreter logic, or post-processing) to support true simultaneous motions (e.g., "pedestal down while panning right") instead of only sequential execution.
+*   [ ] Address semantic orientation: Implement user labeling for model front/forward vector and update Interpreter/Assistant logic to use it.
+*   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
+*   [ ] Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness.
+*   [ ] Enhance Assistant planning to understand implicit user intent, such as re-centering the view on the object after lateral movements (e.g., `truck left` should often be followed by a reorienting `pan` before a subsequent `dolly in`).
+*   [ ] Investigate refining Assistant instructions/KB to have the LLM explicitly generate transition steps (e.g., target pivots) between motions instead of relying solely on Interpreter blending.
+*   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
 
 ## 6. Testing Strategy
 *   **Phase 1:** Unit tests for Assistants API client logic. Manual testing of prompt->plan retrieval.
@@ -310,6 +372,8 @@ interface MotionStep {
 *   Robustness of Assistant correctly mapping prompts to KB and generating valid JSON?
 *   Complexity of implementing sophisticated motion generators in `Scene Interpreter`.
 *   Effort required to create and maintain a high-quality Motion KB.
+*   **Synchronization Risk:** The Assistant's instructions and the associated Motion KB file (`motion_kb.json`) are configured and managed externally on the OpenAI platform. Changes made to the local reference files (`docs/ai/assistant-references/SYSTEM_INSTRUCTIONS_REF.md` and `docs/ai/assistant-references/motion_kb.json`) require manual updates (copy-pasting instructions, re-uploading KB file) in the OpenAI Assistant settings to take effect. Failure to sync can lead to discrepancies between local reference and actual Assistant behavior.
+*   **Technical Debt:** Deferred `npm audit fix --force` for low severity vulnerability in `next@15.2.3` (requires update to `15.3.0`). To be addressed later.
 
 ## 8. Proposed Architecture Diagram (Mermaid)
 
@@ -323,18 +387,17 @@ graph TD
         subgraph "LLM Engine (Adapter Layer)"
             direction LR
             MotionPlanner[MotionPlannerService Interface]
-            VertexAdapter[VertexAIAdapter implements MotionPlanner]
-            OpenAIAdapter[(OpenAI Adapter)] -- Optional --> MotionPlanner
-            MotionPlanner --> VertexAdapter
+            VertexAdapter[VertexAIAdapter implements MotionPlanner] -- Optional --> MotionPlanner
+            OpenAIAdapter[(OpenAI Adapter)] -- Implements --> MotionPlanner
         end
         MetadataMgr[Metadata Manager]
         SceneAnalyzer[Scene Analyzer Data]
         EnvAnalyzer[Environmental Analyzer Data]
     end
 
-    subgraph "External AI Service (Google Cloud)"
-        VertexAI[Vertex AI Agent/Gemini+Search]
-        MotionKB[Motion KB @ GCS Data Store]
+    subgraph "External AI Service (OpenAI)"
+        OpenAI[OpenAI Assistants API <br> (GPT-4 + Retrieval) <br> **Note:** Instructions & KB association <br> configured externally via OpenAI platform/API]
+        MotionKB[(Motion KB File)] -- Uploaded To / Associated With --> OpenAI
     end
 
     subgraph "Frontend Rendering"
@@ -343,11 +406,11 @@ graph TD
     end
 
     %% Data Flows
-    UI -- "User Prompt, Duration" --> MotionPlanner
-    VertexAdapter -- "Prompt, KB Config" --> VertexAI
-    VertexAI -- "Retrieves from" --> MotionKB
-    VertexAI -- "Structured Motion Plan (JSON)" --> VertexAdapter
-    MotionPlanner -- "Structured Motion Plan (JSON)" --> SceneInterpreter
+    UI -- "User Prompt, Duration" --> OpenAIAdapter
+    OpenAIAdapter -- "Prompt, AssistantID" --> OpenAI
+    OpenAI -- "Retrieves from KB" --> MotionKB
+    OpenAI -- "Structured Motion Plan (JSON)" --> OpenAIAdapter
+    OpenAIAdapter -- "Structured Motion Plan (JSON)" --> SceneInterpreter
     MetadataMgr -- "Fetches" --> SceneAnalyzer
     MetadataMgr -- "Fetches" --> EnvAnalyzer
     MetadataMgr -- "SceneAnalysis, EnvMetadata (Local Context)" --> SceneInterpreter
@@ -356,7 +419,9 @@ graph TD
 
     %% Style (Optional)
     classDef external fill:#f9f,stroke:#333,stroke-width:2px;
-    class VertexAI,MotionKB external;
+    class OpenAI,MotionKB external;
     classDef adapter fill:#lightgrey,stroke:#333;
-    class LLM Engine (Adapter Layer) adapter
+    class OpenAIAdapter adapter;
+    classDef service intf:#ccf,stroke:#333;
+    class MotionPlanner service;
 ``` 

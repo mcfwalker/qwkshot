@@ -41,7 +41,7 @@ const easingFunctions = {
 };
 
 // Import the name type if needed for casting/checking
-import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
+import { EasingFunctionName } from '@/lib/easing';
 
 // Define the props interface
 interface CameraAnimationSystemProps {
@@ -414,12 +414,29 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // Parse commands and convert to Vector3 instances
       const newCommands: CameraCommand[] = receivedCommands.map((cmd, index) => {
         try {
-          if (!cmd.position || !cmd.target || typeof cmd.duration !== 'number' || cmd.duration <= 0) {
-              throw new Error(`Command ${index} missing required fields or has invalid duration.`);
+          // --- MODIFIED VALIDATION ---
+          // Ensure position/target exist and are objects (even if empty initially)
+          if (!cmd || typeof cmd !== 'object' || 
+              !cmd.position || typeof cmd.position !== 'object' || 
+              !cmd.target || typeof cmd.target !== 'object' || 
+              typeof cmd.duration !== 'number' || cmd.duration < 0) { // Allow duration 0, reject negative
+              throw new Error(`Command ${index} missing required fields, is not an object, or has invalid duration.`);
           }
+          // --- END MODIFIED VALIDATION ---
+          
+          // --- ADDED: Reconstruct Vector3 --- 
+          // Check if position/target have x, y, z before creating Vector3
+          if (typeof cmd.position.x !== 'number' || typeof cmd.position.y !== 'number' || typeof cmd.position.z !== 'number' ||
+              typeof cmd.target.x !== 'number' || typeof cmd.target.y !== 'number' || typeof cmd.target.z !== 'number') {
+             throw new Error(`Command ${index} position or target object is missing x, y, or z properties.`); 
+          }
+          const positionVec = new Vector3(cmd.position.x, cmd.position.y, cmd.position.z);
+          const targetVec = new Vector3(cmd.target.x, cmd.target.y, cmd.target.z);
+          // --- END ADDED ---
+
           const command: CameraCommand = {
-            position: new Vector3(cmd.position.x, cmd.position.y, cmd.position.z),
-            target: new Vector3(cmd.target.x, cmd.target.y, cmd.target.z),
+            position: positionVec, // Use reconstructed Vector3
+            target: targetVec,     // Use reconstructed Vector3
             duration: cmd.duration,
             easing: cmd.easing || 'linear' // Use easing from command or default to linear
           };

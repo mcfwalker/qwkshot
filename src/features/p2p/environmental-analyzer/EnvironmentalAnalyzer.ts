@@ -61,32 +61,31 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
       const object = this.extractObjectMeasurements(sceneAnalysis);
       this.logger.info('Object measurements extracted:', object);
 
+      // --- Calculate Actual Camera Distance & Height FIRST --- 
+      const cameraPosition = currentCameraState.position;
+      const objectCenter = object.bounds.center;
+      const initialDistanceToCenter = cameraPosition.distanceTo(objectCenter);
+      const initialCameraY = cameraPosition.y;
+      this.logger.debug(`Calculated initialDistanceToCenter: ${initialDistanceToCenter}, initialCameraY: ${initialCameraY}`);
+      // --- END Calculate Distance & Height ---
+
+      // Calculate camera constraints, passing initial distance and height
+      const cameraConstraints = this.calculateCameraConstraints(object, initialDistanceToCenter, initialCameraY);
+      this.logger.info('Camera constraints calculated:', cameraConstraints);
+
       // Calculate distances from object to boundaries
       const distances = this.calculateDistances(environment, object);
       this.logger.info('Distances calculated:', distances);
 
-      // Calculate camera constraints
-      const cameraConstraints = this.calculateCameraConstraints(object);
-      this.logger.info('Camera constraints calculated:', cameraConstraints);
-
-      // --- Calculate Camera Relative Measurements --- START
-      const cameraPosition = currentCameraState.position;
-      const objectCenter = object.bounds.center;
+      // --- Calculate Camera Relative Measurements (uses previously calculated distance) --- START
       const objectBoundingBox = new Box3(object.bounds.min, object.bounds.max);
-      
-      // 1. Distance to Center
-      const distanceToCenter = cameraPosition.distanceTo(objectCenter);
-      this.logger.debug(`Calculated distanceToCenter: ${distanceToCenter}`);
-
-      // 2. Distance to Bounding Box
-      // Create a temporary Vector3 to store the closest point
       const closestPointOnBox = new Vector3(); 
       objectBoundingBox.clampPoint(cameraPosition, closestPointOnBox);
       const distanceToBoundingBox = cameraPosition.distanceTo(closestPointOnBox);
       this.logger.debug(`Calculated distanceToBoundingBox: ${distanceToBoundingBox}`);
 
       const cameraRelative: CameraRelativeMeasurements = {
-          distanceToCenter,
+          distanceToCenter: initialDistanceToCenter,
           distanceToBoundingBox,
       };
       // --- Calculate Camera Relative Measurements --- END
@@ -321,7 +320,7 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
       const distances = this.calculateDistances(analysis.environment, updatedObject);
 
       // Recalculate camera constraints with updated object position
-      const cameraConstraints = this.calculateCameraConstraints(updatedObject);
+      const cameraConstraints = this.calculateCameraConstraints(updatedObject, analysis.cameraRelative.distanceToCenter, analysis.cameraRelative.distanceToCenter);
 
       const endTime = performance.now();
       this.performanceMetrics = {
@@ -356,27 +355,44 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
     }
   }
 
-  private calculateCameraConstraints(object: ObjectMeasurements): CameraConstraints {
-    const { height } = object.dimensions;
+  private calculateCameraConstraints(
+    object: ObjectMeasurements, 
+    initialCameraDistance: number, 
+    initialCameraY: number
+  ): CameraConstraints {
+    const { height } = object.dimensions; 
     const { floorOffset } = object;
+    const environmentFloor = 0; // Assuming ground plane is at Y=0
 
-    // Base camera constraints on object height and floor offset
-    const minHeight = floorOffset + height * 0.5;  
-    const maxHeight = floorOffset + height * 3;    
+    // --- MODIFIED minHeight/maxHeight calculation --- 
+    const objectMinY = floorOffset;
+    const objectMaxY = floorOffset + height;
+    // Define a vertical buffer based on object height (could also use distance)
+    const verticalBuffer = height * 2; // Allow camera +/- 2x object height from its lock position
+    const cameraMinY = initialCameraY - verticalBuffer;
+    const cameraMaxY = initialCameraY + verticalBuffer;
+    // Final minHeight is the lower of object bottom or camera buffer, but not below environment floor
+    const minHeight = Math.max(environmentFloor, Math.min(objectMinY, cameraMinY));
+    // Final maxHeight is the higher of object top or camera buffer
+    const maxHeight = Math.max(objectMaxY, cameraMaxY);
+    this.logger.debug(`Calculated minHeight: ${minHeight} (objectMin: ${objectMinY}, cameraMin: ${cameraMinY})`);
+    this.logger.debug(`Calculated maxHeight: ${maxHeight} (objectMax: ${objectMaxY}, cameraMax: ${cameraMaxY})`);
+    // --- END MODIFICATION ---
+
     const minDistance = height * 0.8;              
-    const maxDistance = height * 5;                
+    const sizeBasedMaxDistance = height * 5;
+    const maxDistance = Math.max(sizeBasedMaxDistance, initialCameraDistance * 1.2); 
+    this.logger.debug(`Calculated maxDistance: ${maxDistance} (sizeBased: ${sizeBasedMaxDistance}, initialDistanceFactor: ${initialCameraDistance * 1.2})`);
 
-    // Add missing properties required by CameraConstraints type
-    const maxSpeed = 2.0; // Default value
-    const maxAngleChange = 45; // Default value (degrees)
-    const minFramingMargin = 0.1; // Default value
+    const maxSpeed = 2.0; 
+    const maxAngleChange = 45; 
+    const minFramingMargin = 0.1; 
 
     return {
       minHeight,
       maxHeight,
       minDistance,
       maxDistance,
-      // Include the missing properties
       maxSpeed,
       maxAngleChange,
       minFramingMargin
@@ -422,7 +438,7 @@ export class EnvironmentalAnalyzerImpl implements EnvironmentalAnalyzer {
       };
 
       // Calculate new camera constraints
-      const cameraConstraints = this.calculateCameraConstraints(updatedObject);
+      const cameraConstraints = this.calculateCameraConstraints(updatedObject, analysis.cameraRelative.distanceToCenter, analysis.cameraRelative.distanceToCenter);
 
       const endTime = performance.now();
       this.performanceMetrics = {

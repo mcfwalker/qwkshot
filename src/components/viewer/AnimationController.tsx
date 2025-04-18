@@ -9,7 +9,7 @@ import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
 // Import easing functions (assuming a shared utility path)
 // Adjust path if necessary
-import { easingFunctions, EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter'; 
+import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing'; 
 
 // Remove placeholder easing functions
 // const easingFunctions: Record<string, (t: number) => number> = { ... };
@@ -130,8 +130,15 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         : 1.0; 
 
     // Apply easing
-    const easingName = command.easing || 'linear';
-    const easingFunction = easingFunctions[easingName as EasingFunctionName] || easingFunctions.linear;
+    let effectiveEasingName: EasingFunctionName = DEFAULT_EASING; // Start with default
+    if (command.easing && command.easing in easingFunctions) {
+      // If command provides a valid easing name, use it
+      effectiveEasingName = command.easing as EasingFunctionName; 
+    }
+    // Otherwise, effectiveEasingName remains DEFAULT_EASING
+    
+    // Look up the function using the guaranteed valid name
+    const easingFunction = easingFunctions[effectiveEasingName]; 
     const easedT = easingFunction(t);
 
     // Interpolate position and target

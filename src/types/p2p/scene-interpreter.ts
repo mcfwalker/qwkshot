@@ -8,7 +8,10 @@ import {
   Logger,
 } from './shared';
 import { CameraPath } from './llm-engine';
-import { EasingFunctionName } from '@/features/p2p/scene-interpreter/interpreter';
+import { EasingFunctionName } from '@/lib/easing';
+import { SceneAnalysis } from './scene-analyzer';
+import { EnvironmentalAnalysis } from './environmental-analyzer';
+import { MotionPlan } from '@/lib/motion-planning/types';
 
 /**
  * Configuration for the Scene Interpreter
@@ -17,6 +20,7 @@ export interface SceneInterpreterConfig extends P2PConfig {
   smoothingFactor: number;
   maxKeyframes: number;
   interpolationMethod: 'linear' | 'smooth' | 'ease';
+  maxVelocity?: number; // Optional: Max allowed velocity (units/sec)
 }
 
 /**
@@ -39,9 +43,14 @@ export interface SceneInterpreter {
   initialize(config: SceneInterpreterConfig): Promise<void>;
 
   /**
-   * Convert a camera path into executable commands
+   * Convert a structured motion plan into executable commands using scene context.
    */
-  interpretPath(path: CameraPath): CameraCommand[];
+  interpretPath(
+    plan: MotionPlan, 
+    sceneAnalysis: SceneAnalysis, 
+    envAnalysis: EnvironmentalAnalysis,
+    initialCameraState: { position: Vector3; target: Vector3 }
+  ): CameraCommand[];
 
   /**
    * Execute a single camera command
