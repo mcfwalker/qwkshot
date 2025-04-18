@@ -306,7 +306,7 @@ interface MotionStep {
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
 
 ### Phase 4: Integration, Testing & Refinement
-*   [ ] Conduct thorough E2E testing with diverse and complex prompts.
+*   [X] Conduct thorough E2E testing with diverse and complex prompts.
     *   **[X] Individual Motion Tests:**
         *   [X] Static: "Just hold the camera still for 5 seconds."
         *   [X] Zoom: "Zoom in halfway towards the object center, quickly."
@@ -325,26 +325,40 @@ interface MotionStep {
         *   [X] "Perform a very slow, wide orbit around the entire model." (Success, but highlighted duration override issue)
         *   [X] "Rapidly push in towards the object's center." (Passed after instruction refinement)
         *   [X] "Gently pedestal down while panning right." (Executed sequentially, not simultaneously)
-*   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
-*   [ ] Refine Assistant instructions and Motion KB based on test results.
-    *   [ ] *TODO:* Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness if needed.
-    *   [ ] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1).
-    *   [ ] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping.
-    *   [X] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`.
-    *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close").
-    *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested.
-    *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values.
-    *   [ ] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc.
-    *   [ ] *TODO:* Enhance Assistant planning to understand implicit user intent, such as re-centering the view on the object after lateral movements (e.g., `truck left` should often be followed by a reorienting `pan` before a subsequent `dolly in`).
-    *   [ ] *TODO:* Investigate refining Assistant instructions/KB to have the LLM explicitly generate transition steps (e.g., target pivots) between motions instead of relying solely on Interpreter blending.
-*   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
-*   [ ] Update project documentation.
+    *   **[X] Test Spatial Reference Targeting:** (Implemented via standardized targets + Interpreter logic)
+        *   [X] "Focus on the top of the object."
+        *   [X] "Tilt down to look at the bottom center."
+        *   [X] "Orbit 90 degrees around the left side."
+    *   **[X] Test "Move To" Destination:** (Implemented via `destination_target` + Interpreter logic)
+        *   [X] "Pedestal down to the bottom of the object."
+        *   [X] "Dolly forward to the front edge."
+    *   **[X] Test Contradictory Zoom Parameters:** (Assistant correctly adjusts plan)
+        *   [X] "Zoom out factor 0.5"
+        *   [X] "Zoom in factor 2.0"
+*   [X] Refine Assistant instructions and Motion KB based on test results.
+    *   [X] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1). (Addressed via instructions)
+    *   [X] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping. (Addressed: Refined large distances, fixed medium_distance)
+    *   [X] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`. (Done previously)
+    *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close"). (Done previously via instructions)
+    *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested. (Done previously via instructions)
+    *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values. (Done previously via instructions)
+    *   [X] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc. (Addressed via standardized targets + Interpreter logic, including `destination_target`)
+*   [X] Update project documentation. (Updated plan, P2P Overview, added reference README, regression suite)
 *   [ ] Prepare for merge to `stable`/`main`.
 *   [ ] *Goal:* Feature-complete, stable, documented, and ready for production use.
 
 ### Future Enhancements / Considerations
+*   [ ] Implement remaining core motion types: `fly_by`, `fly_away`, `set_view`, `arc`, `reveal`.
+*   [ ] Implement parameter handling for advanced features (e.g., custom orbit axis, radius factor, look at target boolean during fly-by).
+*   [ ] Refine duration allocation logic: Consider adjusting step duration if constraint clamping significantly shortens the actual movement distance/angle.
 *   [ ] Investigate inferring animation duration based on motion type/speed modifiers (e.g., "very slow") instead of always requiring explicit user duration input.
 *   [ ] Explore architectural changes (Assistant planning, Interpreter logic, or post-processing) to support true simultaneous motions (e.g., "pedestal down while panning right") instead of only sequential execution.
+*   [ ] Address semantic orientation: Implement user labeling for model front/forward vector and update Interpreter/Assistant logic to use it.
+*   [ ] Profile and address performance issues (Interpreter or Assistant interaction).
+*   [ ] Evaluate Assistant's reliance on specific KB examples vs. generalizing from descriptions (e.g., "Look up" vs "Tilt up" mapping). Consider strategies for improving robustness.
+*   [ ] Enhance Assistant planning to understand implicit user intent, such as re-centering the view on the object after lateral movements (e.g., `truck left` should often be followed by a reorienting `pan` before a subsequent `dolly in`).
+*   [ ] Investigate refining Assistant instructions/KB to have the LLM explicitly generate transition steps (e.g., target pivots) between motions instead of relying solely on Interpreter blending.
+*   [ ] Implement robust error handling across the pipeline (UI, Engine, Interpreter).
 
 ## 6. Testing Strategy
 *   **Phase 1:** Unit tests for Assistants API client logic. Manual testing of prompt->plan retrieval.
