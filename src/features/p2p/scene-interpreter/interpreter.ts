@@ -133,15 +133,42 @@ export class SceneInterpreterImpl implements SceneInterpreter {
       return currentTarget.clone();
     }
 
-    if (targetName === 'object_center') {
-      if (sceneAnalysis?.spatial?.bounds?.center) {
-        this.logger.debug('Resolved target to object_center');
-        return sceneAnalysis.spatial.bounds.center.clone();
-      } else {
-        this.logger.warn("Cannot resolve 'object_center': SceneAnalysis missing spatial.bounds.center.");
-        return null;
-      }
+    // --- Standard Object References ---
+    const bounds = sceneAnalysis?.spatial?.bounds;
+    if (bounds && bounds.center && bounds.min && bounds.max) {
+        const center = bounds.center;
+        const min = bounds.min;
+        const max = bounds.max;
+
+        switch (targetName) {
+            case 'object_center':
+                this.logger.debug('Resolved target to object_center');
+                return center.clone();
+            case 'object_top_center':
+                this.logger.debug('Resolved target to object_top_center');
+                return new Vector3(center.x, max.y, center.z);
+            case 'object_bottom_center':
+                this.logger.debug('Resolved target to object_bottom_center');
+                return new Vector3(center.x, min.y, center.z);
+            case 'object_left_center': // Assuming -X is left
+                this.logger.debug('Resolved target to object_left_center');
+                return new Vector3(min.x, center.y, center.z);
+            case 'object_right_center': // Assuming +X is right
+                this.logger.debug('Resolved target to object_right_center');
+                return new Vector3(max.x, center.y, center.z);
+            case 'object_front_center': // Assuming +Z is front
+                this.logger.debug('Resolved target to object_front_center');
+                return new Vector3(center.x, center.y, max.z);
+            case 'object_back_center': // Assuming -Z is back
+                this.logger.debug('Resolved target to object_back_center');
+                return new Vector3(center.x, center.y, min.z);
+            // Add corners if needed later, e.g., object_top_left_front
+        }
+    } else if (['object_center', 'object_top_center', 'object_bottom_center', 'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center'].includes(targetName)) {
+        this.logger.warn(`Cannot resolve target '${targetName}': SceneAnalysis missing required spatial bounds (center, min, max).`);
+        return null; // Cannot calculate without bounds
     }
+    // --- End Standard Object References ---
 
     // Resolve named features (assuming LLM uses feature.id or feature.description)
     if (sceneAnalysis?.features && Array.isArray(sceneAnalysis.features)) {
@@ -227,6 +254,143 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     }
 
     return intendedEndPosition.clone();
+  }
+
+  /**
+   * Helper method to calculate the effective numeric distance for dolly, truck, or pedestal
+   * based on qualitative string inputs (e.g., "close", "a_bit") or a direct number.
+   *
+   * @param rawDistance The distance parameter from the MotionStep (string, number, or undefined).
+   * @param motionType The type of motion ('dolly', 'truck', 'pedestal').
+   * @param sceneAnalysis Provides context like object size.
+   * @param envAnalysis Provides context like camera constraints.
+   * @param currentPosition Current camera position (needed for dolly).
+   * @param currentTarget Current camera target (needed for dolly).
+   * @param defaultDistance Fallback distance if calculation fails.
+   * @returns The calculated numeric distance.
+   */
+  private _calculateEffectiveDistance(
+    rawDistance: string | number | boolean | undefined | null,
+    motionType: 'dolly' | 'truck' | 'pedestal',
+    sceneAnalysis: SceneAnalysis,
+    envAnalysis: EnvironmentalAnalysis,
+    currentPosition: Vector3,
+    currentTarget: Vector3,
+    defaultDistance: number
+  ): number {
+    let effectiveDistance: number | null = null;
+
+    // 1. Handle direct numeric input
+    if (typeof rawDistance === 'number' && rawDistance > 0) {
+      effectiveDistance = rawDistance;
+      this.logger.debug(`Using numeric distance for ${motionType}: ${effectiveDistance}`);
+      return effectiveDistance;
+    } else if (typeof rawDistance === 'number' && rawDistance <= 0) {
+       this.logger.warn(`Non-positive numeric distance provided for ${motionType}: ${rawDistance}. Using default.`);
+       // Falls through to default
+    }
+
+    // 2. Handle qualitative string input
+    if (typeof rawDistance === 'string') {
+      const distStr = rawDistance.toLowerCase().replace(/_/g, ''); // Normalize
+      const objectSize = sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1.0;
+      const objectHeight = sceneAnalysis.spatial?.bounds?.dimensions.y ?? 0.5;
+      const currentDistanceToTarget = currentPosition.distanceTo(currentTarget); // Dolly specific
+      const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1; // Dolly specific
+
+      this.logger.debug(`Calculating ${motionType} distance for qualitative term: '${distStr}' (objectSize: ${objectSize.toFixed(2)}, objectHeight: ${objectHeight.toFixed(2)}, currentDist: ${currentDistanceToTarget.toFixed(2)}, minDist: ${minConstraintDist.toFixed(2)})`);
+
+      switch (motionType) {
+        case 'dolly':
+          switch (distStr) {
+            case 'veryclose':
+            case 'extremelyclose':
+              // Move almost to the minimum allowed distance
+              effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSize * 0.05)); // Adjusted factor
+              break;
+            case 'close':
+            case 'closer':
+              // Move 60% of the way towards the target (capped by min distance)
+              effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSize * 0.1)) * 0.6; // Simple ratio, ensures we don't overshoot min dist boundary
+              // Alternative: effectiveDistance = currentDistanceToTarget * 0.6; // Simpler, but might violate minDistance more easily if not clamped later
+              break;
+            case 'abit':
+            case 'alittle':
+            case 'smallamount':
+            case 'slightly':
+              // Move by a fraction of current distance or object size
+              effectiveDistance = Math.min(currentDistanceToTarget * 0.2, objectSize * 0.5, 2.0);
+              break;
+            case 'medium':
+              // Move 40% of the way
+              effectiveDistance = currentDistanceToTarget * 0.4;
+              break;
+            // Add cases for "far", "further", "largeamount" if needed for dolly backward?
+            default:
+              this.logger.warn(`Unknown qualitative dolly distance: '${rawDistance}'. Using default.`);
+              effectiveDistance = defaultDistance;
+          }
+          break;
+
+        case 'truck':
+          switch (distStr) {
+            case 'abit':
+            case 'alittle':
+            case 'smallamount':
+            case 'slightly':
+              effectiveDistance = Math.min(objectSize * 0.5, 2.0);
+              break;
+            case 'medium':
+              effectiveDistance = Math.min(objectSize * 1.0, 4.0);
+              break;
+            case 'far':
+            case 'largeamount':
+            case 'significantly':
+              effectiveDistance = Math.min(objectSize * 2.0, 6.0);
+              break;
+            default:
+              this.logger.warn(`Unknown qualitative truck distance: '${rawDistance}'. Using default.`);
+              effectiveDistance = defaultDistance;
+          }
+          break;
+
+        case 'pedestal':
+          switch (distStr) {
+            case 'abit':
+            case 'alittle':
+            case 'smallamount':
+            case 'slightly':
+              effectiveDistance = Math.min(objectHeight * 0.5, 1.0);
+              break;
+            case 'medium':
+              effectiveDistance = Math.min(objectHeight * 1.0, 2.0);
+              break;
+            case 'far': // "far" for pedestal might mean a larger vertical move
+            case 'largeamount':
+            case 'significantly':
+              effectiveDistance = Math.min(objectHeight * 1.5, 3.0);
+              break;
+            default:
+              this.logger.warn(`Unknown qualitative pedestal distance: '${rawDistance}'. Using default.`);
+              effectiveDistance = defaultDistance;
+          }
+          break;
+      }
+
+      // Ensure calculated distance is positive if it was calculated
+      if (effectiveDistance !== null) {
+          effectiveDistance = Math.max(1e-6, effectiveDistance);
+          this.logger.debug(`Calculated effective ${motionType} distance: ${effectiveDistance.toFixed(2)}`);
+          return effectiveDistance;
+      }
+    } else if (rawDistance !== undefined && rawDistance !== null) {
+        // Handle other invalid types (like boolean passed accidentally)
+        this.logger.warn(`Invalid distance type provided for ${motionType}: ${typeof rawDistance}. Using default.`);
+    }
+
+    // 3. Fallback to default if no valid distance found
+    this.logger.warn(`Could not determine effective distance for ${motionType} from input: ${rawDistance}. Using default: ${defaultDistance}`);
+    return defaultDistance;
   }
 
   interpretPath(
@@ -1036,54 +1200,16 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance ---
-          let effectiveDistance: number | null = null;
-          if (typeof rawDistance === 'number' && rawDistance > 0) {
-            effectiveDistance = rawDistance;
-          } else if (typeof rawDistance === 'string') {
-            const distStr = rawDistance.toLowerCase().replace(/_/g, ''); // Normalize
-            const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
-            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1, 1); // Use bounding box diagonal or 1
-            const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1;
-
-            this.logger.debug(`Calculating dolly distance for qualitative term: '${distStr}' (currentDist: ${currentDistanceToTarget.toFixed(2)}, objectSize: ${objectSizeFactor.toFixed(2)}, minDist: ${minConstraintDist.toFixed(2)})`);
-
-            switch (distStr) {
-              case 'veryclose':
-              case 'extremelyclose':
-                // Move almost to the minimum allowed distance
-                effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSizeFactor * 0.1)); 
-                break;
-              case 'close':
-              case 'closer':
-                // Move 60% of the way towards the target
-                effectiveDistance = currentDistanceToTarget * 0.6; 
-                break;
-              case 'abit':
-              case 'alittle':
-              case 'smallamount':
-              case 'slightly':
-                 // Move by a fixed amount or small fraction of current distance
-                effectiveDistance = Math.min(currentDistanceToTarget * 0.2, objectSizeFactor * 0.5, 2.0); 
-                break;
-              case 'medium':
-                 // Move 40% of the way
-                 effectiveDistance = currentDistanceToTarget * 0.4;
-                 break; 
-              // Add cases for "far", "further", "largeamount" if needed for dolly backward?
-              default:
-                this.logger.warn(`Unknown qualitative dolly distance: '${rawDistance}'. Defaulting to 1 unit.`);
-                effectiveDistance = 1.0;
-            }
-            // Ensure calculated distance is positive
-             effectiveDistance = Math.max(1e-6, effectiveDistance);
-             this.logger.debug(`Calculated effective dolly distance: ${effectiveDistance.toFixed(2)}`);
-          }
-          
-          if (effectiveDistance === null) {
-            this.logger.error(`Invalid, missing, or non-positive dolly distance: ${rawDistance}. Defaulting to 1 unit.`);
-            effectiveDistance = 1.0; // Default if calculation failed or input invalid
-          }
+          // --- Calculate Effective Distance --- CALL HELPER ---
+          const effectiveDistance = this._calculateEffectiveDistance(
+            rawDistance,
+            'dolly',
+            sceneAnalysis,
+            envAnalysis,
+            currentPosition,
+            currentTarget,
+            1.0 // Default distance for dolly
+          );
           // --- End Calculate Effective Distance ---
 
           // 1. Calculate movement vector using effectiveDistance
@@ -1210,42 +1336,16 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance ---
-          let effectiveDistance: number | null = null;
-          if (typeof rawDistance === 'number' && rawDistance > 0) {
-            effectiveDistance = rawDistance;
-          } else if (typeof rawDistance === 'string') {
-            const distStr = rawDistance.toLowerCase().replace(/_/g, '');
-            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1, 1); 
-            this.logger.debug(`Calculating truck distance for qualitative term: '${distStr}' (objectSize: ${objectSizeFactor.toFixed(2)})`);
-            switch (distStr) {
-              case 'abit':
-              case 'alittle':
-              case 'smallamount':
-              case 'slightly':
-                 // Move by a fixed amount or fraction of object size
-                effectiveDistance = Math.min(objectSizeFactor * 0.5, 2.0);
-                break;
-              case 'medium':
-                 effectiveDistance = Math.min(objectSizeFactor * 1.0, 4.0);
-                 break;
-              case 'far':
-              case 'largeamount':
-              case 'significantly':
-                 effectiveDistance = Math.min(objectSizeFactor * 2.0, 6.0);
-                 break;
-              default:
-                this.logger.warn(`Unknown qualitative truck distance: '${rawDistance}'. Defaulting to 1 unit.`);
-                effectiveDistance = 1.0;
-            }
-            effectiveDistance = Math.max(1e-6, effectiveDistance);
-            this.logger.debug(`Calculated effective truck distance: ${effectiveDistance.toFixed(2)}`);
-          }
-
-          if (effectiveDistance === null) {
-            this.logger.error(`Invalid, missing, or non-positive truck distance: ${rawDistance}. Defaulting to 1 unit.`);
-            effectiveDistance = 1.0;
-          }
+          // --- Calculate Effective Distance --- CALL HELPER ---
+          const effectiveDistance = this._calculateEffectiveDistance(
+            rawDistance,
+            'truck',
+            sceneAnalysis,
+            envAnalysis,
+            currentPosition,
+            currentTarget,
+            1.0 // Default distance for truck
+          );
           // --- End Calculate Effective Distance ---
 
           // 1. Calculate movement vector using effectiveDistance
@@ -1364,43 +1464,18 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance ---
-          let effectiveDistance: number | null = null;
-          if (typeof rawDistance === 'number' && rawDistance > 0) {
-            effectiveDistance = rawDistance;
-          } else if (typeof rawDistance === 'string') {
-            const distStr = rawDistance.toLowerCase().replace(/_/g, '');
-            const objectSizeFactor = Math.max(sceneAnalysis.spatial?.bounds?.dimensions.y ?? 0.5, 0.5); // Use object height or 0.5
-             this.logger.debug(`Calculating pedestal distance for qualitative term: '${distStr}' (objectHeight: ${objectSizeFactor.toFixed(2)})`);
-            switch (distStr) {
-              case 'abit':
-              case 'alittle':
-              case 'smallamount':
-              case 'slightly':
-                 effectiveDistance = Math.min(objectSizeFactor * 0.5, 1.0);
-                 break;
-              case 'medium':
-                 effectiveDistance = Math.min(objectSizeFactor * 1.0, 2.0);
-                 break;
-              case 'far': // "far" for pedestal might mean a larger vertical move
-              case 'largeamount':
-              case 'significantly':
-                 effectiveDistance = Math.min(objectSizeFactor * 1.5, 3.0);
-                 break;
-              default:
-                this.logger.warn(`Unknown qualitative pedestal distance: '${rawDistance}'. Defaulting to 0.5 units.`);
-                effectiveDistance = 0.5;
-            }
-            effectiveDistance = Math.max(1e-6, effectiveDistance);
-            this.logger.debug(`Calculated effective pedestal distance: ${effectiveDistance.toFixed(2)}`);
-          }
-
-          if (effectiveDistance === null) {
-            this.logger.error(`Invalid, missing, or non-positive pedestal distance: ${rawDistance}. Defaulting to 0.5 units.`);
-            effectiveDistance = 0.5;
-          }
+          // --- Calculate Effective Distance --- CALL HELPER ---
+          const effectiveDistance = this._calculateEffectiveDistance(
+            rawDistance,
+            'pedestal',
+            sceneAnalysis,
+            envAnalysis,
+            currentPosition,
+            currentTarget,
+            0.5 // Default distance for pedestal
+          );
           // --- End Calculate Effective Distance ---
-          
+
           // 1. Calculate movement vector using effectiveDistance
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           let cameraUp = new Vector3(0, 1, 0); 

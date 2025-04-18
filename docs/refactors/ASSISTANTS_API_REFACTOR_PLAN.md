@@ -358,6 +358,7 @@ interface MotionStep {
 *   Robustness of Assistant correctly mapping prompts to KB and generating valid JSON?
 *   Complexity of implementing sophisticated motion generators in `Scene Interpreter`.
 *   Effort required to create and maintain a high-quality Motion KB.
+*   **Synchronization Risk:** The Assistant's instructions and the associated Motion KB file (`motion_kb.json`) are configured and managed externally on the OpenAI platform. Changes made to the local reference files (`docs/ai/assistant-references/SYSTEM_INSTRUCTIONS_REF.md` and `docs/ai/assistant-references/motion_kb.json`) require manual updates (copy-pasting instructions, re-uploading KB file) in the OpenAI Assistant settings to take effect. Failure to sync can lead to discrepancies between local reference and actual Assistant behavior.
 *   **Technical Debt:** Deferred `npm audit fix --force` for low severity vulnerability in `next@15.2.3` (requires update to `15.3.0`). To be addressed later.
 
 ## 8. Proposed Architecture Diagram (Mermaid)
@@ -372,18 +373,17 @@ graph TD
         subgraph "LLM Engine (Adapter Layer)"
             direction LR
             MotionPlanner[MotionPlannerService Interface]
-            VertexAdapter[VertexAIAdapter implements MotionPlanner]
-            OpenAIAdapter[(OpenAI Adapter)] -- Optional --> MotionPlanner
-            MotionPlanner --> VertexAdapter
+            VertexAdapter[VertexAIAdapter implements MotionPlanner] -- Optional --> MotionPlanner
+            OpenAIAdapter[(OpenAI Adapter)] -- Implements --> MotionPlanner
         end
         MetadataMgr[Metadata Manager]
         SceneAnalyzer[Scene Analyzer Data]
         EnvAnalyzer[Environmental Analyzer Data]
     end
 
-    subgraph "External AI Service (Google Cloud)"
-        VertexAI[Vertex AI Agent/Gemini+Search]
-        MotionKB[Motion KB @ GCS Data Store]
+    subgraph "External AI Service (OpenAI)"
+        OpenAI[OpenAI Assistants API <br> (GPT-4 + Retrieval) <br> **Note:** Instructions & KB association <br> configured externally via OpenAI platform/API]
+        MotionKB[(Motion KB File)] -- Uploaded To / Associated With --> OpenAI
     end
 
     subgraph "Frontend Rendering"
@@ -392,11 +392,11 @@ graph TD
     end
 
     %% Data Flows
-    UI -- "User Prompt, Duration" --> MotionPlanner
-    VertexAdapter -- "Prompt, KB Config" --> VertexAI
-    VertexAI -- "Retrieves from" --> MotionKB
-    VertexAI -- "Structured Motion Plan (JSON)" --> VertexAdapter
-    MotionPlanner -- "Structured Motion Plan (JSON)" --> SceneInterpreter
+    UI -- "User Prompt, Duration" --> OpenAIAdapter
+    OpenAIAdapter -- "Prompt, AssistantID" --> OpenAI
+    OpenAI -- "Retrieves from KB" --> MotionKB
+    OpenAI -- "Structured Motion Plan (JSON)" --> OpenAIAdapter
+    OpenAIAdapter -- "Structured Motion Plan (JSON)" --> SceneInterpreter
     MetadataMgr -- "Fetches" --> SceneAnalyzer
     MetadataMgr -- "Fetches" --> EnvAnalyzer
     MetadataMgr -- "SceneAnalysis, EnvMetadata (Local Context)" --> SceneInterpreter
@@ -405,7 +405,9 @@ graph TD
 
     %% Style (Optional)
     classDef external fill:#f9f,stroke:#333,stroke-width:2px;
-    class VertexAI,MotionKB external;
+    class OpenAI,MotionKB external;
     classDef adapter fill:#lightgrey,stroke:#333;
-    class LLM Engine (Adapter Layer) adapter
+    class OpenAIAdapter adapter;
+    classDef service intf:#ccf,stroke:#333;
+    class MotionPlanner service;
 ``` 
