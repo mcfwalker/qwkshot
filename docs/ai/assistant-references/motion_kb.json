@@ -227,6 +227,12 @@
         "required": true
       },
       {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_front_center', 'feature_X') specifying the destination plane/level for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
+      },
+      {
         "name": "speed",
         "type": "string",
         "enum": ["slow", "medium", "fast", "very_fast"],
@@ -273,6 +279,12 @@
         "required": true
       },
       {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_left_center') specifying the destination plane for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
+      },
+      {
         "name": "speed",
         "type": "string",
         "enum": ["slow", "medium", "fast"],
@@ -315,6 +327,12 @@
         "enum": ["a_bit", "slightly", "medium_distance", "large_distance", "significantly"],
         "description": "Distance in scene units OR a qualitative term ('a_bit', 'medium_distance', etc.). Interpreter determines units and calculates distance for qualitative terms.",
         "required": true
+      },
+      {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_top_center') specifying the destination level for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
       },
       {
         "name": "speed",

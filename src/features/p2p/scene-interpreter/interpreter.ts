@@ -1199,37 +1199,98 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         case 'dolly': {
           // --- Start Dolly Logic (Corrected Placement and Logic) ---
           const {
-            direction: rawDirection,
-            distance: rawDistance, // Can be number or string
+            direction: rawDirection, // Direction from Assistant (might be overridden)
+            distance: rawDistance, // Distance from Assistant (might be overridden)
+            destination_target: rawDestinationTargetName, // <<< NEW
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium' // Extract speed
           } = step.parameters;
 
-          // Validate direction and map aliases
-          let direction = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
-          if (direction === 'in') direction = 'forward';
-          if (direction === 'out') direction = 'backward';
-          if (direction !== 'forward' && direction !== 'backward') {
-            this.logger.error(`Invalid or missing dolly direction: ${rawDirection}. Skipping step.`);
+          let direction: string | null = null;
+          let effectiveDistance: number | null = null;
+          let isDestinationMove = false;
+
+          const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
+
+          // --- Check for Destination Target --- 
+          if (destinationTargetName) {
+            this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
+            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+            
+            if (destinationTarget) {
+              const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+              // Handle case where view direction is zero (target equals position)
+              if (viewDirection.lengthSq() < 1e-9) {
+                 this.logger.warn('Dolly: Cannot calculate view direction for destination move (target equals position). Falling back to distance parameter.');
+              } else {
+                  const displacementVector = new Vector3().subVectors(destinationTarget, currentPosition);
+                  // Project displacement onto view direction to get signed distance along dolly axis
+                  const signedDistance = displacementVector.dot(viewDirection);
+                  
+                  if (Math.abs(signedDistance) < 1e-6) {
+                      this.logger.warn(`Dolly: Destination target ${destinationTargetName} is effectively already in the current plane perpendicular to view direction. No dolly needed.`);
+                      effectiveDistance = 0;
+                  } else {
+                      effectiveDistance = Math.abs(signedDistance);
+                  }
+
+                  // Override direction based on calculated distance
+                  direction = signedDistance >= 0 ? 'forward' : 'backward';
+                  isDestinationMove = true;
+                  this.logger.debug(`Dolly: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
+              }
+            } else {
+              this.logger.warn(`Dolly: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
+            }
+          }
+          // --- End Destination Target Check ---
+          
+          // --- Fallback/Standard Distance Calculation ---
+          if (!isDestinationMove) {
+            this.logger.debug('Dolly: No valid destination target. Using distance parameter.');
+            // Validate direction from Assistant
+            let assistantDirection = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
+            if (assistantDirection === 'in') assistantDirection = 'forward';
+            if (assistantDirection === 'out') assistantDirection = 'backward';
+            if (assistantDirection !== 'forward' && assistantDirection !== 'backward') {
+              this.logger.error(`Invalid or missing dolly direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
+              continue;
+            }
+            direction = assistantDirection;
+            
+            // Calculate distance using helper
+            effectiveDistance = this._calculateEffectiveDistance(
+              rawDistance,
+              'dolly',
+              sceneAnalysis,
+              envAnalysis,
+              currentPosition,
+              currentTarget,
+              1.0 // Default distance for dolly
+            );
+          }
+          // --- End Fallback/Standard Distance --- 
+
+          // Validate final calculated distance
+          if (effectiveDistance === null || effectiveDistance < 0) { // Should be positive absolute value now
+            this.logger.error(`Dolly: Final effective distance calculation failed or resulted in negative value. Skipping step.`);
             continue;
           }
-          
+          if (effectiveDistance < 1e-6) { // Handle zero movement explicitly
+             this.logger.debug('Dolly: Effective distance is zero. Generating static command.');
+             commands.push({
+               position: currentPosition.clone(),
+               target: currentTarget.clone(),
+               duration: stepDuration > 0 ? stepDuration : 0.1,
+               easing: 'linear'
+             });
+             break; // Skip rest of dolly logic
+          }
+
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance --- CALL HELPER ---
-          const effectiveDistance = this._calculateEffectiveDistance(
-            rawDistance,
-            'dolly',
-            sceneAnalysis,
-            envAnalysis,
-            currentPosition,
-            currentTarget,
-            1.0 // Default distance for dolly
-          );
-          // --- End Calculate Effective Distance ---
-
-          // 1. Calculate movement vector using effectiveDistance
+          // 1. Calculate movement vector using effectiveDistance & determined direction
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           // --- FIX: Correct cross product order for cameraRight --- 
           // Right = Forward x Up (in a right-handed system)
@@ -1240,6 +1301,11 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           if (cameraRight.lengthSq() < 1e-6) { 
              this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
              cameraRight.set(1, 0, 0); // Fallback to world X axis
+          }
+          // Ensure direction is valid before proceeding
+          if (!direction) {
+             this.logger.error('Dolly: Internal error - direction not set. Skipping step.');
+             continue;
           }
           const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1)); // Dolly uses viewDirection
 
@@ -1340,32 +1406,98 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         }
         case 'truck': {
           const {
-            direction: rawDirection,
-            distance: rawDistance, // Can be number or string
+            direction: rawDirection, // Might be overridden
+            distance: rawDistance, // Might be overridden
+            destination_target: rawDestinationTargetName, // <<< NEW
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate direction
-          const direction = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
-          if (!direction) { /* error handling */ continue; }
-          
+          let direction: string | null = null;
+          let effectiveDistance: number | null = null;
+          let isDestinationMove = false;
+
+          const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
+
+          // --- Check for Destination Target --- 
+          if (destinationTargetName) {
+            this.logger.debug(`Truck: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
+            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+
+            if (destinationTarget) {
+                const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+                const worldUp = new Vector3(0, 1, 0);
+                const cameraRight = new Vector3().crossVectors(viewDirection, worldUp).normalize();
+
+                if (cameraRight.lengthSq() < 1e-9) {
+                    this.logger.warn('Truck: Cannot calculate camera right vector for destination move (view likely aligned with world up). Falling back to distance parameter.');
+                } else {
+                    const displacementVector = new Vector3().subVectors(destinationTarget, currentPosition);
+                    // Project displacement onto camera right vector
+                    const signedDistance = displacementVector.dot(cameraRight);
+
+                    if (Math.abs(signedDistance) < 1e-6) {
+                        this.logger.warn(`Truck: Destination target ${destinationTargetName} is effectively already in the current plane perpendicular to truck direction. No truck needed.`);
+                        effectiveDistance = 0;
+                    } else {
+                        effectiveDistance = Math.abs(signedDistance);
+                    }
+                    
+                    // Override direction based on calculated distance
+                    direction = signedDistance >= 0 ? 'right' : 'left';
+                    isDestinationMove = true;
+                    this.logger.debug(`Truck: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
+                }
+            } else {
+                this.logger.warn(`Truck: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
+            }
+          }
+          // --- End Destination Target Check ---
+
+          // --- Fallback/Standard Distance Calculation ---
+          if (!isDestinationMove) {
+            this.logger.debug('Truck: No valid destination target. Using distance parameter.');
+            // Validate direction from Assistant
+            const assistantDirection = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
+            if (!assistantDirection) {
+               this.logger.error(`Invalid or missing truck direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
+               continue;
+            }
+            direction = assistantDirection;
+
+            // Calculate distance using helper
+            effectiveDistance = this._calculateEffectiveDistance(
+              rawDistance,
+              'truck',
+              sceneAnalysis,
+              envAnalysis,
+              currentPosition,
+              currentTarget,
+              1.0 // Default distance for truck
+            );
+          }
+          // --- End Fallback/Standard Distance --- 
+
+          // Validate final calculated distance
+          if (effectiveDistance === null || effectiveDistance < 0) {
+            this.logger.error(`Truck: Final effective distance calculation failed or resulted in negative value. Skipping step.`);
+            continue;
+          }
+          if (effectiveDistance < 1e-6) { // Handle zero movement explicitly
+             this.logger.debug('Truck: Effective distance is zero. Generating static command.');
+             commands.push({
+               position: currentPosition.clone(),
+               target: currentTarget.clone(),
+               duration: stepDuration > 0 ? stepDuration : 0.1,
+               easing: 'linear'
+             });
+             break; // Skip rest of truck logic
+          }
+
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance --- CALL HELPER ---
-          const effectiveDistance = this._calculateEffectiveDistance(
-            rawDistance,
-            'truck',
-            sceneAnalysis,
-            envAnalysis,
-            currentPosition,
-            currentTarget,
-            1.0 // Default distance for truck
-          );
-          // --- End Calculate Effective Distance ---
-
-          // 1. Calculate movement vector using effectiveDistance
+          // 1. Calculate movement vector using effectiveDistance & determined direction
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           // --- FIX: Correct cross product order for cameraRight --- 
           // Right = Forward x Up (in a right-handed system)
@@ -1376,6 +1508,11 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           if (cameraRight.lengthSq() < 1e-6) { 
              this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
              cameraRight.set(1, 0, 0); // Fallback to world X axis
+          }
+          // Ensure direction is valid before proceeding
+          if (!direction) {
+             this.logger.error('Truck: Internal error - direction not set. Skipping step.');
+             continue;
           }
           const moveVector = cameraRight.multiplyScalar(effectiveDistance * (direction === 'left' ? -1 : 1)); // Left = -X, Right = +X
 
@@ -1468,35 +1605,97 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         }
         case 'pedestal': {
           const {
-            direction: rawDirection,
-            distance: rawDistance, // Can be number or string
+            direction: rawDirection, // Might be overridden
+            distance: rawDistance, // Might be overridden
+            destination_target: rawDestinationTargetName, // <<< NEW
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate direction
-          const direction = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
-           if (!direction) { /* error handling */ continue; }
-          
+          let direction: string | null = null;
+          let effectiveDistance: number | null = null;
+          let isDestinationMove = false;
+
+          const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
+
+          // --- Check for Destination Target --- 
+          if (destinationTargetName) {
+            this.logger.debug(`Pedestal: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
+            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+
+            if (destinationTarget) {
+                // Pedestal moves along world Y axis
+                const signedDistance = destinationTarget.y - currentPosition.y;
+
+                if (Math.abs(signedDistance) < 1e-6) {
+                    this.logger.warn(`Pedestal: Destination target ${destinationTargetName} is effectively already at the current height. No pedestal needed.`);
+                    effectiveDistance = 0;
+                } else {
+                    effectiveDistance = Math.abs(signedDistance);
+                }
+                
+                // Override direction based on calculated distance
+                direction = signedDistance >= 0 ? 'up' : 'down';
+                isDestinationMove = true;
+                this.logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
+            } else {
+                this.logger.warn(`Pedestal: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
+            }
+          }
+          // --- End Destination Target Check ---
+
+          // --- Fallback/Standard Distance Calculation ---
+          if (!isDestinationMove) {
+            this.logger.debug('Pedestal: No valid destination target. Using distance parameter.');
+            // Validate direction from Assistant
+            const assistantDirection = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
+            if (!assistantDirection) {
+               this.logger.error(`Invalid or missing pedestal direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
+               continue;
+            }
+            direction = assistantDirection;
+
+            // Calculate distance using helper
+            effectiveDistance = this._calculateEffectiveDistance(
+              rawDistance,
+              'pedestal',
+              sceneAnalysis,
+              envAnalysis,
+              currentPosition,
+              currentTarget,
+              0.5 // Default distance for pedestal
+            );
+          }
+          // --- End Fallback/Standard Distance --- 
+
+          // Validate final calculated distance
+          if (effectiveDistance === null || effectiveDistance < 0) { 
+            this.logger.error(`Pedestal: Final effective distance calculation failed or resulted in negative value. Skipping step.`);
+            continue;
+          }
+          if (effectiveDistance < 1e-6) { // Handle zero movement explicitly
+             this.logger.debug('Pedestal: Effective distance is zero. Generating static command.');
+             commands.push({
+               position: currentPosition.clone(),
+               target: currentTarget.clone(),
+               duration: stepDuration > 0 ? stepDuration : 0.1,
+               easing: 'linear'
+             });
+             break; // Skip rest of pedestal logic
+          }
+
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // --- Calculate Effective Distance --- CALL HELPER ---
-          const effectiveDistance = this._calculateEffectiveDistance(
-            rawDistance,
-            'pedestal',
-            sceneAnalysis,
-            envAnalysis,
-            currentPosition,
-            currentTarget,
-            0.5 // Default distance for pedestal
-          );
-          // --- End Calculate Effective Distance ---
-
-          // 1. Calculate movement vector using effectiveDistance
+          // 1. Calculate movement vector using effectiveDistance & determined direction
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           let cameraUp = new Vector3(0, 1, 0); 
           if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
+          // Ensure direction is valid before proceeding
+          if (!direction) {
+             this.logger.error('Pedestal: Internal error - direction not set. Skipping step.');
+             continue;
+          }
           const moveVector = cameraUp.multiplyScalar(effectiveDistance * (direction === 'up' ? 1 : -1));
 
           // 2. Calculate candidate position AND target
