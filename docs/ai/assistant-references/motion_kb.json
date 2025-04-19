@@ -260,6 +260,19 @@
         "description": "Easing function type hint.",
         "required": false,
         "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
       }
     ],
     "examples": [
@@ -318,6 +331,19 @@
         "description": "Easing function type hint.",
         "required": false,
         "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
       }
     ],
     "examples": [
@@ -374,6 +400,19 @@
         "description": "Easing function type hint.",
         "required": false,
         "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
       }
     ],
     "examples": [
@@ -487,6 +526,19 @@
         "description": "Easing function type hint.",
         "required": false,
         "default": "easeOut" 
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
       }
     ],
     "examples": [

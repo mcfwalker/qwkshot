@@ -509,7 +509,49 @@ private _mapDescriptorToValue(
   }
   return value;
 }
-// --- END HELPER FUNCTION ---
+
+  private _mapDescriptorToGoalDistance(
+    descriptor: Descriptor,
+    sceneAnalysis: SceneAnalysis
+  ): number {
+    // Map qualitative proximity descriptor to an absolute camera–target distance.
+    // We purposely *ignore* current camera state so that the meaning of the descriptor
+    // is stable regardless of where the camera currently is.
+    const objectSize = sceneAnalysis.spatial?.bounds?.dimensions?.length() ?? 1.0;
+    // Scale factors chosen so that:
+    //   tiny   → ~0.5 × objectSize  (very close)
+    //   small  → ~1.0 × objectSize  (close)
+    //   medium → ~1.5 × objectSize  (comfortable framing)
+    //   large  → ~2.5 × objectSize  (wide framing)
+    //   huge   → ~4.0 × objectSize  (far)
+    const scaleMap: { [key in Descriptor]: number } = {
+      tiny: 0.5,
+      small: 1.0,
+      medium: 1.5,
+      large: 2.5,
+      huge: 4.0,
+    };
+    const goalDist = Math.max(scaleMap[descriptor] * objectSize, 0.05);
+    this.logger.debug(
+      `GoalDistance: descriptor '${descriptor}' mapped to goal distance ${goalDist.toFixed(3)}`
+    );
+    return goalDist;
+  }
+
+  // Helper to map raw qualitative words (e.g. "close", "very_far") to a canonical descriptor
+  private _normalizeDescriptor(raw: any): Descriptor | null {
+    if (typeof raw !== 'string') return null;
+    const key = raw.toLowerCase().replace(/[\s_-]/g, '');
+    const aliasMap: Record<string, Descriptor> = {
+      // closest buckets
+      tiny: 'tiny', verytiny: 'tiny', extremelytiny: 'tiny',
+      small: 'small', verysmall: 'small', close: 'small', nearer: 'small', near: 'small', closer: 'small',
+      medium: 'medium', mid: 'medium', moderate: 'medium',
+      large: 'large', verylarge: 'large', far: 'large', farther: 'large', distant: 'large',
+      huge: 'huge', veryhuge: 'huge', gigantic: 'huge', veryfar: 'huge', extremelyfar: 'huge'
+    };
+    return aliasMap[key] ?? null;
+  }
 
   interpretPath(
     plan: MotionPlan,
@@ -1277,13 +1319,13 @@ private _mapDescriptorToValue(
           break;
         }
         case 'dolly': {
-          // --- Start Dolly Logic (REVISED for Descriptors/Overrides) ---
+          // --- Start Dolly Logic (REVISED structure) ---
           const {
             direction: rawDirection, 
-            // distance: rawDistance, // OLD
-            distance_descriptor: rawDistanceDescriptor, // NEW
-            distance_override: rawDistanceOverride, // NEW
+            distance_descriptor: rawDistanceDescriptor, 
+            distance_override: rawDistanceOverride, 
             destination_target: rawDestinationTargetName,
+            target_distance_descriptor: rawGoalDistanceDescriptor,
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium'
           } = step.parameters;
@@ -1292,62 +1334,110 @@ private _mapDescriptorToValue(
           let effectiveDistance: number | null = null;
           let isDestinationMove = false;
 
+          // --- NEW: Handle goal‑distance descriptor early ---
+          const goalDistanceDescriptor = this._normalizeDescriptor(rawGoalDistanceDescriptor);
+
+          if (goalDistanceDescriptor) {
+            // Compute absolute goal distance, then derive delta & direction.
+            const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
+            const goalDistance = this._mapDescriptorToGoalDistance(
+              goalDistanceDescriptor,
+              sceneAnalysis,
+            );
+            const delta = currentDistanceToTarget - goalDistance;
+            if (Math.abs(delta) < 1e-6) {
+              this.logger.debug(
+                `Dolly: Already at goal distance for descriptor '${goalDistanceDescriptor}'. Generating static command.`
+              );
+              commands.push({
+                position: currentPosition.clone(),
+                target: currentTarget.clone(),
+                duration: stepDuration > 0 ? stepDuration : 0.1,
+                easing: 'linear',
+              });
+              break;
+            }
+            direction = delta > 0 ? 'forward' : 'backward';
+            effectiveDistance = Math.abs(delta);
+            this.logger.debug(
+              `Dolly: Goal descriptor '${goalDistanceDescriptor}' → goalDist=${goalDistance.toFixed(
+                3,
+              )}, current=${currentDistanceToTarget.toFixed(3)}, delta=${delta.toFixed(
+                3,
+              )}, direction='${direction}', effectiveDistance=${effectiveDistance.toFixed(
+                3,
+              )}`,
+            );
+          }
+
           const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
-          // --- Check for Destination Target (PRIORITY 1) --- 
-          if (destinationTargetName) {
-            this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
+          // Only evaluate destination_target logic if goal‑distance was *not* used.
+          if (!goalDistanceDescriptor && destinationTargetName) {
+            // Attempt to calculate direction from destination target
+            this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance and direction.`);
             const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
-            
             if (destinationTarget) {
-              const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-              // Handle case where view direction is zero (target equals position)
-              if (viewDirection.lengthSq() < 1e-9) {
-                 this.logger.warn('Dolly: Cannot calculate view direction for destination move (target equals position). Falling back to distance parameter.');
-              } else {
+              const viewDirectionVec = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+              if (viewDirectionVec.lengthSq() >= 1e-9) {
                   const displacementVector = new Vector3().subVectors(destinationTarget, currentPosition);
-                  // Project displacement onto view direction to get signed distance along dolly axis
-                  const signedDistance = displacementVector.dot(viewDirection);
-                  
-                  if (Math.abs(signedDistance) < 1e-6) {
-                      this.logger.warn(`Dolly: Destination target ${destinationTargetName} is effectively already in the current plane perpendicular to view direction. No dolly needed.`);
-                      effectiveDistance = 0;
-                  } else {
-                      effectiveDistance = Math.abs(signedDistance);
-                  }
-
-                  // Override direction based on calculated distance
-                  direction = signedDistance >= 0 ? 'forward' : 'backward';
+                  const signedDistance = displacementVector.dot(viewDirectionVec);
+                  direction = signedDistance >= 0 ? 'forward' : 'backward'; // Set direction based on calculation
+                  effectiveDistance = Math.abs(signedDistance); // Also calculate distance here
                   isDestinationMove = true;
                   this.logger.debug(`Dolly: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
+              } else {
+                 this.logger.warn('Dolly: Cannot calculate view direction for destination move (target equals position). Ignoring destination_target for direction.');
               }
             } else {
-              this.logger.warn(`Dolly: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
+              this.logger.warn(`Dolly: Could not resolve destination target '${destinationTargetName}'. Ignoring destination_target for direction.`);
             }
           }
-          // --- End Destination Target Check ---
-          
-          // --- Fallback/Standard Distance Calculation ---
-          if (!isDestinationMove) {
-            this.logger.debug('Dolly: No valid destination target. Using distance parameter.');
-            // Validate direction from Assistant
+
+          // If direction wasn't set by goal‑descriptor or destination logic, use rawDirection
+          if (!direction) {
             let assistantDirection = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
             if (assistantDirection === 'in') assistantDirection = 'forward';
             if (assistantDirection === 'out') assistantDirection = 'backward';
-            if (assistantDirection !== 'forward' && assistantDirection !== 'backward') {
-              this.logger.error(`Invalid or missing dolly direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
+            if (assistantDirection === 'forward' || assistantDirection === 'backward') {
+              direction = assistantDirection;
+            } else {
+              this.logger.error(`Invalid or missing dolly direction: ${rawDirection} (and destination/goal failed). Skipping step.`);
               continue;
             }
-            direction = assistantDirection;
           }
-          // --- End Fallback/Standard Distance --- 
 
-          // Validate final calculated distance
-          if (effectiveDistance === null || effectiveDistance < 0) { // Should be positive absolute value now
-            this.logger.error(`Dolly: Final effective distance calculation failed or resulted in negative value. Skipping step.`);
+          // --- STEP 2: Determine Effective Distance if still unknown --- 
+          if (effectiveDistance === null && !isDestinationMove && !goalDistanceDescriptor) {
+            // 1. Check Override
+            this.logger.debug(`Dolly: Checking override. rawDistanceOverride = ${rawDistanceOverride}, typeof = ${typeof rawDistanceOverride}`);
+            if (typeof rawDistanceOverride === 'number' && rawDistanceOverride > 0) {
+              effectiveDistance = rawDistanceOverride;
+              this.logger.debug(`Dolly: Using distance_override: ${effectiveDistance}`);
+            } else {
+              // 2. Check Descriptor
+              const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+
+              if (distanceDescriptor) {
+                effectiveDistance = this._mapDescriptorToValue(
+                  distanceDescriptor, 'distance', 'dolly',
+                  sceneAnalysis, envAnalysis,
+                  { position: currentPosition, target: currentTarget }
+                );
+                this.logger.debug(`Dolly: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
+              } else {
+                this.logger.error(`Dolly: No valid distance found (no destination, override, descriptor, or goal). Skipping step.`);
+                continue; 
+              }
+            }
+          }
+          
+          // --- STEP 3: Validation and Movement Calculation ---
+          if (effectiveDistance === null || effectiveDistance < 0) {
+            this.logger.error(`Dolly: Final effective distance is invalid (${effectiveDistance}). Skipping step.`);
             continue;
           }
-          if (effectiveDistance < 1e-6) { // Handle zero movement explicitly
+          if (effectiveDistance < 1e-6) { 
              this.logger.debug('Dolly: Effective distance is zero. Generating static command.');
              commands.push({
                position: currentPosition.clone(),
@@ -1361,26 +1451,11 @@ private _mapDescriptorToValue(
           const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // 1. Calculate movement vector using effectiveDistance & determined direction
+          // Calculate movement vector (Direction is now guaranteed to be valid)
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          // --- FIX: Correct cross product order for cameraRight --- 
-          // Right = Forward x Up (in a right-handed system)
-          const worldUp = new Vector3(0, 1, 0); 
-          const cameraRight = new Vector3().crossVectors(viewDirection, worldUp).normalize(); 
-          // --- END FIX ---
-          // Handle edge case where view is aligned with world up
-          if (cameraRight.lengthSq() < 1e-6) { 
-             this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
-             cameraRight.set(1, 0, 0); // Fallback to world X axis
-          }
-          // Ensure direction is valid before proceeding
-          if (!direction) {
-             this.logger.error('Dolly: Internal error - direction not set. Skipping step.');
-             continue;
-          }
-          const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1)); // Dolly uses viewDirection
+          const moveVector = viewDirection.multiplyScalar(effectiveDistance * (direction === 'forward' ? 1 : -1));
 
-          // 2. Calculate candidate position
+          // Calculate candidate position
           const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
           let finalPosition = newPositionCandidate.clone();
           let clamped = false;
@@ -1477,9 +1552,11 @@ private _mapDescriptorToValue(
         }
         case 'truck': {
           const {
-            direction: rawDirection, // Might be overridden
-            distance: rawDistance, // Might be overridden
-            destination_target: rawDestinationTargetName, // <<< NEW
+            direction: rawDirection,
+            // distance: rawDistance, // OLD
+            distance_descriptor: rawDistanceDescriptor, // NEW - Should define it
+            distance_override: rawDistanceOverride,     // NEW - Should define it
+            destination_target: rawDestinationTargetName,
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium'
           } = step.parameters;
@@ -1525,18 +1602,37 @@ private _mapDescriptorToValue(
           }
           // --- End Destination Target Check ---
 
-          // --- Fallback/Standard Distance Calculation ---
+          // --- Distance Calculation (Priority: Override > Descriptor) ---
           if (!isDestinationMove) {
-            this.logger.debug('Truck: No valid destination target. Using distance parameter.');
-            // Validate direction from Assistant
-            const assistantDirection = typeof rawDirection === 'string' && (rawDirection === 'left' || rawDirection === 'right') ? rawDirection : null;
-            if (!assistantDirection) {
-               this.logger.error(`Invalid or missing truck direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
-               continue;
-            }
-            direction = assistantDirection;
+             // Add diagnostic logging
+             this.logger.debug(`Truck: Checking override. rawDistanceOverride = ${rawDistanceOverride}, typeof = ${typeof rawDistanceOverride}`);
+             
+             // 1. Check Override (PRIORITY 2)
+             if (typeof rawDistanceOverride === 'number' && rawDistanceOverride > 0) {
+                effectiveDistance = rawDistanceOverride;
+                this.logger.debug(`Truck: Using distance_override: ${effectiveDistance}`);
+             } else {
+                // 2. Check Descriptor
+                const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+                
+                if (distanceDescriptor) {
+                  effectiveDistance = this._mapDescriptorToValue(
+                    distanceDescriptor,
+                    'distance',
+                    'truck',
+                    sceneAnalysis,
+                    envAnalysis,
+                    { position: currentPosition, target: currentTarget }
+                  );
+                  this.logger.debug(`Truck: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
+                } else {
+                   // 3. Error
+                   this.logger.error(`Truck: Missing or invalid destination_target, distance_override (${rawDistanceOverride}), AND distance_descriptor (${rawDistanceDescriptor}). Skipping step.`);
+                   continue; 
+                }
+             }
           }
-          // --- End Fallback/Standard Distance --- 
+          // --- End Distance Calculation (Priority: Override > Descriptor) ---
 
           // Validate final calculated distance
           if (effectiveDistance === null || effectiveDistance < 0) {
@@ -1665,9 +1761,11 @@ private _mapDescriptorToValue(
         }
         case 'pedestal': {
           const {
-            direction: rawDirection, // Might be overridden
-            distance: rawDistance, // Might be overridden
-            destination_target: rawDestinationTargetName, // <<< NEW
+            direction: rawDirection,
+            // distance: rawDistance, // OLD
+            distance_descriptor: rawDistanceDescriptor, // NEW - Should define it
+            distance_override: rawDistanceOverride,     // NEW - Should define it
+            destination_target: rawDestinationTargetName,
             easing: rawEasingName = DEFAULT_EASING,
             speed: rawSpeed = 'medium'
           } = step.parameters;
@@ -1704,18 +1802,37 @@ private _mapDescriptorToValue(
           }
           // --- End Destination Target Check ---
 
-          // --- Fallback/Standard Distance Calculation ---
+          // --- Distance Calculation (Priority: Override > Descriptor) ---
           if (!isDestinationMove) {
-            this.logger.debug('Pedestal: No valid destination target. Using distance parameter.');
-            // Validate direction from Assistant
-            const assistantDirection = typeof rawDirection === 'string' && (rawDirection === 'up' || rawDirection === 'down') ? rawDirection : null;
-            if (!assistantDirection) {
-               this.logger.error(`Invalid or missing pedestal direction: ${rawDirection} (and no valid destination_target). Skipping step.`);
-               continue;
-            }
-            direction = assistantDirection;
+             // Add diagnostic logging
+             this.logger.debug(`Pedestal: Checking override. rawDistanceOverride = ${rawDistanceOverride}, typeof = ${typeof rawDistanceOverride}`);
+             
+             // 1. Check Override (PRIORITY 2)
+             if (typeof rawDistanceOverride === 'number' && rawDistanceOverride > 0) {
+                effectiveDistance = rawDistanceOverride;
+                this.logger.debug(`Pedestal: Using distance_override: ${effectiveDistance}`);
+             } else {
+                 // 2. Check Descriptor
+                const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+
+                if (distanceDescriptor) {
+                  effectiveDistance = this._mapDescriptorToValue(
+                    distanceDescriptor,
+                    'distance',
+                    'pedestal',
+                    sceneAnalysis,
+                    envAnalysis,
+                    { position: currentPosition, target: currentTarget }
+                  );
+                  this.logger.debug(`Pedestal: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
+                } else {
+                  // 3. Error
+                  this.logger.error(`Pedestal: Missing or invalid destination_target, distance_override (${rawDistanceOverride}), AND distance_descriptor (${rawDistanceDescriptor}). Skipping step.`);
+                  continue; 
+                }
+             }
           }
-          // --- End Fallback/Standard Distance --- 
+          // --- End Distance Calculation (Priority: Override > Descriptor) ---
 
           // Validate final calculated distance
           if (effectiveDistance === null || effectiveDistance < 0) { 
@@ -1963,9 +2080,7 @@ private _mapDescriptorToValue(
             this.logger.debug(`FlyAway: Using distance_override: ${effectiveDistance}`);
           } else {
             // 2. Check Descriptor
-            const distanceDescriptor = typeof rawDistanceDescriptor === 'string' && [
-              'tiny', 'small', 'medium', 'large', 'huge'
-            ].includes(rawDistanceDescriptor) ? rawDistanceDescriptor as Descriptor : null;
+            const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
 
             if (distanceDescriptor) {
               effectiveDistance = this._mapDescriptorToValue(
