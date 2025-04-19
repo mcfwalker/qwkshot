@@ -13,6 +13,12 @@ import { SceneAnalysis } from '@/types/p2p/scene-analyzer'; // Added
 import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer'; // Added
 import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing';
 
+// Define Canonical Descriptor type (KEEP OUTSIDE CLASS)
+type Descriptor = 'tiny' | 'small' | 'medium' | 'large' | 'huge';
+
+// Define Magnitude type (KEEP OUTSIDE CLASS)
+type MagnitudeType = 'distance' | 'factor' | 'pass_distance';
+
 // Define a simple logger for this module
 const logger = {
   info: (...args: any[]) => console.log('[SceneInterpreter]', ...args),
@@ -21,7 +27,7 @@ const logger = {
   debug: (...args: any[]) => console.debug('[SceneInterpreter]', ...args),
 };
 
-// Helper function to check if a vector's components are finite
+// Helper function to check if a vector's components are finite (Ensure this is outside the class)
 function isFiniteVector(v: any): boolean {
     return v && typeof v === 'object' && 
            Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
@@ -410,6 +416,101 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return defaultDistance;
   }
 
+  /**
+ * Maps a canonical descriptor (tiny, small, medium, large, huge) to a context-aware numeric value.
+ *
+ * @param descriptor The canonical descriptor string.
+ * @param magnitudeType Type of magnitude being calculated ('distance', 'factor', 'pass_distance').
+ * @param motionType The type of motion ('dolly', 'zoom', etc.).
+ * @param sceneAnalysis Provides context like object size.
+ * @param envAnalysis Provides context like camera constraints.
+ * @param currentCameraState Current camera position and target.
+ * @param direction Optional: Direction ('in'/'out') specifically for zoom factor calculation.
+ * @returns Calculated numeric value (distance or factor).
+ */
+private _mapDescriptorToValue(
+  descriptor: Descriptor, // Use global Descriptor type
+  magnitudeType: MagnitudeType, // Use global MagnitudeType
+  motionType: MotionPlan['steps'][0]['type'],
+  sceneAnalysis: SceneAnalysis,
+  envAnalysis: EnvironmentalAnalysis,
+  currentCameraState: { position: Vector3; target: Vector3 },
+  direction?: 'in' | 'out'
+): number {
+  this.logger.debug(`Mapping descriptor '${descriptor}' for ${motionType} (${magnitudeType})`);
+
+  const { position: currentPosition, target: currentTarget } = currentCameraState;
+  const objectSize = sceneAnalysis.spatial?.bounds?.dimensions?.length() ?? 1.0;
+  const objectHeight = sceneAnalysis.spatial?.bounds?.dimensions?.y ?? objectSize * 0.5;
+  const objectWidth = sceneAnalysis.spatial?.bounds?.dimensions?.x ?? objectSize * 0.5;
+  const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
+  const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1;
+  const maxConstraintDist = envAnalysis.cameraConstraints?.maxDistance ?? Infinity;
+
+  let value: number;
+
+  if (magnitudeType === 'factor' && motionType === 'zoom') {
+    // Zoom Factor Mapping
+    if (!direction) {
+      this.logger.error('Zoom factor mapping requires direction (\'in\'/\'out\'). Defaulting factor to 1.0');
+      return 1.0;
+    }
+    const factorMap: { [key in Descriptor]: number } = {
+      tiny: direction === 'in' ? 0.9 : 1.1,
+      small: direction === 'in' ? 0.7 : 1.3,
+      medium: direction === 'in' ? 0.5 : 1.8,
+      large: direction === 'in' ? 0.3 : 2.5,
+      huge: direction === 'in' ? 0.15 : 4.0,
+    };
+    value = factorMap[descriptor];
+    this.logger.debug(`Mapped zoom descriptor '${descriptor}' (direction: ${direction}) to base factor: ${value}`);
+    // Clamping logic...
+    let projectedDistance = currentDistanceToTarget * value;
+    if (projectedDistance < minConstraintDist) {
+        value = minConstraintDist / currentDistanceToTarget;
+        this.logger.warn(`Zoom factor clamped due to minDistance. New factor: ${value.toFixed(3)}`);
+    }
+    if (projectedDistance > maxConstraintDist) {
+        value = maxConstraintDist / currentDistanceToTarget;
+        this.logger.warn(`Zoom factor clamped due to maxDistance. New factor: ${value.toFixed(3)}`);
+    }
+    if (direction === 'in' && value >= 1.0) value = 0.99;
+    if (direction === 'out' && value <= 1.0) value = 1.01;
+
+  } else {
+    // Distance Mapping
+    let baseMetric: number;
+    switch (motionType) {
+        case 'pedestal': baseMetric = objectHeight; break;
+        case 'truck': baseMetric = objectWidth; break;
+        case 'dolly': case 'fly_away': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break;
+        case 'fly_by': baseMetric = objectSize; break;
+        default: baseMetric = objectSize;
+    }
+    baseMetric = Math.max(baseMetric, 0.1);
+
+    const scaleMap: { [key in Descriptor]: number } = {
+        tiny: 0.1, small: 0.3, medium: 0.75, large: 1.5, huge: 3.0,
+    };
+    const scaleFactor = scaleMap[descriptor];
+    value = baseMetric * scaleFactor;
+
+    // Adjustments & Clamping...
+    if (motionType === 'dolly' && (descriptor === 'tiny' || descriptor === 'small') && currentDistanceToTarget < baseMetric) {
+        value = currentDistanceToTarget * scaleFactor;
+    }
+    const maxReasonableDist = Math.max(objectSize * 5, 20.0);
+    if (value > maxReasonableDist) {
+      this.logger.warn(`Clamping calculated distance ${value.toFixed(2)} to max reasonable ${maxReasonableDist.toFixed(2)}.`);
+      value = maxReasonableDist;
+    }
+    value = Math.max(value, 1e-6);
+    this.logger.debug(`Mapped distance descriptor '${descriptor}' for ${motionType} to value: ${value.toFixed(3)}`);
+  }
+  return value;
+}
+// --- END HELPER FUNCTION ---
+
   interpretPath(
     plan: MotionPlan,
     sceneAnalysis: SceneAnalysis,
@@ -572,55 +673,75 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'zoom': {
-          // --- Start Zoom Logic (Corrected) ---
+          // --- Start Zoom Logic (REVISED for Descriptors/Overrides) ---
           const {
             direction: rawDirection,
-            factor: rawFactor,
+            // factor: rawFactor, // OLD
+            factor_descriptor: rawFactorDescriptor, // NEW
+            factor_override: rawFactorOverride,   // NEW
             target: rawTargetName = 'current_target',
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed
+            speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate parameters
+          // Validate direction
           const direction = typeof rawDirection === 'string' && (rawDirection === 'in' || rawDirection === 'out') ? rawDirection : null;
-          const factor = typeof rawFactor === 'number' && rawFactor > 0 ? rawFactor : null;
-          const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target'; // Default
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
-
           if (!direction) {
             this.logger.error(`Invalid or missing zoom direction: ${rawDirection}. Skipping step.`);
             continue;
           }
-          if (factor === null) {
-            this.logger.error(`Invalid, missing, or non-positive zoom factor: ${rawFactor}. Skipping step.`);
-            continue;
-          }
-          if (rawEasingName !== easingName && typeof rawEasingName === 'string') {
-             this.logger.warn(`Invalid or unsupported easing name: ${rawEasingName}. Defaulting to ${easingName}.`);
-          }
 
-          // 1. Resolve target point
+          let effectiveFactor: number | null = null;
+
+          // 1. Check for numeric override
+          if (typeof rawFactorOverride === 'number' && rawFactorOverride > 0) {
+            effectiveFactor = rawFactorOverride;
+            this.logger.debug(`Zoom: Using factor_override: ${effectiveFactor}`);
+          } else {
+            // 2. Check for descriptor
+            const factorDescriptor = typeof rawFactorDescriptor === 'string' && [
+              'tiny', 'small', 'medium', 'large', 'huge'
+            ].includes(rawFactorDescriptor) ? rawFactorDescriptor as Descriptor : null;
+
+            if (factorDescriptor) {
+              // Map descriptor to value
+              effectiveFactor = this._mapDescriptorToValue(
+                factorDescriptor,
+                'factor',
+                'zoom',
+                sceneAnalysis,
+                envAnalysis,
+                { position: currentPosition, target: currentTarget },
+                direction // Pass direction for zoom factor mapping
+              );
+              this.logger.debug(`Zoom: Mapped factor_descriptor '${factorDescriptor}' to factor: ${effectiveFactor}`);
+            } else {
+              this.logger.error(`Zoom: Missing or invalid factor_override (${rawFactorOverride}) and factor_descriptor (${rawFactorDescriptor}). Skipping step.`);
+              continue; // Cannot proceed without factor
+            }
+          }
+          
+          // Now we have effectiveFactor, proceed with existing zoom logic...
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target'; // Default
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
+
+          // 1. Resolve target point (uses targetName)
           const zoomTargetPosition = this._resolveTargetPosition(targetName, sceneAnalysis, currentTarget);
           if (!zoomTargetPosition) {
             this.logger.error(`Could not resolve zoom target '${targetName}'. Skipping step.`);
             continue;
           }
 
-          // 2. Calculate new distance based on direction and factor
+          // 2. Calculate new distance based on direction and *effectiveFactor*
           const vectorToTarget = new Vector3().subVectors(zoomTargetPosition, currentPosition);
           const currentDistance = vectorToTarget.length();
           let newDistance: number;
-
-          if (direction === 'in') {
-            // Factor determines the new distance as a ratio of the old distance
-            // e.g., factor = 0.5 means new distance is half the original
-            newDistance = currentDistance * factor;
-          } else { // direction === 'out'
-            // Factor determines the new distance as a ratio of the old distance
-            // e.g., factor = 2.0 means new distance is double the original
-            newDistance = currentDistance * factor;
-          }
+          
+          // IMPORTANT: Ensure effectiveFactor aligns with direction conceptually.
+          // _mapDescriptorToValue already handles basic directional alignment and clamping.
+          // Here, we just use the factor regardless of direction name, as the factor itself dictates the movement.
+          newDistance = currentDistance * effectiveFactor; 
           
           // Avoid division by zero or moving to the exact target point if already there
           if (currentDistance < 1e-6) {
@@ -1197,13 +1318,15 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'dolly': {
-          // --- Start Dolly Logic (Corrected Placement and Logic) ---
+          // --- Start Dolly Logic (REVISED for Descriptors/Overrides) ---
           const {
-            direction: rawDirection, // Direction from Assistant (might be overridden)
-            distance: rawDistance, // Distance from Assistant (might be overridden)
-            destination_target: rawDestinationTargetName, // <<< NEW
+            direction: rawDirection, 
+            // distance: rawDistance, // OLD
+            distance_descriptor: rawDistanceDescriptor, // NEW
+            distance_override: rawDistanceOverride, // NEW
+            destination_target: rawDestinationTargetName,
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium' // Extract speed
+            speed: rawSpeed = 'medium'
           } = step.parameters;
 
           let direction: string | null = null;
@@ -1212,7 +1335,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
 
           const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
-          // --- Check for Destination Target --- 
+          // --- Check for Destination Target (PRIORITY 1) --- 
           if (destinationTargetName) {
             this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
             const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
@@ -1257,17 +1380,6 @@ export class SceneInterpreterImpl implements SceneInterpreter {
               continue;
             }
             direction = assistantDirection;
-            
-            // Calculate distance using helper
-            effectiveDistance = this._calculateEffectiveDistance(
-              rawDistance,
-              'dolly',
-              sceneAnalysis,
-              envAnalysis,
-              currentPosition,
-              currentTarget,
-              1.0 // Default distance for dolly
-            );
           }
           // --- End Fallback/Standard Distance --- 
 
@@ -1464,17 +1576,6 @@ export class SceneInterpreterImpl implements SceneInterpreter {
                continue;
             }
             direction = assistantDirection;
-
-            // Calculate distance using helper
-            effectiveDistance = this._calculateEffectiveDistance(
-              rawDistance,
-              'truck',
-              sceneAnalysis,
-              envAnalysis,
-              currentPosition,
-              currentTarget,
-              1.0 // Default distance for truck
-            );
           }
           // --- End Fallback/Standard Distance --- 
 
@@ -1654,17 +1755,6 @@ export class SceneInterpreterImpl implements SceneInterpreter {
                continue;
             }
             direction = assistantDirection;
-
-            // Calculate distance using helper
-            effectiveDistance = this._calculateEffectiveDistance(
-              rawDistance,
-              'pedestal',
-              sceneAnalysis,
-              envAnalysis,
-              currentPosition,
-              currentTarget,
-              0.5 // Default distance for pedestal
-            );
           }
           // --- End Fallback/Standard Distance --- 
 
@@ -1795,6 +1885,180 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           currentTarget = finalTarget.clone(); // <<< UPDATE TARGET STATE
           // --- End Pedestal Logic ---
           break;
+        }
+        // TODO: Implement other motion generators like fly_by, fly_away, set_view, focus_on, arc, reveal
+        case 'fly_by': { // <<< Placeholder
+          this.logger.warn('Fly-by motion generator is not fully implemented. Skipping step.');
+          // --- START FlyBy Logic --- 
+          const {
+              target: rawTargetName,
+              // pass_distance: rawPassDistance, // OLD
+              pass_distance_descriptor: rawPassDistanceDescriptor, // NEW
+              pass_distance_override: rawPassDistanceOverride, // NEW
+              look_at_target: rawLookAtTarget = true,
+              speed: rawSpeed = 'fast',
+              easing: rawEasingName = 'linear'
+          } = step.parameters;
+
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
+          if (!targetName) {
+              this.logger.error('FlyBy: Missing target parameter. Skipping step.');
+              continue;
+          }
+          const flyByTarget = this._resolveTargetPosition(targetName, sceneAnalysis, currentTarget);
+          if (!flyByTarget) {
+            this.logger.error(`FlyBy: Could not resolve target '${targetName}'. Skipping step.`);
+            continue;
+          }
+
+          let effectivePassDistance: number | null = null;
+
+          // 1. Check Override
+          if (typeof rawPassDistanceOverride === 'number' && rawPassDistanceOverride > 0) {
+            effectivePassDistance = rawPassDistanceOverride;
+            this.logger.debug(`FlyBy: Using pass_distance_override: ${effectivePassDistance}`);
+          } else {
+            // 2. Check Descriptor (or use default)
+            let passDistanceDescriptor = typeof rawPassDistanceDescriptor === 'string' && [
+              'tiny', 'small', 'medium', 'large', 'huge'
+            ].includes(rawPassDistanceDescriptor) ? rawPassDistanceDescriptor as Descriptor : 'medium'; // Default to medium
+            
+            if (rawPassDistanceDescriptor && rawPassDistanceDescriptor !== passDistanceDescriptor) {
+                this.logger.warn(`FlyBy: Invalid pass_distance_descriptor '${rawPassDistanceDescriptor}'. Defaulting to '${passDistanceDescriptor}'.`);
+            } else if (!rawPassDistanceDescriptor) {
+                 this.logger.debug(`FlyBy: No pass_distance_descriptor provided. Defaulting to '${passDistanceDescriptor}'.`);
+            }
+
+            effectivePassDistance = this._mapDescriptorToValue(
+              passDistanceDescriptor,
+              'pass_distance',
+              'fly_by',
+              sceneAnalysis,
+              envAnalysis,
+              { position: currentPosition, target: currentTarget }
+            );
+            this.logger.debug(`FlyBy: Mapped pass_distance_descriptor '${passDistanceDescriptor}' to distance: ${effectivePassDistance}`);
+          }
+          
+          // --- Placeholder for FlyBy Path Calculation using effectivePassDistance ---
+          this.logger.warn(`FlyBy Path calculation using target ${flyByTarget.toArray()} and passDistance ${effectivePassDistance.toFixed(2)} needs implementation.`);
+          // Example: Generate simple path (replace with actual logic)
+          const flyByStartPos = currentPosition.clone();
+          // Calculate a point offset from target using passDistance
+          const offsetDir = new Vector3().subVectors(currentPosition, flyByTarget).normalize().cross(new Vector3(0,1,0)).normalize(); // Side vector
+          const passPoint = new Vector3().copy(flyByTarget).addScaledVector(offsetDir, effectivePassDistance);
+          // Simple end point further along initial direction
+          const flyByEndPos = new Vector3().copy(currentPosition).add(new Vector3().subVectors(currentPosition, currentTarget).normalize().multiplyScalar(effectivePassDistance * 2)); 
+          
+          const finalPosition = flyByEndPos; // Use calculated end pos
+          const finalTarget = rawLookAtTarget ? flyByTarget.clone() : currentTarget.clone(); // Look at target or keep looking forward
+
+          // --- Create Commands (Example: Simple 2-point move) ---
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+            position: currentPosition.clone(),
+            target: currentTarget.clone(), 
+            duration: 0,
+            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : 'linear'
+          });
+           commandsList.push({
+            position: finalPosition.clone(), 
+            target: finalTarget.clone(), 
+            duration: stepDuration > 0 ? stepDuration : 1.0, // Use calculated duration or default
+            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : 'linear'
+          });
+          this.logger.debug('Generated fly_by commands (placeholder):', commandsList);
+          commands.push(...commandsList);
+          // --- End Placeholder ---
+
+          // Update state
+          currentPosition = finalPosition.clone();
+          currentTarget = finalTarget.clone();
+          break;
+        }
+        case 'fly_away': { // <<< Placeholder
+          this.logger.warn('Fly-away motion generator is not fully implemented. Skipping step.');
+          // --- START FlyAway Logic --- 
+          const {
+              target: rawTargetName = 'current_target', 
+              // distance: rawDistance, // OLD
+              distance_descriptor: rawDistanceDescriptor, // NEW
+              distance_override: rawDistanceOverride, // NEW
+              direction_hint: rawDirectionHint = 'away_from_target',
+              speed: rawSpeed = 'medium',
+              easing: rawEasingName = 'easeOut'
+          } = step.parameters;
+
+          const flyAwayTargetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target';
+          const flyAwayTarget = this._resolveTargetPosition(flyAwayTargetName, sceneAnalysis, currentTarget);
+          if (!flyAwayTarget) {
+            this.logger.error(`FlyAway: Could not resolve target '${flyAwayTargetName}'. Skipping step.`);
+            continue;
+          }
+
+          let effectiveDistance: number | null = null;
+
+          // 1. Check Override
+          if (typeof rawDistanceOverride === 'number' && rawDistanceOverride > 0) {
+            effectiveDistance = rawDistanceOverride;
+            this.logger.debug(`FlyAway: Using distance_override: ${effectiveDistance}`);
+          } else {
+            // 2. Check Descriptor
+            const distanceDescriptor = typeof rawDistanceDescriptor === 'string' && [
+              'tiny', 'small', 'medium', 'large', 'huge'
+            ].includes(rawDistanceDescriptor) ? rawDistanceDescriptor as Descriptor : null;
+
+            if (distanceDescriptor) {
+              effectiveDistance = this._mapDescriptorToValue(
+                distanceDescriptor,
+                'distance',
+                'fly_away',
+                sceneAnalysis,
+                envAnalysis,
+                { position: currentPosition, target: currentTarget }
+              );
+              this.logger.debug(`FlyAway: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
+            } else {
+               this.logger.error(`FlyAway: Missing or invalid distance_override AND distance_descriptor. Skipping step.`);
+               continue; 
+            }
+          }
+
+          // --- Placeholder for FlyAway Path Calculation ---
+          this.logger.warn(`FlyAway Path calculation using target ${flyAwayTarget.toArray()}, distance ${effectiveDistance.toFixed(2)}, hint ${rawDirectionHint} needs implementation.`);
+          // Example: Simple move backward
+          const directionVec = new Vector3().subVectors(currentPosition, flyAwayTarget).normalize(); // Direction away from target
+          if (rawDirectionHint === 'up_and_back') directionVec.add(new Vector3(0,0.5,0)).normalize(); // Add upward component
+          
+          const finalPosition = new Vector3().copy(currentPosition).addScaledVector(directionVec, effectiveDistance);
+          const finalTarget = flyAwayTarget.clone(); // Keep looking at the target
+
+          // --- Create Commands (Example) ---
+          const commandsList: CameraCommand[] = [];
+           commandsList.push({
+            position: currentPosition.clone(),
+            target: currentTarget.clone(), 
+            duration: 0,
+            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : DEFAULT_EASING // Use DEFAULT_EASING
+          });
+           commandsList.push({
+            position: finalPosition.clone(), 
+            target: finalTarget.clone(), 
+            duration: stepDuration > 0 ? stepDuration : 1.0, // Use calculated duration or default
+            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : DEFAULT_EASING // Use DEFAULT_EASING
+          });
+          this.logger.debug('Generated fly_away commands (placeholder):', commandsList);
+          commands.push(...commandsList);
+          // --- End Placeholder ---
+
+          // Update state
+          currentPosition = finalPosition.clone();
+          currentTarget = finalTarget.clone();
+          break;
+        }
+        default: {
+          this.logger.error(`Unknown motion type: ${step.type}. Skipping step.`);
+          continue;
         }
       }
     }

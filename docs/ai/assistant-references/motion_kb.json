@@ -28,10 +28,17 @@
         "required": true
       },
       {
-        "name": "factor",
+        "name": "factor_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative zoom intensity. Required if factor_override is not provided. Interpreter maps this to a context-aware numeric factor.",
+        "required": false 
+      },
+      {
+        "name": "factor_override",
         "type": "number",
-        "description": "Relative amount or intensity of the zoom. E.g., 0.5 could mean 'zoom halfway towards target' or 'reduce distance by 50%', 2.0 could mean 'double distance'. Interpreter defines precise calculation based on context (distance vs FOV change).",
-        "required": true
+        "description": "Optional: Explicit numeric zoom factor (e.g., 0.5 for halfway, 2.0 for double distance). If provided, overrides factor_descriptor. Interpreter uses this value directly.",
+        "required": false
       },
       {
         "name": "target",
@@ -220,11 +227,17 @@
         "required": true
       },
       {
-        "name": "distance",
-        "type": ["number", "string"], 
-        "enum": ["close", "very_close", "a_bit", "slightly", "medium_distance", "large_distance", "far"],
-        "description": "Distance in scene units OR a qualitative term ('close', 'very_close', 'a_bit', 'far', etc.). Interpreter determines units and calculates distance for qualitative terms.",
-        "required": true
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
       },
       {
         "name": "destination_target",
@@ -272,11 +285,17 @@
         "required": true
       },
       {
-        "name": "distance",
-        "type": ["number", "string"], 
-        "enum": ["a_bit", "slightly", "medium_distance", "large_distance", "significantly"],
-        "description": "Distance in scene units OR a qualitative term ('a_bit', 'medium_distance', etc.). Interpreter determines units and calculates distance for qualitative terms.",
-        "required": true
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
       },
       {
         "name": "destination_target",
@@ -322,11 +341,17 @@
         "required": true
       },
       {
-        "name": "distance",
-        "type": ["number", "string"], 
-        "enum": ["a_bit", "slightly", "medium_distance", "large_distance", "significantly"],
-        "description": "Distance in scene units OR a qualitative term ('a_bit', 'medium_distance', etc.). Interpreter determines units and calculates distance for qualitative terms.",
-        "required": true
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
       },
       {
         "name": "destination_target",
@@ -371,9 +396,17 @@
         "required": true
       },
       {
-        "name": "pass_distance",
+        "name": "pass_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Optional: Canonical descriptor for the approximate closest distance the camera should pass by the target. Default: 'medium'. Interpreter maps this to a context-aware numeric distance. Overridden by pass_distance_override.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "pass_distance_override",
         "type": "number",
-        "description": "Approximate closest distance the camera should pass by the target. Interpreter determines units/calculation.",
+        "description": "Optional: Explicit numeric distance for the closest pass. If provided, overrides pass_distance_descriptor. Interpreter determines units/calculation.",
         "required": false 
       },
        {
@@ -419,10 +452,17 @@
         "default": "current_target"
       },
        {
-        "name": "distance",
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to move away. Required if distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
         "type": "number",
-        "description": "Approximate distance to move away. Interpreter determines units.",
-        "required": true
+        "description": "Optional: Explicit numeric distance to move away. If provided, overrides distance_descriptor. Interpreter determines units.",
+        "required": false
       },
       {
         "name": "direction_hint",
