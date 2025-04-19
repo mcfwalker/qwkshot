@@ -1665,6 +1665,22 @@ private _mapDescriptorToValue(
              this.logger.warn('Cannot determine camera right vector (view likely aligned with world up). Using world X as fallback.');
              cameraRight.set(1, 0, 0); // Fallback to world X axis
           }
+
+          // Fallback: use explicit direction parameter if destination‑target logic
+          // didn’t set it.
+          if (!direction) {
+            const explicitDir =
+              typeof rawDirection === 'string' &&
+              (rawDirection === 'left' || rawDirection === 'right')
+                ? rawDirection
+                : null;
+
+            if (explicitDir) {
+              direction = explicitDir;
+              this.logger.debug(`Truck: Using explicit direction parameter '${direction}'.`);
+            }
+          }
+
           // Ensure direction is valid before proceeding
           if (!direction) {
              this.logger.error('Truck: Internal error - direction not set. Skipping step.');
@@ -1857,6 +1873,22 @@ private _mapDescriptorToValue(
           const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
           let cameraUp = new Vector3(0, 1, 0); 
           if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
+          
+          // Fallback: use explicit direction parameter if destination‑target logic
+          // didn’t set it.
+          if (!direction) {
+            const explicitDir =
+              typeof rawDirection === 'string' &&
+              (rawDirection === 'up' || rawDirection === 'down')
+                ? rawDirection
+                : null;
+
+            if (explicitDir) {
+              direction = explicitDir;
+              this.logger.debug(`Pedestal: Using explicit direction parameter '${direction}'.`);
+            }
+          }
+          
           // Ensure direction is valid before proceeding
           if (!direction) {
              this.logger.error('Pedestal: Internal error - direction not set. Skipping step.');
