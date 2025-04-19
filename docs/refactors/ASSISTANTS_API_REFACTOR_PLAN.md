@@ -344,8 +344,8 @@ interface MotionStep {
     *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values. (Done previously via instructions)
     *   [X] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc. (Addressed via standardized targets + Interpreter logic, including `destination_target`)
 *   [X] Update project documentation. (Updated plan, P2P Overview, added reference README, regression suite)
-*   [ ] Prepare for merge to `stable`/`main`.
-*   [ ] *Goal:* Feature-complete, stable, documented, and ready for production use.
+*   [X] Prepare for merge to `stable`/`main`.
+*   [X] *Goal:* Feature-complete, stable, documented, and ready for production use.
 
 ### Future Enhancements / Considerations
 *   [ ] Implement remaining core motion types: `fly_by`, `fly_away`, `set_view`, `arc`, `reveal`.
