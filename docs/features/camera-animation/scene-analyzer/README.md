@@ -47,26 +47,29 @@ The Scene Analyzer is a core component of the Prompt-to-Path (P2P) pipeline that
 
 ## Integration
 
-### Environmental Analyzer Integration
+### Interaction with Other Components
+- The `SceneAnalyzer` typically runs once when a model is uploaded or processed.
+- Its primary output, the `SceneAnalysis` object (containing spatial data, features, etc.), is stored persistently, usually via the `MetadataManager`.
+- Downstream components in the P2P pipeline (like the `/api/camera-path` route and ultimately the `SceneInterpreter`) retrieve the stored `SceneAnalysis` via the `MetadataManager` to get the necessary geometric context for path generation. 
+- The `EnvironmentalAnalyzer` also uses the `SceneAnalysis` data as input when it runs (typically when the user locks the scene).
+
 ```typescript
-// Analyze scene and prepare for environmental analysis
-const sceneAnalysis = await sceneAnalyzer.analyzeScene(glbFile);
+// Conceptual Flow:
+// 1. Model Upload/Processing Time:
+// const sceneAnalysis = await sceneAnalyzer.analyzeScene(glbFile);
+// await metadataManager.storeSceneAnalysis(modelId, sceneAnalysis);
 
-// Pass to environmental analyzer
-const environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis);
-
-// Combine results
-const comprehensiveAnalysis = {
-  ...sceneAnalysis,
-  environment: environmentalAnalysis,
-  startPosition: sceneAnalysis.optimalStartPosition,
-  animation: sceneAnalysis.animationConstraints
-};
+// 2. Later, during Path Generation request (/api/camera-path):
+// const sceneAnalysis = await metadataManager.getSceneAnalysis(modelId);
+// const environmentalAnalysis = await environmentalAnalyzer.analyzeEnvironment(sceneAnalysis, currentCameraState); 
+// const commands = sceneInterpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, ...);
 ```
 
 ## Usage
 
 ### Basic Usage
+*Note: While the SceneAnalyzer can be instantiated and used directly as shown below, within the V3 P2P pipeline, it is typically invoked once during model upload/processing. The resulting `SceneAnalysis` object is then stored via the `MetadataManager` and retrieved by the API route when needed for path generation.*
+
 ```typescript
 import { SceneAnalyzerImpl } from '@/features/p2p/scene-analyzer/SceneAnalyzer';
 import { SceneAnalyzerConfig } from '@/types/p2p';
@@ -102,12 +105,6 @@ const safety = await analyzer.calculateSafetyBoundaries(analysis);
 
 // Get scene understanding
 const understanding = await analyzer.getSceneUnderstanding(analysis);
-
-// Get optimal start position
-const startPosition = await analyzer.getOptimalStartPosition(analysis);
-
-// Get animation constraints
-const animationConstraints = await analyzer.getAnimationConstraints(analysis);
 ```
 
 ### Advanced Usage
@@ -121,12 +118,6 @@ if (!validation.isValid) {
 // Get performance metrics
 const metrics = analyzer.getPerformanceMetrics();
 console.log('Analysis duration:', metrics.duration);
-
-// Validate start position
-const startPositionValidation = analyzer.validateStartPosition(analysis, startPosition);
-
-// Validate animation path
-const animationValidation = analyzer.validateAnimationPath(analysis, animationPath);
 ```
 
 ## Implementation Details
@@ -139,24 +130,18 @@ const animationValidation = analyzer.validateAnimationPath(analysis, animationPa
 - Supports files up to 100MB
 - Handles large files efficiently (tested with 21MB+ files)
 - Reports accurate file sizes and formats
-- Optimizes start position calculation
-- Validates animation paths
 
 ### 2. Spatial Analysis
 - Calculates bounding volumes using Three.js Box3 and Sphere
 - Identifies key reference points based on spatial bounds
 - Detects symmetry planes
 - Assesses scene complexity based on geometry metrics
-- Determines optimal start positions
-- Calculates animation path boundaries
 
 ### 3. Safety Calculations
 - Validates safe distances
 - Enforces height restrictions
 - Identifies restricted zones
 - Calculates movement boundaries
-- Validates start positions
-- Ensures animation path safety
 
 ## Performance Considerations
 
@@ -165,16 +150,12 @@ const animationValidation = analyzer.validateAnimationPath(analysis, animationPa
 - Streaming for large files
 - Progress reporting
 - Error recovery
-- Start position optimization
-- Animation path optimization
 
 ### 2. Analysis Optimization
 - Parallel processing where possible
 - Caching of intermediate results
 - Resource cleanup
 - Memory management
-- Start position caching
-- Animation path caching
 
 ## Testing
 The analyzer includes comprehensive tests covering:
@@ -184,8 +165,6 @@ The analyzer includes comprehensive tests covering:
 - Performance metrics
 - Error handling
 - Integration testing
-- Start position validation
-- Animation path validation
 
 ## Future Improvements
 1. **Analysis Enhancement**
@@ -193,16 +172,12 @@ The analyzer includes comprehensive tests covering:
    - Better symmetry analysis
    - Improved material understanding
    - Enhanced safety calculations
-   - Improved start position optimization
-   - Enhanced animation path analysis
 
 2. **Performance Optimization**
    - Faster processing
    - Better memory usage
    - Improved caching
    - Enhanced error recovery
-   - Optimized start position calculation
-   - Optimized animation path validation
 
 ## Related Components
 - Environmental Analyzer

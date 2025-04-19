@@ -103,8 +103,7 @@ This issue affects all storage buckets in the application:
 Security policy updates should be completed before the application is deployed to production or made available to end-users.
 
 ## Related Documentation
-- [Authentication Documentation](../auth/README.md)
-- [Technical Debt](../../TECHNICAL_DEBT.md)
+- [Technical Debt](../../TECHNICAL_DEBT.md) - Known issues and planned improvements (Verify link/file existence)
 - [Development Setup](../../DEVELOPMENT_SETUP.md)
 
 ---

@@ -115,4 +115,3 @@ Common issues:
 - [Development Roadmap](./DEVELOPMENT_ROADMAP.md)
 - [Branch Strategy](./BRANCH_STRATEGY.md)
 - [Troubleshooting Guide](./troubleshooting/README.md)
-- [Authentication Documentation](./features/auth/README.md)

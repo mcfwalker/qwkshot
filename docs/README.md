@@ -21,15 +21,13 @@ This directory contains the comprehensive documentation for the Modern 3D Viewer
 * **[Model Viewing](./features/model-viewing/)**: 
   - Model loading and rendering
   - Viewport controls and interactions
-* **[Authentication](./features/authentication/)**: User authentication and authorization
 * **[Storage](./features/storage/)**: Data persistence and management
 * **[Export](./features/export/)**: Model and animation export capabilities
 
 ## Development Guidelines
 ### Process & Standards
-* **[Contributing Guidelines](./development/contributing.md)**: Code standards and documentation patterns
-* **[Branch Strategy](./development/branch-strategy.md)**: Git workflow and branch management
-* **[Testing Strategy](./development/testing-strategy/)**: Testing approach and infrastructure
+* **[Contributing Guidelines](./development/CONTRIBUTING.md)**: Code standards and documentation patterns
+* **[Branch Strategy](./development/BRANCH_STRATEGY.md)**: Git workflow and branch management
 
 ### Setup & Maintenance
 * **[Development Environment](./development/)**: Local setup and configuration

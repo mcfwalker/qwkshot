@@ -11,7 +11,7 @@ This README serves as the central index for all project documentation.
 *   **[Session Initialization Guide](./GET_STARTED.md)**: **START HERE** for initiating a new development session (especially with AI assistant).
 *   **[End of Session Checklist](./END_SESSION.md)**: **USE THIS** checklist to properly wrap up a development session.
 *   **[Branch Strategy](./BRANCH_STRATEGY.md)**: Git workflow and branch management guidelines.
-*   **[Contributing Guidelines](./docs/CONTRIBUTING.md)**: Code contribution standards and documentation patterns/templates.
+*   **[Contributing Guidelines](./docs/development/CONTRIBUTING.md)**: Code contribution standards and documentation patterns/templates.
 
 ### 📋 Project Planning & Status
 *   **[Product Requirements (PRD)](./PRD.md)**: High-level goals, target users, core features, and requirements.

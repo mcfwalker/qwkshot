@@ -1,11 +1,17 @@
-# UI Documentation
+# UI Documentation & Assets
 
-This directory contains documentation related to the Modern 3D Viewer's user interface design, implementation, and evolution.
+This directory contains documentation related to the user interface design, components, and specific UI features, as well as related assets.
 
-## Contents
+## Documentation
 
-### Current Documents
-- [UI Revamp 2025](./UI_REVAMP_2025-03-25-1114.md) - Comprehensive plan for the 2025 UI restructuring, including tab-based navigation and improved workflow organization
+*   **[UI Revamp Plan](./UI_REVAMP.md)**: Details and status for the UI modernization effort (from March 2025).
+*   **[Model Thumbnails](./MODEL_THUMBNAILS.md)**: Documentation for the model thumbnail generation and display feature.
+*   **[General UI/UX Notes](./README.md)**: (This file) Overview and potentially general UI principles or links.
+
+## Assets
+
+*   **[Improved Toast Messages](./Improved_Toast_Messages.csv)**: Data related to toast message content.
+*   **[Slimmed Toast Messages](./slimmed_toast_messages.csv)**: Data related to toast message content.
 
 ## UI Design Principles
 

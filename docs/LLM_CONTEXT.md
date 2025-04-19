@@ -29,7 +29,7 @@ Modern 3D Viewer is a web application built with Next.js, React, and Three.js th
 5. **AI Integration**: Analysis and generation of 3D content using AI services
 
 ## Development Workflow
-- Feature branches created from `stable` branch
+- Feature branches created from `main` branch
 - Regular rebasing to keep branches up-to-date
 - Development server runs in background mode (`npm run dev &`)
 - Technical debt and issues tracked in project management software
@@ -84,7 +84,7 @@ Modern 3D Viewer is a web application built with Next.js, React, and Three.js th
   - Cache issues: Clear `.next` directory with `rm -rf .next`
 
 ## Important Context for LLM
-1. **Branch Strategy**: Feature branches created from `stable`, regular rebasing
+1. **Branch Strategy**: Feature branches created from `main`, regular rebasing
 2. **Development Environment**: Server runs in background mode (`npm run dev &`)
 3. **Authentication**: Supabase auth with session persistence
 4. **Testing**: Vitest with React Testing Library, JSDOM environment

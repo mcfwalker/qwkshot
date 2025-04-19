@@ -349,9 +349,14 @@ export async function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl
 
-  // Protect specific routes/patterns
-  if (!session && (pathname.startsWith('/viewer') || pathname.startsWith('/library') || pathname.startsWith('/generate'))) {
-      // Redirect to sign-in, preserving the intended destination
+  // Defined Protected Routes:
+  // - /library/*
+  // - /viewer/*
+  // - /generate/* 
+  // - Any route within (protected) group
+  const isProtectedRoute = pathname.startsWith('/viewer') || pathname.startsWith('/library') || pathname.startsWith('/generate');
+
+  if (!session && isProtectedRoute) {
       const redirectUrl = req.nextUrl.clone()
       redirectUrl.pathname = '/auth/sign-in'
       redirectUrl.searchParams.set(`redirectTo`, pathname)
@@ -434,7 +439,7 @@ export async function GET(request: NextRequest) {
 - Perform environment variable validation on startup
 - Verify model ownership in database functions
 
-*(See also: [Authentication Feature Documentation](./features/auth/README.md), [Storage Security Documentation](./features/storage/README.md))*
+*(See also: [Storage Security Documentation](../features/storage/README.md))*
 
 ## 4. API Structure
 
@@ -479,38 +484,48 @@ export async function GET(request: NextRequest) {
 ## 5. Feature Specifications (Data Structures)
 
 ### 5.1. P2P Pipeline Architecture
-- **Overview:** Translates user prompts into camera commands, leveraging scene and environmental context.
+- **Overview:** Translates user prompts into camera commands, leveraging scene and environmental context via the OpenAI Assistants API and a deterministic Scene Interpreter.
 - **Client Interaction:**
     - **Model Processing/Saving:** Client (`ModelLoader`) runs analysis via `P2PPipeline.processModel`, then calls `prepareModelUpload` Server Action with results and file info. Client uploads file directly to storage using signed URL from action response.
     - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state and `modelHeight` (as `modelOffset`).
-    - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID (and optionally `retryContext` on subsequent tries).
+    - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID.
 - **Backend Flow (`/api/camera-path`):**
-    1. Route handler receives request (checks for `retryContext`).
-    2. Initializes server-side components (`MetadataManager`, `PromptCompiler`, `LLMEngine`, `SceneInterpreter`, `EnvironmentalAnalyzer`).
-    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including `modelOffset`).
-    4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data.
-    5. Constructs `currentCameraState` from fetched environmental metadata.
-    6. Calls `EnvironmentalAnalyzer.analyzeEnvironment` with deserialized `SceneAnalysis` and `currentCameraState` (to calculate camera-relative metrics).
-    7. Constructs `retryFeedback` string if applicable.
-    8. Calls `PromptCompiler.compilePrompt` with scene/env analysis, other metadata, camera state, duration, and optional `retryFeedback`.
-    9. Calls `LLMEngine.generatePath` with compiled prompt.
-   10. Calls `SceneInterpreter.interpretPath` with LLM response.
-   11. Calculates adjusted bounding box using `environmentalAnalysis` and fetched `modelOffset`.
-   12. Calls `SceneInterpreter.validateCommands` passing the generated commands and the adjusted bounding box.
-   13. If validation fails due to bounding box violation, returns specific 422 error.
-   14. Otherwise, returns final `CameraCommand[]` to client (or other error).
+    1. Route handler receives request.
+    2. Initializes server-side components (`MetadataManager`).
+    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including camera state and `modelOffset`).
+    4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data to get `SceneAnalysis` object.
+    5. Constructs `initialCameraState` from fetched environmental metadata.
+    6. Instantiates the `OpenAIAssistantAdapter` (LLM Engine implementation) with necessary configuration (API Key, Assistant ID).
+    7. Calls `adapter.generatePlan(prompt, duration)`, which handles interaction with the OpenAI Assistants API:
+        - Creates a thread.
+        - Adds the user message (prompt).
+        - Creates and polls a run using the configured Assistant ID.
+        - The Assistant uses its instructions and the associated Motion KB file (via Retrieval) to generate a structured `MotionPlan` JSON.
+        - The adapter parses and validates the `MotionPlan` JSON response.
+    8. Instantiates the `SceneInterpreterImpl`.
+    9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
+        - Processes the `MotionPlan` steps sequentially.
+        - Resolves targets (including spatial references like `object_top_center`).
+        - Calculates distances based on `destination_target` parameter (if present) or qualitative/numeric `distance`.
+        - Applies constraints and easing.
+        - Generates `CameraCommand[]` (keyframes).
+   10. Calculates adjusted bounding box using `sceneAnalysis.spatial.bounds` and fetched `modelOffset` from `environmentalMetadata`.
+   11. Calls `interpreter.validateCommands` passing the generated commands and the adjusted bounding box.
+   12. If validation fails due to bounding box violation, returns specific 422 error.
+   13. Otherwise, returns final `CameraCommand[]` to client (or other error).
 
 ## 6. External Integrations
 
 ### 6.1. AI Services
-- **Google Generative AI:** Used for camera path generation and scene analysis
-  - Integration via `@google/generative-ai` package
-  - Handles prompt construction and response parsing
-  - Manages API errors and rate limits
+- **OpenAI Assistants API:** Used for camera path *planning*.
+  - Integration via `openai` package (using Assistants API features: threads, runs, messages, retrieval).
+  - An `OpenAIAssistantAdapter` implements the internal `MotionPlannerService` interface.
+  - Adapter handles interaction, polling, and parsing the structured `MotionPlan` response based on the configured Assistant ID and its associated Motion KB.
+  - Manages API errors and rate limits (basic handling).
 
-- **OpenAI:** Used for specific AI features
-  - Integration via `openai` package
-  - Handles API authentication and error management
+- **Google Generative AI:** Potentially used for other AI features like scene analysis or initial model generation concepts (Verify specific usage).
+  - Integration via `@google/generative-ai` package.
+  - Handles prompt construction and response parsing for its specific tasks.
 
 ### 6.2. Model Generation Service
 - **Purpose:** Convert images to 3D models.
@@ -567,40 +582,57 @@ export async function checkModelGenerationStatus(jobId: string): Promise<JobStat
 
 ```typescript
 // Example test structure for P2P components
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { SceneInterpreterImpl } from '@/features/p2p/scene-interpreter/interpreter';
+import { OpenAIAssistantAdapter } from '@/lib/motion-planning/providers/openai-assistant';
 
-describe('P2P Pipeline Integration', () => {
-  let pipeline: P2PPipeline;
-  let sceneAnalyzer: SceneAnalyzer;
-  let environmentalAnalyzer: EnvironmentalAnalyzer;
-  let promptCompiler: PromptCompiler;
+describe('P2P Pipeline Integration (Conceptual Example)', () => {
+  let sceneInterpreter: SceneInterpreterImpl;
+  let assistantAdapter: OpenAIAssistantAdapter;
+  // Mock dependencies like MetadataManager, OpenAI API client
+  const mockOpenAI = { /* ... mock methods ... */ };
+  const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  const mockAdapterConfig = { apiKey: 'test', assistantId: 'test-id' };
+  const mockInterpreterConfig = { /* ... */ };
 
   beforeEach(() => {
-    // Initialize components with mock data
-    sceneAnalyzer = new SceneAnalyzerImpl(mockConfig, mockLogger);
-    environmentalAnalyzer = new EnvironmentalAnalyzerImpl(mockConfig, mockLogger);
-    promptCompiler = new PromptCompilerImpl(mockConfig);
-    pipeline = new P2PPipelineImpl(
-      mockConfig,
-      mockLogger,
-      sceneAnalyzer,
-      environmentalAnalyzer,
-      promptCompiler,
-      mockLLMEngine,
-      mockSceneInterpreter
-    );
+    // Reset mocks
+    vi.clearAllMocks();
+
+    // Initialize components with mocks
+    assistantAdapter = new OpenAIAssistantAdapter(mockAdapterConfig);
+    // Potentially mock internal openai client if needed for specific tests
+    // assistantAdapter.openai = mockOpenAI as any; 
+
+    sceneInterpreter = new SceneInterpreterImpl(mockInterpreterConfig, mockLogger);
+    // Mock MetadataManager, etc.
   });
 
-  describe('Scene Analysis', () => {
-    it('should analyze GLB file correctly', async () => {
-      const analysis = await sceneAnalyzer.analyzeScene(mockGLBFile);
-      expect(analysis.spatial.bounds).toBeDefined();
-      expect(analysis.features).toBeDefined();
-    });
+  it('should generate commands from a prompt', async () => {
+    // Arrange
+    const userPrompt = "Orbit left 90 degrees";
+    const mockMotionPlan: MotionPlan = { steps: [/* ... */] }; 
+    const mockCameraCommands: CameraCommand[] = [/* ... */];
+
+    // Mock adapter response
+    const generatePlanSpy = vi.spyOn(assistantAdapter, 'generatePlan').mockResolvedValue(mockMotionPlan);
+    // Mock interpreter response
+    const interpretPathSpy = vi.spyOn(sceneInterpreter, 'interpretPath').mockReturnValue(mockCameraCommands);
+    
+    // Act (Simulate API route logic)
+    // 1. Call adapter
+    const motionPlan = await assistantAdapter.generatePlan(userPrompt);
+    // 2. Call interpreter (using mock scene/env data)
+    const commands = sceneInterpreter.interpretPath(motionPlan, mockSceneAnalysis, mockEnvAnalysis, mockInitialState);
+
+    // Assert
+    expect(generatePlanSpy).toHaveBeenCalledWith(userPrompt, undefined); // Or with duration
+    expect(interpretPathSpy).toHaveBeenCalledWith(motionPlan, mockSceneAnalysis, mockEnvAnalysis, mockInitialState);
+    expect(commands).toEqual(mockCameraCommands);
+    // ... other assertions
   });
 
-  // ... rest of test examples ...
+  // ... other tests for specific interpreter logic, adapter error handling etc. 
 });
 ```
 

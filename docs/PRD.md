@@ -80,62 +80,20 @@ graph TD
 - Basic export functionality (e.g., screenshots).
 
 ### B. AI Camera Path Generation
-- **Prompt-to-Path (p2p) Pipeline**
-  - **Prompt Compiler**
-    - Natural language instruction processing
-    - Scene context integration
-    - Structured prompt formatting
-    - Token optimization
-    - Metadata tracking
-  - **LLM Engine**
-    - Intent parsing and understanding
-    - Motion segment composition (push-in, orbit, crane)
-    - Spatial reasoning and constraints
-    - Camera framing optimization
-    - Structured JSON response generation
-  - **Scene Interpreter**
-    - Motion segment parsing and validation
-    - Advanced interpolation (CatmullRom, Bezier)
-    - LookAt vector management
-    - Duration and easing control
-    - Safety validation and bounds checking
-  - **Three.js Viewer Integration**
-    - Camera animation system
-    - Path preview visualization
-    - Interactive playback controls
-    - Export capabilities
-  - **Feedback & Logging**
-    - Input/output logging
-    - Playback metadata collection
-    - User feedback system
-    - Training data collection
-    - Model health monitoring
+- **Concept:** Allow users to generate smooth, cinematic camera paths based on natural language prompts.
+- **Core Functionality:**
+  - Input: Text prompt describing desired camera movement (e.g., "Orbit the model slowly", "Zoom in on the top feature").
+  - Process: Utilize an AI Assistant (currently OpenAI Assistants API) with a custom Motion Knowledge Base and scene context to generate a structured `MotionPlan`.
+  - Execution: A deterministic `SceneInterpreter` uses the `MotionPlan` and detailed local scene/environmental context to calculate precise camera keyframes, enforcing constraints.
+  - Output: Smooth camera animation played back in the viewer.
+- **Key User Features:**
+  - Natural language control.
+  - Scene-aware path generation (respecting boundaries).
+  - Interactive preview.
+  - (Future) Path editing capabilities.
+  - (Future) Export options.
 
-- **Key Features**
-  - Natural language to camera path translation
-  - Cinematic-quality camera movements
-  - Scene-aware path generation
-  - Safety constraints and validation
-  - Interactive preview and editing
-  - Export to video or animation formats
-
-- **Technical Requirements**
-  - Support for multiple LLM providers
-  - Real-time path generation
-  - Smooth camera interpolation
-  - Collision avoidance
-  - Performance optimization
-  - Error recovery and fallbacks
-
-- **User Experience**
-  - Intuitive prompt interface
-  - Real-time path preview
-  - Interactive path editing
-  - Multiple animation styles
-  - Export options
-  - Feedback collection
-
-*(For detailed pipeline architecture and component specifications, see the [Path-to-Path Pipeline Documentation](./features/p2p/ARCHITECTURE.md))*
+*(For detailed technical architecture and current implementation, see the [P2P Pipeline Architecture](../features/camera-animation/ARCHITECTURE.md))*
 
 ### C. AI Model Generation
 - Capability to generate 3D models from user-provided images (Image-to-3D).

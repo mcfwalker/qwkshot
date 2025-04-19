@@ -1,291 +1,147 @@
-# Path-to-Path (p2p) Pipeline Architecture
+# 📽️ Prompt-to-Path Pipeline Overview (v3 - Assistants API Refactor)
 
-## Overview
-The Path-to-Path (p2p) pipeline is a sophisticated system that translates natural language instructions into dynamic camera paths within a Three.js scene. This document outlines the overall architecture and component interactions.
+**Status:** Reflects the architecture after completing the core Phase 3 refinements and initial Phase 4 E2E testing/bug fixing.
 
-> 🔄 For current implementation details and status, see [P2P Pipeline Overview v2](./P2P_OVERVIEW_v2.md)
+## High-Level Explanation
 
-## Pipeline Components
+Our Prompt-to-Path (P2P) pipeline translates a user's natural language request (e.g., "Orbit the model slowly") into a smooth, executable camera animation within the 3D viewer.
 
-### Component Implementation Status
-Current implementation status and detailed flow diagrams are maintained in P2P_OVERVIEW_v2.md. This document focuses on architectural principles, requirements, and guidelines.
+The process leverages the OpenAI Assistants API for high-level planning and a local "Scene Interpreter" for precise geometric execution:
 
-### 1. Scene Analyzer
-- **Purpose**: Analyze and understand 3D scene structure and spatial relationships
-- **Key Features**:
-  - GLB file parsing and analysis
-  - Spatial reference point extraction
-  - Safety boundary calculation
-  - Basic scene understanding
-- **Status**: ✅ Fully functional
-- **Interface**: See [Scene Analyzer Documentation](./scene-analyzer/README.md)
+1.  The user provides a **text prompt**.
+2.  The backend interacts with a configured **OpenAI Assistant** (via our `OpenAIAssistantAdapter`).
+3.  The Assistant consults its **Motion Knowledge Base (KB)** (a file defining available camera moves like "zoom", "orbit", "pan", and their parameters) using OpenAI's Retrieval tool.
+4.  The Assistant generates a structured **`MotionPlan`** (a JSON object detailing a sequence of steps, like `[{ type: "orbit", direction: "left", angle: 90, duration_ratio: 1.0 }]`).
+    *   For "move to destination" requests (e.g., 'pedestal to the top'), the Assistant includes a `destination_target` parameter (e.g., `object_top_center`) instead of a `distance` parameter.
+5.  This `MotionPlan` is passed to the **Scene Interpreter** on our backend.
+6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**.
+7.  The Scene Interpreter processes each step in the `MotionPlan`:
+    *   It uses the `type` (e.g., "orbit") to select the correct internal logic.
+    *   It uses the step's `parameters` (e.g., direction, angle) combined with the local scene/environmental context to calculate precise camera movements.
+    *   It handles qualitative distance inputs (e.g., "close", "a_bit") for dolly/truck/pedestal by calculating context-aware numeric distances using a centralized helper (`_calculateEffectiveDistance`).
+    *   **It handles 'move to destination' requests (e.g., 'pedestal to the top') by checking for the `destination_target` parameter. If present, it calculates the required distance to reach that target's plane/level along the motion axis, overriding any qualitative/numeric `distance` parameter provided by the Assistant.**
+    *   It enforces constraints (like not colliding with the model bounding box or exceeding maximum camera distance/height) during calculation, using dynamic offsets for collision avoidance.
+    *   It determines appropriate easing based on parameters (`speed`, `easing`), potentially overriding easing based on the speed hint.
+8.  The Interpreter outputs a list of **`CameraCommand[]`** objects, typically representing **keyframes** (often a start and end state for each logical motion step, or multiple intermediate steps for smoother rotations like orbits).
+9.  These commands are sent to the frontend client.
+10. A dedicated **AnimationController** component within the React Three Fiber render loop reads these commands and smoothly interpolates the Three.js camera between keyframes, producing the final animation.
 
-### 2. Environmental Analyzer
-- **Purpose**: Analyze environmental factors and constraints
-- **Key Features**:
-  - Lighting analysis and optimization
-  - Material property analysis
-  - Environmental constraint detection
-  - Performance optimization
-- **Status**: ⚠️ Functional but with storage issues
-- **Known Issues**:
-  - Data persistence challenges
-  - Complex nested structure handling
-  - Integration with metadata storage
-- **Interface**: See [Environmental Analyzer Documentation](./environmental-analyzer/README.md)
+This architecture separates the AI's natural language understanding and planning from the deterministic, context-aware geometric execution, improving reliability and control.
 
-### 3. Metadata Manager
-- **Purpose**: Handle user-specified metadata and model information
-- **Key Features**:
-  - User metadata storage and retrieval
-  - Model orientation handling
-  - Feature point tracking
-  - Database integration (Supabase)
-  - Scene analysis data persistence
-- **Status**: ✅ Core functionality complete
-- **Recent Improvements**:
-  - Enhanced data persistence reliability
-  - Optimized database integration
-  - Improved error handling
-- **Known Issues**:
-  - Analysis data storage optimization needed
-- **Interface**: See [Metadata Manager Documentation](./metadata-manager/README.md)
-
-### 4. Prompt Compiler
-- **Purpose**: Transform user instructions into optimized LLM prompts
-- **Key Features**:
-  - Natural language processing
-  - Scene context integration
-  - Token optimization
-  - Metadata tracking
-- **Status**: ✅ Fully functional
-- **Interface**: See [Prompt Compiler Documentation](./prompt-compiler/README.md)
-
-### 5. LLM Engine ✅ (Substantially Complete)
-- **Purpose**: Manage interaction with external LLM services
-- **Key Features**:
-  - Provider communication abstraction (`ThinLLMEngine`)
-  - Standardized API request/response handling (`LLMResponse`)
-  - Centralized error management
-- **Status**: ✅ Substantially Complete (Refactor done, provider selection deferred)
-- **Current Implementation**: 
-    - `ThinLLMEngine` class encapsulates provider calls.
-    - Takes `CompiledPrompt`.
-    - Uses helpers from `lib/llm/providers`.
-    - Returns `LLMResponse<CameraPath>`.
-    - Integrated into API route.
-- **Interface**: See [LLM Engine Documentation](./llm-engine/README.md) (Needs Update)
-
-### 6. Scene Interpreter ✅ (Substantially Complete)
-- **Purpose**: Convert LLM output (`CameraPath`) into executable camera commands
-- **Key Features**:
-  - Path processing (smoothing/easing structure added, execution is client-side)
-  - Detailed input path validation (incl. speed, bounds, etc.)
-  - Basic output command validation structure
-  - Safety constraint enforcement (partially implemented via validation, incl. bounding box check with known limitations)
-- **Status**: ✅ Substantially Complete (Core structure done, refinement TODOs remain)
-- **Current Implementation**: 
-    - `SceneInterpreterImpl` class (Note: Previous docs referenced `CoreSceneInterpreter`).
-    - `interpretPath` method processes `CameraPath` into `CameraCommand[]`.
-    - `validateInputPath` performs detailed checks.
-    - Integrated into API route after LLM Engine.
-- **Interface**: See [Scene Interpreter Documentation](./scene-interpreter/README.md) (Needs Update)
-
-### 7. Client-Side Animation & UI (Formerly Viewer Integration)
-- **Purpose**: Receive camera commands, manage playback state, execute animation within R3F context, and handle UI interactions.
-- **Key Components & Features**:
-  - **`Viewer` Component:** 
-      - Renders the R3F `<Canvas>`.
-      - Holds lifted animation state (`isPlaying`, `commands`, `progress`, `duration`, `playbackSpeed`).
-      - Holds core refs (`cameraRef`, `controlsRef`, `canvasRef`, `modelRef`).
-      - Passes state/refs/callbacks down to child components.
-  - **`AnimationController` Component (New):**
-      - Rendered inside `<Canvas>`.
-      - Uses `useFrame` hook for synchronized frame-by-frame execution.
-      - Performs interpolation (lerp) and applies easing based on `CameraCommand[]`.
-      - Updates `cameraRef` directly (`position.copy`, `lookAt`).
-      - Manages internal animation timing (`startTimeRef`, `progressRef`).
-      - Handles playback speed adjustment.
-      - Calls `onProgressUpdate` and `onComplete` callbacks.
-      - Manages `OrbitControls.enabled` state during playback.
-  - **`CameraAnimationSystem` Component:**
-      - Renders UI panels (Shot Caller, Playback).
-      - Handles user inputs (prompt, duration, speed slider, play/pause, download, lock buttons).
-      - Displays animation progress and state.
-      - Communicates user actions and receives state via props/callbacks from `Viewer`.
-- **Status**: ✅ Core playback/recording functional using `useFrame`. UI adapted. State lifted.
-- **Recent Improvements**:
-  - Refactored animation execution to use R3F `useFrame` hook via `AnimationController`.
-  - Lifted animation state/refs to `Viewer` component.
-  - Resolved visual playback glitches.
-  - Resolved static video recording issue (by forcing render in `useFrame`).
-- **Known Issues**:
-  - Lock state and animation playback coordination (Lock/Validation conflict).
-  - Slider scrubbing needs reimplementation after state lifting.
-  - Easing function refinement/testing needed.
-  - Hover states and minor UI cleanup pending.
-- **Interface**: N/A (Internal component structure)
-
-### 8. Feedback System
-- **Purpose**: Monitor and improve pipeline performance
-- **Key Features**:
-  - Session logging
-  - User feedback collection
-  - Health monitoring
-  - Training data preparation
-- **Status**: 🚧 Planned
-- **Interface**: See [Feedback System Documentation](./feedback/README.md)
-
-## Component Interactions
+## 🔄 Pipeline Data Flow (v3)
 
 ```mermaid
 graph TD
-    subgraph Current Refactored State (API Level)
-        A1[User Input] --> R1[API Route /api/camera-path]
-        R1 -- modelId --> F1[MetadataManager]
-        R1 -- instruction, context --> C1[PromptCompiler]
-        C1 --> R1
-        R1 -- CompiledPrompt --> E1[LLM Engine]
-        E1 --> P1[LLM Provider]
-        P1 --> E1
-        E1 -- CameraPath --> R1
-        R1 -- CameraPath --> G1[Scene Interpreter]
-        G1 -- CameraCommand[] --> R1
-        R1 --> Client[UI / Caller]
-        
-        subgraph Placeholders/Deferred
-            X1(SceneAnalyzer Integration)
-            X2(EnvAnalyzer Integration / Refinement)
-            X3(API Authentication / RLS)
-        end
+    subgraph "User Interface (Client)"
+        UI[React UI]
+        AnimController[AnimationController <br> (R3F useFrame)]
+        ThreeJS[Three.js Camera]
     end
 
-    subgraph Target Architecture
-        A2[User Input] --> B2[Pipeline Controller]
-        B2 --> C2[Scene Analysis Layer] 
-        C2 --> D2[Metadata Manager]
-        D2 --> E2[Prompt Compiler]
-        E2 --> F2[LLM Engine]
-        F2 --> G2[Scene Interpreter]
-        G2 --> H2[Viewer]
+    subgraph "Backend (Next.js API Route)"
+        API["/api/camera-path"]
+        subgraph "LLM Engine"
+            OAIAdapter[OpenAIAssistantAdapter]
+        end
+        subgraph "Scene Interpreter"
+            Interpreter[SceneInterpreterImpl <br> (interpretPath)]
+        end
+        MetadataMgr[Metadata Manager <br> (DB Access)]
     end
+
+    subgraph "External Services"
+        OpenAI[OpenAI Assistants API <br> (GPT-4 + Retrieval) <br> **Note:** Instructions & KB <br> configured externally]
+        MotionKB[(Motion KB File)] -- Uploaded To --> OpenAI
+    end
+
+    %% Data Flow
+    UI -- "1. User Prompt, Duration, ModelID" --> API
+    API -- "2. Fetch Context (ModelID)" --> MetadataMgr
+    MetadataMgr -- "3. SceneAnalysis, EnvAnalysis, InitialCameraState" --> API
+    API -- "4. Instantiate Adapter" --> OAIAdapter
+    API -- "5. generatePlan(Prompt, Duration)" --> OAIAdapter
+    OAIAdapter -- "6. Create Thread/Run (Prompt, AssistantID)" --> OpenAI
+    OpenAI -- "7. Use KB via Retrieval" --> MotionKB
+    OpenAI -- "8. MotionPlan (JSON)" --> OAIAdapter
+    OAIAdapter -- "9. Parsed MotionPlan Object" --> API
+    API -- "10. Instantiate Interpreter" --> Interpreter
+    API -- "11. interpretPath(MotionPlan, SceneAnalysis, EnvAnalysis, InitialCameraState)" --> Interpreter
+    Interpreter -- "12. CameraCommand[]" --> API
+    API -- "13. Response: CameraCommand[]" --> UI
+    UI -- "14. Update State (isPlaying=true, commands)" --> AnimController
+    AnimController -- "15. Interpolates & Updates Camera Ref (using d3-ease)" --> ThreeJS
+    ThreeJS -- "16. Renders Updated View" --> UI
+
+    %% Styling (Optional)
+    classDef external fill:#f9f,stroke:#333,stroke-width:2px;
+    class OpenAI,MotionKB external;
+    classDef client fill:#ccf,stroke:#333;
+    class UI,AnimController,ThreeJS client;
+    classDef api fill:#cfc,stroke:#333;
+    class API,OAIAdapter,Interpreter,MetadataMgr api;
+
 ```
 
-## Data Flow (Updated)
+## 🎯 Core Components (v3 Roles)
 
-1.  **Scene/Env/Metadata Analysis** (Partially Integrated / Placeholder)
-    - GLB potentially analyzed by `SceneAnalyzer` (Placeholder in current API flow).
-    - Environmental factors potentially analyzed by `EnvironmentalAnalyzer` (Called in API flow, input is placeholder).
-    - Context data fetched via `MetadataManager`.
+*   **Scene Analyzer:** (`src/features/p2p/scene-analyzer/`) **(Retained)**
+    *   Analyzes the 3D model geometry upon upload/processing.
+    *   Generates detailed `SceneAnalysis` data (bounding box, center, features, etc.).
+    *   Output is stored via Metadata Manager. Crucial *input* for the Scene Interpreter.
+*   **Environmental Analyzer:** (`src/features/p2p/environmental-analyzer/`) **(Retained)**
+    *   Analyzes the relationship between the camera and the scene *when the user locks the view*.
+    *   Generates `EnvironmentalAnalysis` data (distances, relative positions, camera constraints based on locked view).
+    *   Output is stored via Metadata Manager. Crucial *input* for the Scene Interpreter.
+*   **Metadata Manager:** (`src/features/p2p/metadata-manager/`) **(Retained)**
+    *   Stores and retrieves `SceneAnalysis` and `EnvironmentalAnalysis` data associated with a model ID (likely in a database like Supabase).
+    *   Provides this essential *local context* to the API route, which then passes it to the Scene Interpreter.
+*   **Prompt Compiler:** (`src/features/p2p/prompt-compiler/`) **(Deprecated)**
+    *   Previously bundled scene context with the user prompt *for the LLM*.
+    *   No longer needed as context is now used locally by the Scene Interpreter, and the Assistant only receives the raw user prompt.
+*   **LLM Engine (Adapter):** (`src/lib/motion-planning/`) **(Refactored)**
+    *   Implements the `MotionPlannerService` interface.
+    *   Contains specific adapters, currently `OpenAIAssistantAdapter`.
+    *   Handles interaction with the chosen AI service (OpenAI Assistants API):
+        *   Manages threads, messages, and runs.
+        *   Ensures the correct Assistant ID and Motion KB (via Retrieval) are used.
+        *   Sends the user prompt.
+        *   Receives and parses the structured `MotionPlan` JSON.
+        *   Returns the validated `MotionPlan` object.
+*   **Scene Interpreter:** (`src/features/p2p/scene-interpreter/`) **(Major Refactor/Rewrite & Refinement)**
+    *   Receives the `MotionPlan` object AND local context (`SceneAnalysis`, `EnvironmentalAnalysis`, `initialCameraState`) from the API route.
+    *   **Does NOT call any LLM.**
+    *   Loops through `MotionPlan.steps`.
+    *   For each step:
+        *   Selects the appropriate internal generator logic based on `step.type`.
+        *   Uses `step.parameters` and local context to calculate precise camera movements.
+        *   **Handles qualitative distance parameters** (e.g., "close", "a_bit") for dolly/truck/pedestal via a centralized helper function (`_calculateEffectiveDistance`) using scene/environment data.
+        *   **Handles 'move to destination' steps** for dolly, truck, and pedestal by checking for a `destination_target` parameter (e.g., `object_top_center`). If present, it calculates the precise distance needed to reach that target's plane/level along the motion axis, overriding the standard `distance` parameter.
+        *   Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center').
+        *   Applies constraints (height, distance, bounding box via raycasting with **dynamic offset**) during calculation.
+        *   Determines appropriate **effective easing function** (using `d3-ease`) based on speed/easing parameters, potentially overriding explicit easing.
+        *   Handles duration allocation.
+    *   Outputs an array of `CameraCommand` objects representing **keyframes** (often start/end pairs per step, or multiple intermediate steps for rotations like `orbit`) defining the path.
+*   **Animation Controller (Client):** (`src/components/viewer/AnimationController.tsx`) **(Largely Unchanged Conceptually)**
+    *   Receives the `CameraCommand[]` from the API response (via UI state).
+    *   Runs within the React Three Fiber `useFrame` loop.
+    *   Interpolates the camera's `position` and `target` between command keyframes over the specified `duration` for each segment.
+    *   Looks up and applies the specified `easing` function (using `d3-ease`) during interpolation.
+    *   Updates the Three.js camera object directly.
 
-2.  **Input Processing**
-    - User provides natural language instruction.
+## 💾 Data Persistence (`models` Table Columns)
 
-3.  **Prompt Generation** (Integrated Structurally)
-    - API Route calls `PromptCompiler`.
-    - Compiler uses fetched/placeholder context to create `CompiledPrompt`.
+The pipeline relies on data stored (typically via `MetadataManager`) likely in a `models` table:
 
-4.  **LLM Interaction & Path Generation** (Integrated)
-    - API Route calls `LLM Engine` with `CompiledPrompt`.
-    - Engine uses configured provider helper to call external LLM.
-    - Engine receives response, standardizes into `CameraPath`.
+1.  **`metadata` (jsonb):** Core model info, user preferences, basic geometry derived from initial analysis.
+2.  **`scene_analysis` (jsonb):** Stores the detailed, static analysis results from `SceneAnalyzer` (intrinsic geometry, features, model-based constraints). *Crucial input for Scene Interpreter*.
+3.  **`environmental_metadata` (jsonb):** Stores the dynamic context captured when the user locks the scene (`EnvironmentalAnalyzer` output: camera state, derived constraints). *Crucial input for Scene Interpreter*.
 
-5.  **Path Interpretation & Validation** (Integrated)
-    - API Route calls `Scene Interpreter` with `CameraPath`.
-    - Interpreter validates input path (speed, bounds, etc.).
-    - Interpreter processes path (smoothing/easing structure added).
-    - Interpreter validates output commands (basic structure added).
-    - Interpreter returns `CameraCommand[]`.
+*(Note: Other columns like `id`, `name`, `user_id` etc. also exist).*
 
-6.  **Execution** (Client-Side - Refactored)
-    - API Route returns `CameraCommand[]` to client.
-    - `Viewer` component receives response (via handler like `handleNewPathGenerated`), stores `commands` and `duration` in state.
-    - `Viewer` passes `commands`, `isPlaying`, `playbackSpeed`, `cameraRef`, `controlsRef` etc. as props to `AnimationController`.
-    - `AnimationController` uses `useFrame` hook:
-        - Calculates current time/progress based on `isPlaying` and internal refs.
-        - Finds the relevant command segment(s).
-        - Interpolates `position` and `target` vectors using easing.
-        - Updates `cameraRef.current.position` and `cameraRef.current.lookAt`.
-        - Calls `onProgressUpdate` callback (updates `Viewer` state, which updates `CameraAnimationSystem` UI).
-        - Calls `onComplete` callback when finished (updates `Viewer` state).
-    - `CameraAnimationSystem` displays progress/state received from `Viewer` and handles UI interactions (play/pause etc.) which call back up to `Viewer` to modify state.
+## 📝 Notes
 
-7.  **Feedback Loop** (Planned)
-
-## Error Handling
-
-### 1. Component-Level Errors
-- Each component handles its own errors
-- Provides meaningful error messages
-- Implements fallback strategies
-- ⚠️ Enhanced error handling needed for metadata operations
-
-### 2. Pipeline-Level Errors
-- Graceful degradation
-- State preservation
-- Recovery mechanisms
-- ⚠️ Improved error tracking for data persistence issues
-
-## Performance Considerations
-
-### 1. Optimization Points
-- GLB parsing efficiency
-- Environmental analysis
-- Metadata management
-  - ⚠️ Complex structure optimization
-  - ⚠️ Database operation efficiency
-- Prompt token management
-- Path generation efficiency
-- Animation smoothness
-- Memory usage
-
-### 2. Monitoring
-- Response times
-- Error rates
-- Resource usage
-- User satisfaction
-- ⚠️ Enhanced logging for metadata operations
-
-## Development Guidelines
-
-### 1. Component Development
-- Follow TypeScript best practices
-- Implement comprehensive testing
-- Document interfaces thoroughly
-- Maintain backward compatibility
-- ⚠️ Focus on data persistence reliability
-
-### 2. Integration Testing
-- Test component interactions
-- Validate data flow
-- Check error handling
-- Measure performance
-- ⚠️ Verify metadata storage reliability
-
-## Current Focus Areas
-
-1.  **Lock/Validation Conflict Resolution:** Decide and implement strategy.
-2.  **UI Functional Testing & Refinement:** Re-implement scrubbing, test all interactions, fix hover states, finalize easing.
-3.  **API Authentication:** Implement proper auth for API routes.
-
-## Future Enhancements
-
-### 1. Planned Features
-- Advanced GLB analysis
-- Enhanced environmental understanding
-- Improved metadata management
-- Better performance monitoring
-
-### 2. Research Areas
-- GLB processing optimization
-- Environmental analysis improvement
-- User experience enhancement
-- Performance optimization
-- Database integration refinement
-
-## Related Documentation
-- [Product Requirements Document](../../PRD.md)
-- [Technical Design Document](../../TECHNICAL_DESIGN.md)
-- [Development Roadmap](../../DEVELOPMENT_ROADMAP.md)
-- [P2P Development Roadmap](./P2P_DEVELOPMENT_ROADMAP.md)
-- [Original Pipeline Overview](./P2P_OVERVIEW.md) 
+-   This v3 architecture prioritizes separating AI planning from deterministic execution.
+-   Context is used *locally* by the Scene Interpreter, not sent to the LLM.
+-   The `MotionPlan` schema is the key interface between the LLM Engine and Scene Interpreter.
+-   The `CameraCommand` schema is the key interface between the Scene Interpreter and the client-side Animation Controller, with the array now representing a sequence of keyframes defining the path segments.
+-   `d3-ease` is used for standardized easing functions.

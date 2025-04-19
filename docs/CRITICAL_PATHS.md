@@ -72,13 +72,13 @@ Ask yourself:
   - Changes here affect core application functionality
   - Must maintain consistent response formats
 
-### 3. P2P Pipeline Components (`src/features/p2p/*`)
+### 3. P2P Pipeline Components (`src/features/p2p/*`, `src/lib/motion-planning/*`)
 - **Core Components**:
   - Scene Analyzer ✅
     - Spatial analysis
     - Safety zones calculation
     - Reference point extraction
-  - Environmental Analyzer ⚠️
+  - Environmental Analyzer ✅
     - Environment bounds validation
     - Camera constraints definition
     - Movement boundaries
@@ -89,39 +89,32 @@ Ask yourself:
     - Feature point tracking
     - Environmental metadata storage and retrieval
     - Supabase integration
-  - Prompt Compiler ✅
-    - System and user prompt merging
-    - Scene metadata integration
-    - Safety constraint embedding
-  - LLM Engine 🚧
-    - Currently in API routes:
-      - Provider management and switching
-      - Response validation and parsing
-      - Error handling and retries
-    - Planned centralization of:
-      - Provider abstraction
-      - Response standardization
-      - Error management
-  - Scene Interpreter 🚧
-    - Currently in UI:
-      - Camera segment parsing
-      - Motion interpolation
-      - Safety validation
-    - Planned separation:
-      - Path processing
-      - Animation logic
-      - Safety enforcement
-  - Three.js Viewer ⚠️
-    - Camera animation execution
-    - Scene visualization
-    - Path preview and controls
+  - LLM Engine (Adapter) ✅
+    - Implemented via `OpenAIAssistantAdapter` (`src/lib/motion-planning/providers/openai-assistant.ts`)
+    - Handles interaction with OpenAI Assistants API (threads, runs, messages)
+    - Manages polling and timeouts.
+    - Parses and validates `MotionPlan` JSON response.
+    - Provider abstraction via `MotionPlannerService` interface.
+    - Handles API errors.
+  - Scene Interpreter ✅
+    - Implemented via `SceneInterpreterImpl` (`src/features/p2p/scene-interpreter/interpreter.ts`)
+    - Receives `MotionPlan` and local context (Scene/Env Analysis, Initial State).
+    - Deterministically generates `CameraCommand[]` keyframes based on plan steps.
+    - Resolves targets (including spatial references).
+    - Calculates distance based on `destination_target` or `distance` parameter.
+    - Applies constraints and easing.
+    - Validates generated commands against bounding box.
+  - Three.js Viewer / Animation Controller ✅
+    - Executes `CameraCommand[]` keyframes.
+    - Handles interpolation and easing via `d3-ease`.
+    - Manages animation playback state (play, pause, progress).
     - Lock mechanism for camera position ✅
-    - Animation playback with lock state coordination
+    - Coordinates lock state with animation playback.
   - Changes here affect the entire pipeline flow
-  - Must maintain data structure consistency between components
+  - Must maintain data structure consistency between components (`MotionPlan`, `CameraCommand`)
   - Requires thorough testing of component interactions
 
-### 4. Authentication (`src/lib/supabase-server.ts`)
+### 4. Authentication (`src/lib/supabase-server.ts`, `src/middleware.ts`)
 - Supabase client configuration
 - Session management
 - Protected route handlers
@@ -207,88 +200,66 @@ Ask yourself:
        - ✓ Maintains metadata consistency
        - ✓ Handles metadata updates
 
-   - Prompt Compiler Tests
-     - [ ] System/user prompt merging
-       - ✓ Maintains prompt hierarchy
-       - ✓ Preserves all constraints
-       - ✓ Handles multi-part prompts
-     - [ ] Scene metadata integration
-       - ✓ Includes all required context
-       - ✓ Updates with scene changes
-       - ✓ Efficient metadata formatting
-     - [ ] Token length management
-       - ✓ Stays under model limits
-       - ✓ Preserves critical information
-       - ✓ Handles truncation gracefully
-     - [ ] Safety constraint inclusion
-       - ✓ All constraints represented
-       - ✓ Priority ordering maintained
-       - ✓ Clear constraint formatting
-     - [ ] Start position context
-       - ✓ Accurate position encoding
-       - ✓ Handles all coordinate spaces
-       - ✓ Updates with position changes
+   - OpenAI Assistant Adapter Tests (`LLM Engine`)
+     - [ ] Assistant API Interaction
+       - ✓ Creates threads
+       - ✓ Adds messages
+       - ✓ Creates runs with correct Assistant ID
+       - ✓ Polls run status correctly
+       - ✓ Handles run timeouts
+     - [ ] Response Handling
+       - ✓ Parses valid MotionPlan JSON
+       - ✓ Rejects malformed JSON
+       - ✓ Handles markdown code fences in response
+       - ✓ Extracts relevant data from Assistant messages
+       - ✓ Handles missing Assistant responses
+     - [ ] Error Handling
+       - ✓ Catches and wraps OpenAI API errors (auth, rate limit, server errors)
+       - ✓ Handles failed/cancelled run statuses
+       - ✓ Throws specific error types (`AssistantInteractionError`, `MotionPlanParsingError`)
+     - [ ] Configuration
+       - ✓ Uses correct API Key and Assistant ID from config
+       - ✓ `validateConfiguration` check works
+       - ✓ `getCapabilities` check works
 
-   - LLM Engine Tests
-     - [ ] Provider switching functionality
-       - ✓ Sub-second switch time
-       - ✓ Maintains session state
-       - ✓ Handles API key validation
-     - [ ] API request/response handling
-       - ✓ < 500ms average latency
-       - ✓ Proper error propagation
-       - ✓ Handles rate limiting
-     - [ ] Response validation
-       - ✓ Catches all malformed responses
-       - ✓ Validates JSON structure
-       - ✓ Handles partial responses
-     - [ ] Error handling and recovery
-       - ✓ Auto-retries on temporary errors
-       - ✓ Graceful provider fallback
-       - ✓ Clear error messaging
-     - [ ] Keyframe data parsing
-       - ✓ Validates all required fields
-       - ✓ Handles complex paths
-       - ✓ Efficient parsing of large responses
+   - Scene Interpreter Tests (`SceneInterpreterImpl`)
+     - [ ] MotionPlan Processing
+       - ✓ Handles empty or invalid `MotionPlan` input
+       - ✓ Iterates through steps correctly
+       - ✓ Calculates step durations based on `duration_ratio` and total duration
+       - ✓ Normalizes durations correctly
+     - [ ] Motion Generators (Per Type: `static`, `zoom`, `orbit`, `pan`, `tilt`, `dolly`, `truck`, `pedestal`)
+       - ✓ Generates correct `CameraCommand[]` structure (start/end keyframes or intermediate steps for orbit)
+       - ✓ Handles valid numerical parameters correctly (angle, factor, distance)
+       - ✓ Handles qualitative `distance` parameters correctly (calls `_calculateEffectiveDistance`)
+       - ✓ Handles `destination_target` parameter correctly, overriding `distance`
+       - ✓ Handles `direction` parameters and aliases correctly
+       - ✓ Resolves `target` parameters (current_target, object_center, spatial refs, features) using `_resolveTargetPosition`
+       - ✓ Applies `speed` parameter influence on easing correctly
+       - ✓ Applies `easing` parameter correctly (uses `d3-ease`)
+     - [ ] Constraint Enforcement (Within Generators)
+       - ✓ Applies min/max height constraints
+       - ✓ Applies min/max distance constraints (relative to target/center where applicable)
+       - ✓ Applies bounding box collision avoidance using `_clampPositionWithRaycast`
+     - [ ] Helper Functions
+       - ✓ `_resolveTargetPosition` works for all target types
+       - ✓ `_calculateEffectiveDistance` provides reasonable values for qualitative terms
+       - ✓ `_clampPositionWithRaycast` correctly prevents intersection/containment
+     - [ ] Command Validation
+       - ✓ `validateCommands` correctly detects bounding box violations
 
-   - Scene Interpreter Tests (Currently in UI Layer)
-     - [ ] Camera segment parsing
-       - ✓ Supports all movement types
-       - ✓ Validates segment connections
-       - ✓ Handles complex sequences
-     - [ ] Motion interpolation
-       - ✓ 60 FPS smooth playback
-       - ✓ Accurate spline generation
-       - ✓ Maintains target focus
-     - [ ] Path safety validation
-       - ✓ No safety violations
-       - ✓ Smooth collision avoidance
-       - ✓ Maintains minimum distances
-     - [ ] Easing/duration handling
-       - ✓ Natural acceleration/deceleration
-       - ✓ Accurate timing control
-       - ✓ Smooth speed transitions
-     - [ ] Lock mechanism validation ✅
-       - ✓ Validates camera position on lock
-       - ✓ Handles lock state transitions
-       - ✓ Coordinates with animation playback
-
-   - Three.js Viewer Tests
+   - Three.js Viewer / Animation Controller Tests
      - [ ] Camera animation execution
        - ✓ 60 FPS minimum performance
        - ✓ No visual stuttering
-       - ✓ Accurate path following
+       - ✓ Accurate path following for generated `CameraCommand[]`
      - [ ] Scene rendering
        - ✓ Correct material display
        - ✓ Proper shadow rendering
        - ✓ Maintains scale accuracy
-     - [ ] Path preview functionality
-       - ✓ Real-time path updates
-       - ✓ Clear visual indicators
-       - ✓ Interactive manipulation
      - [ ] User control responsiveness
        - ✓ < 16ms input latency
-       - ✓ Smooth camera control
+       - ✓ Smooth camera control (OrbitControls)
        - ✓ Accurate position updates
      - [ ] Animation playback controls
        - ✓ Frame-accurate seeking
@@ -301,8 +272,8 @@ Ask yourself:
        - ✓ Handles unlock transitions
 
    - Feedback & Logging Tests
-     - [ ] Input/output logging
-       - ✓ Captures all interactions
+     - [ ] Input/output logging (Adapter & Interpreter)
+       - ✓ Captures prompts, plans, commands, errors
        - ✓ Proper data sanitization
        - ✓ Efficient storage usage
      - [ ] Performance metric collection
@@ -313,39 +284,31 @@ Ask yourself:
        - ✓ Instant feedback storage
        - ✓ Handles all feedback types
        - ✓ Links to relevant sessions
-     - [ ] Training data flagging
-       - ✓ Correct classification
-       - ✓ Efficient data extraction
-       - ✓ Proper version tracking
      - [ ] System health monitoring
        - ✓ Real-time status updates
        - ✓ Accurate error detection
        - ✓ Proper alert triggering
 
    - End-to-End Pipeline Tests
-     - [ ] Complete prompt-to-path flow
-       - ✓ < 5 second total processing
-       - ✓ All components integrated
-       - ✓ Proper error propagation
+     - [ ] Complete prompt-to-path flow (API Route -> Adapter -> Interpreter -> Commands)
+       - ✓ < N second total processing (Define N based on expectation)
+       - ✓ All components integrated correctly
+       - ✓ Proper error propagation (e.g., Assistant error, Interpreter error)
      - [ ] Component interaction validation
-       - ✓ Clean data handoffs
+       - ✓ Clean data handoffs (`MotionPlan`, `CameraCommand`)
        - ✓ No interface violations
-       - ✓ Proper state management
+       - ✓ Proper state management (initial state used correctly)
      - [ ] Data consistency checks
+       - ✓ Correct Scene/Env data passed to Interpreter
        - ✓ No data loss between steps
        - ✓ Proper type validation
-       - ✓ Version compatibility
-     - [ ] Error propagation handling
-       - ✓ Clear error sources
-       - ✓ Proper cleanup on failure
-       - ✓ Useful error messages
      - [ ] Performance benchmarking
        - ✓ Meets latency targets
        - ✓ Resource usage within limits
        - ✓ Scales with load
 
 3. **LLM Provider Integration**
-   - [ ] Provider switching
+   - [ ] Provider switching (If multiple adapters implemented)
    - [ ] API key validation
    - [ ] Response handling
    - [ ] Error management
