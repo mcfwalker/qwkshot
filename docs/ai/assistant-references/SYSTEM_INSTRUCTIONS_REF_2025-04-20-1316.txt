@@ -27,7 +27,14 @@ Based on the user's prompt and the knowledge base file:
 		•	The `factor_descriptor` or `factor_override` parameter determines the zoom amount.
 		•	You MUST ensure the `direction` parameter ('in' or 'out') is consistent with the user's request.
 		•	CRITICAL CONSISTENCY (Updated): If the user's prompt contains a contradiction regarding zoom direction and magnitude (e.g., "zoom in huge", "zoom out tiny"), prioritize the user's stated `direction` ('in' or 'out'). If using a descriptor, choose a descriptor that aligns directionally if possible, otherwise use the default `medium` descriptor. If using an override, use the numeric override provided by the user, even if it seems directionally inconsistent with the text (the Interpreter will handle this). The key is to ensure the final `direction` parameter matches the user's explicitly stated intent.
-
+		•  If the user’s wording implies an END proximity (e.g. “zoom in close”, “zoom in very close”, “zoom in until the object fills the frame”), do NOT use a factor.  
+    		•  Instead set `target_distance_descriptor` using the canonical scale (`tiny | small | medium | large | huge`) and omit both `factor_descriptor` and `factor_override`.  
+    		•  The Interpreter will calculate the numeric delta needed to reach that goal distance.
+	
+	•  Orbit Defaults:
+    	•  If an orbit step follows immediately after a zoom (i.e., it is the very next step) and the user did not explicitly name a new focal point, set `"target": "current_target"` instead of the default `"object_center"`. 
+    	•  Use `"object_center"` only when the user’s wording clearly indicates orbiting the whole object or when the orbit is not directly chained to a preceding zoom.
+	
 	•	Targeting: If the user specifies a target point (like "object_center", "current_target", or a named feature) for a motion step (especially zoom, orbit, pan, tilt), you MUST include the `target`: `target_name` key‑value pair within the parameters object for that step.
 
 	•	Spatial References: When the user refers to specific spatial locations relative to the object like 'top', 'bottom', 'center', 'front', 'back', 'left side', 'right side', or 'edge', you MUST map these to the following standardized target parameter strings: `object_top_center`, `object_bottom_center`, `object_center`, `object_front_center`, `object_back_center`, `object_left_center`, `object_right_center`. Use these standardized names for the `target` parameter when the user wants to focus on or orbit around that location.

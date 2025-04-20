@@ -723,7 +723,8 @@ private _mapDescriptorToValue(
             factor_override: rawFactorOverride,   // NEW
             target: rawTargetName = 'current_target',
             easing: rawEasingName = DEFAULT_EASING,
-            speed: rawSpeed = 'medium'
+            speed: rawSpeed = 'medium',
+            target_distance_descriptor: rawGoalDistanceDescriptor, // NEW
           } = step.parameters;
 
           // Validate direction
@@ -757,9 +758,12 @@ private _mapDescriptorToValue(
                 direction // Pass direction for zoom factor mapping
               );
               this.logger.debug(`Zoom: Mapped factor_descriptor '${factorDescriptor}' to factor: ${effectiveFactor}`);
-            } else {
-              this.logger.error(`Zoom: Missing or invalid factor_override (${rawFactorOverride}) and factor_descriptor (${rawFactorDescriptor}). Skipping step.`);
-              continue; // Cannot proceed without factor
+            } else if (!rawGoalDistanceDescriptor) {
+              // Only error out if there is *no* goal-distance descriptor to fall back on
+              this.logger.error(
+                `Zoom: Missing factor_override (${rawFactorOverride}) and factor_descriptor (${rawFactorDescriptor}), and no target_distance_descriptor provided. Skipping step.`
+              );
+              continue;
             }
           }
           
@@ -780,11 +784,42 @@ private _mapDescriptorToValue(
           const currentDistance = vectorToTarget.length();
           let newDistance: number;
           
-          // IMPORTANT: Ensure effectiveFactor aligns with direction conceptually.
-          // _mapDescriptorToValue already handles basic directional alignment and clamping.
-          // Here, we just use the factor regardless of direction name, as the factor itself dictates the movement.
-          newDistance = currentDistance * effectiveFactor; 
+          // --- NEW: Compute factor from goal‑distance descriptor if provided and factor still undefined ---
+          if (effectiveFactor === null) {
+              const goalDescriptor = this._normalizeDescriptor(rawGoalDistanceDescriptor);
+              if (goalDescriptor) {
+                  const goalDistance = this._mapDescriptorToGoalDistance(goalDescriptor, sceneAnalysis);
+                  const delta = currentDistance - goalDistance;
+                  if (Math.abs(delta) < 1e-6) {
+                      this.logger.debug(`Zoom: Already at goal distance for descriptor '${goalDescriptor}'. Generating static command.`);
+                      commands.push({
+                        position: currentPosition.clone(),
+                        target: currentTarget.clone(),
+                        duration: stepDuration > 0 ? stepDuration : 0.1,
+                        easing: 'linear'
+                      });
+                      // Skip rest of zoom logic for this step
+                      continue;
+                  }
+                  effectiveFactor = goalDistance / currentDistance;
+                  this.logger.debug(`Zoom: Goal descriptor '${goalDescriptor}' → goalDist=${goalDistance.toFixed(3)}, current=${currentDistance.toFixed(3)}, factor=${effectiveFactor.toFixed(3)}`);
+                  // Ensure factor moves in the requested direction
+                  if (direction === 'in' && effectiveFactor >= 1.0) {
+                      effectiveFactor = 0.99; // Minimal inwards move
+                  } else if (direction === 'out' && effectiveFactor <= 1.0) {
+                      effectiveFactor = 1.01; // Minimal outwards move
+                  }
+              }
+          }
+
+          if (effectiveFactor === null) {
+              this.logger.error(`Zoom: Missing effective factor (goal descriptor '${rawGoalDistanceDescriptor}', factor_override '${rawFactorOverride}', factor_descriptor '${rawFactorDescriptor}'). Skipping step.`);
+              continue;
+          }
           
+          // --- Compute newDistance from the resolved factor ---
+          newDistance = currentDistance * effectiveFactor;
+
           // Avoid division by zero or moving to the exact target point if already there
           if (currentDistance < 1e-6) {
               this.logger.warn('Zoom target is effectively at the current camera position. Cannot zoom further. Keeping position static.');
@@ -928,13 +963,16 @@ private _mapDescriptorToValue(
           }
           // Note: No need to log target/easing defaults as they are common fallbacks.
           
-          // 1. Resolve target
+          // 1. Resolve target / orbit center
           let orbitCenter: Vector3;
-          if (targetName === 'object_center' && sceneAnalysis?.spatial?.bounds?.center) {
+          if (targetName === 'current_target') {
+            orbitCenter = currentTarget.clone();
+            this.logger.debug('Orbit target resolved to current target.');
+          } else if (targetName === 'object_center' && sceneAnalysis?.spatial?.bounds?.center) {
             orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
             this.logger.debug(`Orbit target resolved to object center: ${orbitCenter.toArray()}`);
           } else {
-            // Default to object center if available, otherwise skip.
+            // Fall back to object center if we cannot resolve the named target
             if (sceneAnalysis?.spatial?.bounds?.center) {
                 orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
                 this.logger.warn(`Unsupported orbit target '${targetName}', defaulting to object center.`);
@@ -1667,7 +1705,7 @@ private _mapDescriptorToValue(
           }
 
           // Fallback: use explicit direction parameter if destination‑target logic
-          // didn’t set it.
+          // didn't set it.
           if (!direction) {
             const explicitDir =
               typeof rawDirection === 'string' &&
@@ -1875,7 +1913,7 @@ private _mapDescriptorToValue(
           if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
           
           // Fallback: use explicit direction parameter if destination‑target logic
-          // didn’t set it.
+          // didn't set it.
           if (!direction) {
             const explicitDir =
               typeof rawDirection === 'string' &&
