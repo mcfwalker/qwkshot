@@ -18,7 +18,11 @@ The process leverages the OpenAI Assistants API for high-level planning and a lo
 7.  The Scene Interpreter processes each step in the `MotionPlan`:
     *   It uses the `type` (e.g., "orbit") to select the correct internal logic.
     *   It uses the step's `parameters` (e.g., direction, angle) combined with the local scene/environmental context to calculate precise camera movements.
-    *   It handles qualitative distance inputs (e.g., "close", "a_bit") for dolly/truck/pedestal by calculating context-aware numeric distances using a centralized helper (`_calculateEffectiveDistance`).
+    *   **It resolves targets** (e.g., 'object_center', feature names, spatial references like 'object_top_center', and **`'current_target'`** for applicable motions like `orbit`).
+    *   **It handles qualitative distance/factor inputs:**
+        *   For `dolly`/`truck`/`pedestal`: Calculates context-aware numeric distances using `_calculateEffectiveDistance` based on `distance_descriptor`.
+        *   For `zoom`: Calculates a zoom `factor` based on `factor_descriptor`.
+        *   **NEW:** For `dolly`/`zoom`: If `target_distance_descriptor` is provided instead, calculates the necessary distance/factor to reach the goal proximity.
     *   **It handles 'move to destination' requests (e.g., 'pedestal to the top') by checking for the `destination_target` parameter. If present, it calculates the required distance to reach that target's plane/level along the motion axis, overriding any qualitative/numeric `distance` parameter provided by the Assistant.**
     *   It enforces constraints (like not colliding with the model bounding box or exceeding maximum camera distance/height) during calculation, using dynamic offsets for collision avoidance.
     *   It determines appropriate easing based on parameters (`speed`, `easing`), potentially overriding easing based on the speed hint.
@@ -114,9 +118,14 @@ graph TD
     *   For each step:
         *   Selects the appropriate internal generator logic based on `step.type`.
         *   Uses `step.parameters` and local context to calculate precise camera movements.
-        *   **Handles qualitative distance parameters** (e.g., "close", "a_bit") for dolly/truck/pedestal via a centralized helper function (`_calculateEffectiveDistance`) using scene/environment data.
-        *   **Handles 'move to destination' steps** for dolly, truck, and pedestal by checking for a `destination_target` parameter (e.g., `object_top_center`). If present, it calculates the precise distance needed to reach that target's plane/level along the motion axis, overriding the standard `distance` parameter.
-        *   Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center').
+        *   Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center', and **`'current_target'`** for applicable motions like `orbit`).
+        *   **Handles qualitative/goal parameters:**
+            *   For `dolly`/`truck`/`pedestal`: Prioritizes `destination_target`, then `distance_override`, then `distance_descriptor` (mapped via `_calculateEffectiveDistance`), then `target_distance_descriptor` (for `dolly`, mapped via `_mapDescriptorToGoalDistance`).
+            *   For `zoom`: Prioritizes `factor_override`, then `factor_descriptor` (mapped via `_mapDescriptorToValue`), then `target_distance_descriptor` (mapped via `_mapDescriptorToGoalDistance` and converted to a factor).
+        *   **Handles qualitative distance/factor inputs:**
+            *   For `dolly`/`truck`/`pedestal`: Calculates context-aware numeric distances using `_calculateEffectiveDistance` based on `distance_descriptor`.
+            *   For `zoom`: Calculates a zoom `factor` based on `factor_descriptor`.
+            *   **NEW:** For `dolly`/`zoom`: If `target_distance_descriptor` is provided instead, calculates the necessary distance/factor to reach the goal proximity.
         *   Applies constraints (height, distance, bounding box via raycasting with **dynamic offset**) during calculation.
         *   Determines appropriate **effective easing function** (using `d3-ease`) based on speed/easing parameters, potentially overriding explicit easing.
         *   Handles duration allocation.

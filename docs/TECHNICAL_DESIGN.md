@@ -505,7 +505,11 @@ export async function GET(request: NextRequest) {
     8. Instantiates the `SceneInterpreterImpl`.
     9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
         - Processes the `MotionPlan` steps sequentially.
-        - Resolves targets (including spatial references like `object_top_center`).
+        - Resolves targets (including spatial references like `object_top_center`, and `'current_target'` for orbit).
+        - Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center', and `'current_target'` for applicable motions like `orbit`).
+        - Handles qualitative/goal parameters:
+            * For `dolly`/`truck`/`pedestal`: Prioritizes `destination_target`, then `distance_override`, then `distance_descriptor` (mapped via `_calculateEffectiveDistance`), then `target_distance_descriptor` (for `dolly`, mapped via `_mapDescriptorToGoalDistance`).
+            * For `zoom`: Prioritizes `factor_override`, then `factor_descriptor` (mapped via `_mapDescriptorToValue`), then `target_distance_descriptor` (mapped via `_mapDescriptorToGoalDistance` and converted to a factor).
         - Calculates distances based on `destination_target` parameter (if present) or qualitative/numeric `distance`.
         - Applies constraints and easing.
         - Generates `CameraCommand[]` (keyframes).

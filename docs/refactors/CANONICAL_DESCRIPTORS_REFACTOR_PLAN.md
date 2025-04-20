@@ -19,53 +19,54 @@ Recent testing revealed brittleness in the V3 pipeline when handling nuanced qua
 ### Phase 1: KB Schema Update
 *   **Goal:** Update the Motion Knowledge Base schema to replace numeric/string distance/factor parameters with canonical descriptor enums and numeric overrides.
 *   **Action Items:**
-    *   [ ] **Define Parameters:**
+    *   [x] **Define Parameters:**
         *   Define `distance_descriptor: enum["tiny", "small", "medium", "large", "huge"]` (required if no override).
         *   Define `distance_override: number` (optional).
         *   Define `factor_descriptor: enum["tiny", "small", "medium", "large", "huge"]` (required if no override).
         *   Define `factor_override: number` (optional).
         *   Define `pass_distance_descriptor: enum["tiny", "small", "medium", "large", "huge"]` (optional, default medium).
         *   Define `pass_distance_override: number` (optional).
-    *   [ ] **Apply to Motions in `motion_kb.json`:**
+    *   [x] **Apply to Motions in `motion_kb.json`:**
         *   For `dolly`, `truck`, `pedestal`, `fly_away`: Replace old `distance` param with `distance_descriptor` and `distance_override`.
         *   For `zoom`: Replace old `factor` param with `factor_descriptor` and `factor_override`.
         *   For `fly_by`: Replace old `pass_distance` param with `pass_distance_descriptor` and `pass_distance_override`.
-    *   [ ] **Update Descriptions:** Update parameter descriptions in `motion_kb.json` to reflect the new structure and purpose.
-    *   [ ] **Sync KB:** Manually upload the updated `motion_kb.json` file to the configured OpenAI Assistant, replacing the old version.
+    *   [x] **Update Descriptions:** Update parameter descriptions in `motion_kb.json` to reflect the new structure and purpose.
+    *   [x] **Sync KB:** Manually upload the updated `motion_kb.json` file to the configured OpenAI Assistant, replacing the old version.
 
 ### Phase 2: Assistant Instruction Update
 *   **Goal:** Instruct the Assistant to map qualitative magnitudes to canonical descriptors and handle numeric overrides correctly.
 *   **Action Items:**
-    *   [ ] **Get Timestamp:** Run `date "+%Y-%m-%d-%H%M"` to get the current timestamp.
-    *   [ ] **Create New Instruction File:** Create `docs/ai/assistant-references/SYSTEM_INSTRUCTIONS_REF_<timestamp>.txt`.
-    *   [ ] **Remove Old Guidance:** Delete instructions related to interpreting specific qualitative synonyms (e.g., "close means factor 0.5") for distance and factor.
-    *   [ ] **Add Descriptor Mapping Rule:** Add clear instructions stating:
+    *   [x] **Get Timestamp:** Run `date "+%Y-%m-%d-%H%M"` to get the current timestamp.
+    *   [x] **Create New Instruction File:** Create `docs/ai/assistant-references/SYSTEM_INSTRUCTIONS_REF_<timestamp>.txt`.
+    *   [x] **Remove Old Guidance:** Delete instructions related to interpreting specific qualitative synonyms (e.g., "close means factor 0.5") for distance and factor.
+    *   [x] **Add Descriptor Mapping Rule:** Add clear instructions stating:
         *   For any user phrasing indicating magnitude/intensity/closeness for distance (`dolly`, `truck`, `pedestal`, `fly_away`), zoom factor (`zoom`), or pass distance (`fly_by`), map it to the *closest* canonical descriptor: `tiny`, `small`, `medium`, `large`, or `huge`.
         *   Output this chosen descriptor using the corresponding parameter field (e.g., `distance_descriptor`, `factor_descriptor`, `pass_distance_descriptor`).
-    *   [ ] **Add Numeric Override Rule:** Instruct the Assistant:
+    *   [x] **Add Numeric Override Rule:** Instruct the Assistant:
         *   If the user provides an explicit number for distance, factor, or pass distance, output that number using the corresponding `_override` parameter field (e.g., `distance_override`, `factor_override`, `pass_distance_override`).
         *   If an `_override` field is used, **OMIT** the corresponding `_descriptor` field for that motion step.
-    *   [ ] **Review & Save:** Ensure instructions are clear and consistent.
-    *   [ ] **Sync Instructions:** Manually copy the plain text content from the new file and update the Assistant's configuration on the OpenAI platform.
-    *   [ ] **Update README:** Add the new instruction file reference to `docs/ai/assistant-references/README.md`.
+    *   [x] **Review & Save:** Ensure instructions are clear and consistent.
+    *   [x] **Sync Instructions:** Manually copy the plain text content from the new file and update the Assistant's configuration on the OpenAI platform.
+    *   [x] **Update README:** Add the new instruction file reference to `docs/ai/assistant-references/README.md`.
 
 ### Phase 3: Scene Interpreter Implementation
 *   **Goal:** Update the Interpreter logic to handle the new descriptor/override parameters and calculate context-aware numeric values.
 *   **Action Items:**
-    *   [ ] **Refactor/Create Mapping Helper:**
+    *   [x] **Refactor/Create Mapping Helper:**
         *   Decide whether to refactor `_calculateEffectiveDistance` or create a new helper function (e.g., `_mapDescriptorToValue`).
         *   This helper needs input parameters: `descriptor`, `motionType`, `sceneAnalysis`, `envAnalysis`, `currentPosition`, `currentTarget`.
         *   Implement the core mapping logic inside: use `sceneAnalysis.spatial.bounds.dimensions` (and potentially `currentDistance`, `min/maxDistance` constraints) to calculate a numeric distance/factor based on the `descriptor` and `motionType`. Define multipliers or formulas for `tiny`...`huge`.
-    *   [ ] **Update Motion Generators (`dolly`, `truck`, `pedestal`, `fly_away`):**
+    *   [x] **Update Motion Generators (`dolly`, `truck`, `pedestal`, `fly_away`):**
         *   Read `distance_override` and `distance_descriptor` from `step.parameters`.
         *   If `distance_override` is valid, use it directly as `effectiveDistance`.
         *   Else if `distance_descriptor` is valid, call the mapping helper to get `effectiveDistance`.
         *   Else, handle error or use a default distance.
         *   Use the final `effectiveDistance` in subsequent movement calculations.
-    *   [ ] **Update Motion Generator (`zoom`):**
+    *   [x] **Update Motion Generator (`zoom`):**
         *   Read `factor_override` and `factor_descriptor` from `step.parameters`.
         *   If `factor_override` is valid, use it directly as `effectiveFactor`.
         *   Else if `factor_descriptor` is valid, call mapping helper (or use inline logic) to get `effectiveFactor`.
+        *   **Added:** Handle `target_distance_descriptor` to calculate `effectiveFactor` based on goal proximity.
         *   Ensure calculated `effectiveFactor` is consistent with the `direction` parameter.
         *   Use the final `effectiveFactor` in zoom calculations.
     *   [ ] **Update Motion Generator (`fly_by`):**
@@ -76,14 +77,15 @@ Recent testing revealed brittleness in the V3 pipeline when handling nuanced qua
 
 ### Phase 4: Testing & Refinement
 *   **Goal:** Verify the new system correctly interprets varied qualitative inputs and produces contextually appropriate movements. Tune the mapping logic.
+*   **Status:** Approximately 70% complete. Core functionality for distance/factor descriptors and overrides is implemented and anecdotally tested. Goal-distance logic for dolly/zoom added and tested. Remaining work involves comprehensive testing across various scenarios and object sizes, plus specific tests for spatial targets.
 *   **Action Items:**
-    *   [ ] **Update Regression Prompts:** Add more prompts to `docs/testing/REGRESSION_PROMPTS.md` using diverse qualitative phrasing (e.g., "zoom in just a tiny bit", "truck way across the scene", "pedestal a smidge", "dolly back substantially", "fly by extremely close").
-    *   [ ] **Add Override Tests:** Include prompts explicitly testing numeric overrides (e.g., "dolly forward 5 units", "zoom factor 0.1").
-    *   [ ] **Execute E2E Tests:** Run the updated regression prompts through the application.
-    *   [ ] **Analyze Results:**
-        *   Check Assistant `MotionPlan` output in logs: Does it correctly map phrasing to descriptors (e.g., "way across" -> `distance_descriptor: "huge"`)? Does it correctly use overrides (e.g., "5 units" -> `distance_override: 5`)?
-        *   Observe resulting animation: Does the *magnitude* of the movement feel appropriate given the descriptor and the object's size? (e.g., Does `huge` feel significantly larger than `medium`? Does `medium` scale reasonably between small and large objects?).
-    *   [ ] **Tune Interpreter Mapping:** Adjust the multipliers/formulas within the Interpreter's descriptor mapping logic based on test results until the "feel" of `tiny`...`huge` is satisfactory across different scenarios. Repeat testing as needed.
+    *   [~] **Update Regression Prompts:** Add more prompts to `docs/testing/REGRESSION_PROMPTS.md` using diverse qualitative phrasing (e.g., "zoom in just a tiny bit", "truck way across the scene", "pedestal a smidge", "dolly back substantially", "fly by extremely close"). *Needs more systematic additions.* 
+    *   [~] **Add Override Tests:** Include prompts explicitly testing numeric overrides (e.g., "dolly forward 5 units", "zoom factor 0.1"). *Needs more systematic additions.* 
+    *   [~] **Execute E2E Tests:** Run the updated regression prompts through the application. *Anecdotal testing done; full regression pending.* 
+    *   [~] **Analyze Results:**
+        *   Check Assistant `MotionPlan` output in logs: Does it correctly map phrasing to descriptors (e.g., "way across" -> `distance_descriptor: "huge"`)? Does it correctly use overrides (e.g., "5 units" -> `distance_override: 5`)? *Initial checks positive.* 
+        *   Observe resulting animation: Does the *magnitude* of the movement feel appropriate given the descriptor and the object's size? (e.g., Does `huge` feel significantly larger than `medium`? Does `medium` scale reasonably between small and large objects?). *Initial checks positive; needs wider object size testing.* 
+    *   [~] **Tune Interpreter Mapping:** Adjust the multipliers/formulas within the Interpreter's descriptor mapping logic based on test results until the "feel" of `tiny`...`huge` is satisfactory across different scenarios. Repeat testing as needed. *Adjustments made for dolly/zoom goal-distance; further tuning may be needed after full tests.* 
 
 ### Phase 5: Documentation Update
 *   **Goal:** Ensure project documentation accurately reflects the canonical descriptor implementation.
