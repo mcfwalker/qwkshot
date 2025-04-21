@@ -71,7 +71,7 @@ This document contains a set of standard prompts used for regression testing the
     *   `"Pedestal down small amount."`
 *   **Override Tests:**
     *   `"Dolly forward 5 units."`
-    *   `"Zoom factor 0.1."` (Should zoom in)
+    *   `"Zoom factor 0.1."` (Should zoom in) xxx
     *   `"Pedestal down 2.5 units."`
     *   `"Truck left 10."`
     *   `"Zoom out with a factor of 3.0."`

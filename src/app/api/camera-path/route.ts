@@ -251,6 +251,16 @@ export async function POST(request: Request) {
         ); 
         if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
+        // <<< FIX: Manually add the CORRECT modelOffset to the analysis object >>>
+        if (fetchedEnvironmentalMetadata?.modelOffset !== undefined) {
+          (environmentalAnalysis as any).modelOffset = fetchedEnvironmentalMetadata.modelOffset;
+          logger.debug(`Added correct modelOffset (${fetchedEnvironmentalMetadata.modelOffset}) to environmentalAnalysis object.`);
+        } else {
+          logger.warn('Could not find modelOffset in fetchedEnvironmentalMetadata to add to analysis.');
+          (environmentalAnalysis as any).modelOffset = 0; // Default if missing
+        }
+        // <<< END FIX >>>
+        
         logger.debug('Successfully fetched and analyzed context data');
 
     } catch (contextError: any) { // Catch for context fetching/analysis errors
@@ -321,7 +331,7 @@ export async function POST(request: Request) {
           motionPlan,
           sceneAnalysis,
           environmentalAnalysis,
-          { position: currentCameraState.position, target: currentCameraState.target } // Pass initial state
+          { position: currentCameraState.position, target: currentCameraState.target }
         );
 
         logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
