@@ -170,6 +170,19 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                     console.error("---");
                     console.error(rawJsonString); // Log the original raw string
                     console.error("---");
+                    // --- NEW FALLBACK: try slicing everything after the last closing brace ---
+                    try {
+                        const lastBrace = cleanedJsonString.lastIndexOf('}');
+                        if (lastBrace !== -1) {
+                            const truncated = cleanedJsonString.slice(0, lastBrace + 1).trim();
+                            const reparsed = JSON.parse(truncated);
+                            motionPlan = reparsed as MotionPlan;
+                            jsonParseError = null;
+                            console.warn('Fallback JSON parse succeeded after truncating content beyond last }');
+                        }
+                    } catch (fallbackErr) {
+                        // Still failing; leave jsonParseError as‑is
+                    }
                 }
             } else {
                 jsonParseError = "Assistant message content is empty or not in the expected text format.";

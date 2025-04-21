@@ -58,7 +58,27 @@ This document contains a set of standard prompts used for regression testing the
 *   `"Dolly forward 0 units"` (Test zero movement)
 *   `"Truck left a tiny bit"` (Test potentially unsupported qualitative terms)
 
-### 4. Spatial Reference Targeting
+### 4. Canonical Descriptors & Overrides (NEW)
+
+*   **Descriptor Tests:**
+    *   `"Zoom in just a tiny bit."`
+    *   `"Truck way across the scene to the right."`
+    *   `"Pedestal a smidge up."` (Should map to 'tiny')
+    *   `"Dolly back substantially."` (Should map to 'large' or 'huge')
+    *   `"Fly by extremely close to the object center."` (Requires fly_by implementation)
+    *   `"Zoom out a huge amount."`
+    *   `"Move forward a medium distance."`
+    *   `"Pedestal down small amount."`
+*   **Override Tests:**
+    *   `"Dolly forward 5 units."`
+    *   `"Zoom factor 0.1."` (Should zoom in)
+    *   `"Pedestal down 2.5 units."`
+    *   `"Truck left 10."`
+    *   `"Zoom out with a factor of 3.0."`
+    *   `"Fly by the object center, passing 0.5 units away."` (Requires fly_by implementation)
+    *   `"Move back exactly 4.2 units."`
+
+### 5. Spatial Reference Targeting (Renumbered)
 
 *   `"Tilt down to look at the bottom center."`
 *   `"Orbit 90 degrees around the left side."`
