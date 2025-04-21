@@ -35,6 +35,8 @@ src/
 ├── components/
 │   ├── ui/                 # Reusable UI components
 │   └── viewer/             # Viewer-specific components
+│       ├── Viewer.tsx               # Primary R3F viewer component (ACTIVE for main route)
+│       ├── ModelViewerClient.tsx    # Older vanilla Three.js viewer (May be used elsewhere or deprecated)
 │       ├── LockButton.tsx             # Added
 │       ├── ShotCallerPanel.tsx        # Added
 │       ├── PlaybackPanel.tsx          # Added
@@ -60,6 +62,7 @@ interface ViewerState {
 
   // Model State
   currentModelId: string | null;
+  modelVerticalOffset: number | null; // Auto-calculated offset based on geometry (Stored in Zustand)
   isModelLoading: boolean;
   // ... methods to load/unload models
 
@@ -484,7 +487,7 @@ export async function GET(request: NextRequest) {
 ## 5. Feature Specifications (Data Structures)
 
 ### 5.1. P2P Pipeline Architecture
-- **Overview:** Translates user prompts into camera commands, leveraging scene and environmental context via the OpenAI Assistants API and a deterministic Scene Interpreter.
+- **Overview:** Translates user prompts into camera commands. Leverages the OpenAI Assistants API for planning and a deterministic Scene Interpreter which uses crucial local context (`SceneAnalysis` and `EnvironmentalAnalysis` - including the final `modelOffset`) for accurate geometric execution.
 - **Client Interaction:**
     - **Model Processing/Saving:** Client (`ModelLoader`) runs analysis via `P2PPipeline.processModel`, then calls `prepareModelUpload` Server Action with results and file info. Client uploads file directly to storage using signed URL from action response.
     - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state and `modelHeight` (as `modelOffset`).
@@ -505,24 +508,17 @@ export async function GET(request: NextRequest) {
     8. Instantiates the `SceneInterpreterImpl`.
     9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
         - Processes the `MotionPlan` steps sequentially.
-        - Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center', and `'current_target'` for applicable motions like `orbit`).
+        - Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **by applying the `modelOffset` from the provided `EnvironmentalAnalysis` to the base coordinates from `SceneAnalysis`**, ensuring alignment with the normalized visual model.
         - **Handles quantitative/qualitative/goal parameters (with priority):**
             *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance`.
-            *   **`dolly/truck/pedestal` Priority:**
-                1.  `destination_target` (Calculates required distance/direction)
-                2.  `distance_override` (Uses direct number)
-                3.  `distance_descriptor` (Maps descriptor via `_mapDescriptorToValue`)
-                4.  `target_distance_descriptor` (For `dolly` only; maps descriptor via `_mapDescriptorToGoalDistance`, then calculates required distance/direction)
-            *   **`zoom` Priority:**
-                1.  `factor_override` (Uses direct number)
-                2.  `factor_descriptor` (Maps descriptor via `_mapDescriptorToValue`)
-                3.  `target_distance_descriptor` (Maps descriptor via `_mapDescriptorToGoalDistance`, then calculates required factor)
+            *   **`fly_away` Priority (Placeholder):**
+                1.  `distance_override`
+                2.  `distance_descriptor` (Maps via `_mapDescriptorToValue`)
         - Applies constraints and easing.
         - Generates `CameraCommand[]` (keyframes).
-   10. Calculates adjusted bounding box using `sceneAnalysis.spatial.bounds` and fetched `modelOffset` from `environmentalMetadata`.
-   11. Calls `interpreter.validateCommands` passing the generated commands and the adjusted bounding box.
-   12. If validation fails due to bounding box violation, returns specific 422 error.
-   13. Otherwise, returns final `CameraCommand[]` to client (or other error).
+    10. Calls `interpreter.validateCommands` passing the generated commands and the *original* bounding box from `SceneAnalysis`. *(Note: Current validation might not account for `modelOffset`, potentially leading to false positives/negatives if the model is significantly adjusted vertically).*
+    11. If validation fails (e.g., bounding box violation based on original bounds), returns specific 422 error.
+    12. Otherwise, returns final serialized `CameraCommand[]` to client (or other error).
 
 ## 6. External Integrations
 
