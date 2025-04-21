@@ -106,6 +106,7 @@ export interface EnvironmentalAnalysis {
   distances: DistanceMeasurements;
   cameraConstraints: CameraConstraints;
   cameraRelative: CameraRelativeMeasurements;
+  modelOffset?: number;
   performance: PerformanceMetrics;
 }
 

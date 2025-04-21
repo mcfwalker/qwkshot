@@ -130,7 +130,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
   private _resolveTargetPosition(
     targetName: string,
     sceneAnalysis: SceneAnalysis,
-    currentTarget: Vector3
+    currentTarget: Vector3,
+    modelOffset: number = 0 // Add modelOffset parameter with default
   ): Vector3 | null {
     this.logger.debug(`Resolving target name: '${targetName}'`);
 
@@ -149,25 +150,32 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         switch (targetName) {
             case 'object_center':
                 this.logger.debug('Resolved target to object_center');
-                return center.clone();
+                // Apply offset to Y component
+                return new Vector3(center.x, center.y + modelOffset, center.z);
             case 'object_top_center':
                 this.logger.debug('Resolved target to object_top_center');
-                return new Vector3(center.x, max.y, center.z);
+                // Apply offset to Y component
+                return new Vector3(center.x, max.y + modelOffset, center.z);
             case 'object_bottom_center':
                 this.logger.debug('Resolved target to object_bottom_center');
-                return new Vector3(center.x, min.y, center.z);
+                // Apply offset to Y component
+                return new Vector3(center.x, min.y + modelOffset, center.z);
             case 'object_left_center': // Assuming -X is left
                 this.logger.debug('Resolved target to object_left_center');
-                return new Vector3(min.x, center.y, center.z);
+                // Apply offset to Y component
+                return new Vector3(min.x, center.y + modelOffset, center.z);
             case 'object_right_center': // Assuming +X is right
                 this.logger.debug('Resolved target to object_right_center');
-                return new Vector3(max.x, center.y, center.z);
+                // Apply offset to Y component
+                return new Vector3(max.x, center.y + modelOffset, center.z);
             case 'object_front_center': // Assuming +Z is front
                 this.logger.debug('Resolved target to object_front_center');
-                return new Vector3(center.x, center.y, max.z);
+                // Apply offset to Y component
+                return new Vector3(center.x, center.y + modelOffset, max.z);
             case 'object_back_center': // Assuming -Z is back
                 this.logger.debug('Resolved target to object_back_center');
-                return new Vector3(center.x, center.y, min.z);
+                // Apply offset to Y component
+                return new Vector3(center.x, center.y + modelOffset, min.z);
             // Add corners if needed later, e.g., object_top_left_front
         }
     } else if (['object_center', 'object_top_center', 'object_bottom_center', 'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center'].includes(targetName)) {
@@ -642,7 +650,12 @@ private _mapDescriptorToValue(
       }
       // Add other motion type specific default targets here if needed
 
-      const nextTarget = this._resolveTargetPosition(nextTargetName, sceneAnalysis, currentTarget); // Pass currentTarget as fallback for 'current_target'
+      const nextTarget = this._resolveTargetPosition(
+        nextTargetName,
+        sceneAnalysis,
+        currentTarget,
+        envAnalysis.modelOffset ?? 0 // Use correct offset from top-level analysis object
+      ); // Pass currentTarget as fallback for 'current_target'
 
       if (nextTarget && !currentTarget.equals(nextTarget)) {
           this.logger.debug(`Target change detected between steps. Previous: ${currentTarget.toArray()}, Next: ${nextTarget.toArray()}. Inserting blend command.`);
@@ -773,7 +786,12 @@ private _mapDescriptorToValue(
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // 1. Resolve target point (uses targetName)
-          const zoomTargetPosition = this._resolveTargetPosition(targetName, sceneAnalysis, currentTarget);
+          const zoomTargetPosition = this._resolveTargetPosition(
+              targetName,
+              sceneAnalysis,
+              currentTarget,
+              envAnalysis.modelOffset ?? 0 // Use correct offset
+          );
           if (!zoomTargetPosition) {
             this.logger.error(`Could not resolve zoom target '${targetName}'. Skipping step.`);
             continue;
@@ -1271,20 +1289,25 @@ private _mapDescriptorToValue(
           let isAbsoluteTarget = false;
           if (targetName) {
               // An explicit target was specified in the step parameters
-              const resolvedExplicitTarget = this._resolveTargetPosition(targetName, sceneAnalysis, initialTarget); // Try resolving it
-              if (resolvedExplicitTarget) {
-                  finalTarget = resolvedExplicitTarget.clone();
-                  this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
-                  isAbsoluteTarget = true; 
-                  // NOTE: The provided 'angle' parameter is ignored when an absolute target is given.
-                  // We might want to log a warning or refine the KB/Assistant instructions about this.
-                  if (angle) { 
-                      this.logger.warn(`Tilt: Explicit target '${targetName}' provided, ignoring angle parameter (${angle} degrees).`);
-                  }
-              } else {
-                  this.logger.error(`Tilt: Could not resolve explicit target '${targetName}'. Skipping step.`);
-                  continue; // Cannot proceed without a valid target
-              }
+              const resolvedExplicitTarget = this._resolveTargetPosition(
+                targetName,
+                sceneAnalysis,
+                initialTarget, // Use initialTarget here
+                envAnalysis.modelOffset ?? 0 // Use correct offset
+            ); // Try resolving it
+            if (resolvedExplicitTarget) {
+                finalTarget = resolvedExplicitTarget.clone();
+                this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
+                isAbsoluteTarget = true;
+                // NOTE: The provided 'angle' parameter is ignored when an absolute target is given.
+                // We might want to log a warning or refine the KB/Assistant instructions about this.
+                if (angle) {
+                    this.logger.warn(`Tilt: Explicit target '${targetName}' provided, ignoring angle parameter (${angle} degrees).`);
+                }
+            } else {
+                this.logger.error(`Tilt: Could not resolve explicit target '${targetName}'. Skipping step.`);
+                continue; // Cannot proceed without a valid target
+            }
           } else {
               // No explicit target - perform a relative tilt by the specified angle
               this.logger.debug(`Tilt: No explicit target provided. Performing relative tilt of ${angle} degrees ${direction}.`);
@@ -1414,7 +1437,12 @@ private _mapDescriptorToValue(
           if (!goalDistanceDescriptor && destinationTargetName) {
             // Attempt to calculate direction from destination target
             this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance and direction.`);
-            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+            const destinationTarget = this._resolveTargetPosition(
+              destinationTargetName,
+              sceneAnalysis,
+              currentTarget,
+              envAnalysis.modelOffset ?? 0 // Use correct offset
+            );
             if (destinationTarget) {
               const viewDirectionVec = new Vector3().subVectors(currentTarget, currentPosition).normalize();
               if (viewDirectionVec.lengthSq() >= 1e-9) {
@@ -1608,7 +1636,12 @@ private _mapDescriptorToValue(
           // --- Check for Destination Target --- 
           if (destinationTargetName) {
             this.logger.debug(`Truck: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
-            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+            const destinationTarget = this._resolveTargetPosition(
+                destinationTargetName,
+                sceneAnalysis,
+                currentTarget,
+                envAnalysis.modelOffset ?? 0 // Use correct offset
+            );
 
             if (destinationTarget) {
                 const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
@@ -1628,7 +1661,7 @@ private _mapDescriptorToValue(
                     } else {
                         effectiveDistance = Math.abs(signedDistance);
                     }
-                    
+
                     // Override direction based on calculated distance
                     direction = signedDistance >= 0 ? 'right' : 'left';
                     isDestinationMove = true;
@@ -1830,26 +1863,33 @@ private _mapDescriptorToValue(
 
           const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
-          // --- Check for Destination Target --- 
+          // --- Check for Destination Target ---
           if (destinationTargetName) {
             this.logger.debug(`Pedestal: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
-            const destinationTarget = this._resolveTargetPosition(destinationTargetName, sceneAnalysis, currentTarget);
+            // Pass the offset from envAnalysis, defaulting to 0
+            // Assuming modelOffset is directly on envAnalysis or fetched separately
+            const modelOffsetValue = envAnalysis.modelOffset ?? 0; // Use ?? 0 for null/undefined fallback
+            this.logger.debug(`Using modelOffsetValue: ${modelOffsetValue}`); // Add log
+            const destinationTarget = this._resolveTargetPosition(
+                destinationTargetName,
+                sceneAnalysis,
+                currentTarget,
+                modelOffsetValue // Pass the resolved offset value
+            );
 
             if (destinationTarget) {
                 // Pedestal moves along world Y axis
                 const signedDistance = destinationTarget.y - currentPosition.y;
-
-                if (Math.abs(signedDistance) < 1e-6) {
-                    this.logger.warn(`Pedestal: Destination target ${destinationTargetName} is effectively already at the current height. No pedestal needed.`);
+                if (Math.abs(signedDistance) < 1e-6) { // Case 1: Distance is effectively zero
+                    this.logger.warn(`Pedestal: Destination target height matches current. No pedestal needed.`);
                     effectiveDistance = 0;
-                } else {
+                    isDestinationMove = true; // <<< FIX: Ensure flag is set even for zero distance
+                } else { // Case 2: Distance is non-zero
                     effectiveDistance = Math.abs(signedDistance);
+                    direction = signedDistance >= 0 ? 'up' : 'down';
+                    isDestinationMove = true; // <<< Ensure flag is set for non-zero distance
+                    this.logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
                 }
-                
-                // Override direction based on calculated distance
-                direction = signedDistance >= 0 ? 'up' : 'down';
-                isDestinationMove = true;
-                this.logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
             } else {
                 this.logger.warn(`Pedestal: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
             }
@@ -2051,7 +2091,12 @@ private _mapDescriptorToValue(
               this.logger.error('FlyBy: Missing target parameter. Skipping step.');
               continue;
           }
-          const flyByTarget = this._resolveTargetPosition(targetName, sceneAnalysis, currentTarget);
+          const flyByTarget = this._resolveTargetPosition(
+            targetName,
+            sceneAnalysis,
+            currentTarget,
+            envAnalysis.modelOffset ?? 0 // Use correct offset
+          );
           if (!flyByTarget) {
             this.logger.error(`FlyBy: Could not resolve target '${targetName}'. Skipping step.`);
             continue;
@@ -2136,7 +2181,12 @@ private _mapDescriptorToValue(
           } = step.parameters;
 
           const flyAwayTargetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target';
-          const flyAwayTarget = this._resolveTargetPosition(flyAwayTargetName, sceneAnalysis, currentTarget);
+          const flyAwayTarget = this._resolveTargetPosition(
+            flyAwayTargetName,
+            sceneAnalysis,
+            currentTarget,
+            envAnalysis.modelOffset ?? 0 // Use correct offset
+          );
           if (!flyAwayTarget) {
             this.logger.error(`FlyAway: Could not resolve target '${flyAwayTargetName}'. Skipping step.`);
             continue;
