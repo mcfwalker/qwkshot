@@ -23,6 +23,8 @@ interface SceneControlsProps {
   onAddTextureClick?: () => void;
   texture?: string | null;
   onRemoveTexture?: () => void;
+  userVerticalAdjustment: number;
+  onUserVerticalAdjustmentChange: (value: number) => void;
 }
 
 export function SceneControls({
@@ -33,6 +35,8 @@ export function SceneControls({
   onAddTextureClick,
   texture,
   onRemoveTexture,
+  userVerticalAdjustment,
+  onUserVerticalAdjustmentChange
 }: SceneControlsProps) {
   const { isLocked } = useViewerStore();
 
@@ -44,6 +48,14 @@ export function SceneControls({
     onFovChange(values[0]);
   };
 
+  const handleAdjustmentChange = (values: number[]) => {
+    if (isLocked) {
+      toast.error('Viewer is locked. Unlock to adjust model offset.');
+      return;
+    }
+    onUserVerticalAdjustmentChange(values[0]);
+  };
+
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
@@ -52,6 +64,22 @@ export function SceneControls({
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase">SCENE</CardTitle>
             
             <div className="space-y-6"> 
+              <div className="space-y-5"> 
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-muted-foreground">Model Offset</Label>
+                  <span className="text-sm font-medium text-muted-foreground">{userVerticalAdjustment.toFixed(2)}</span>
+                </div>
+                <Slider
+                  value={[userVerticalAdjustment]}
+                  onValueChange={handleAdjustmentChange}
+                  min={-2}
+                  max={5}
+                  step={0.05}
+                  className="viewer-slider h-2 disabled:cursor-not-allowed"
+                  disabled={isLocked}
+                />
+              </div>
+
               <div className="space-y-5"> 
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium text-muted-foreground">FOV</Label>

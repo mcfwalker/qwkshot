@@ -21,7 +21,7 @@ import { FloorTexture } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 // Model component that handles GLTF/GLB loading and NORMALIZATION
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -97,6 +97,7 @@ interface ViewerProps {
 
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
+  const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -174,6 +175,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   // ADD state for the current model ID within Viewer
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
 
+  const router = useRouter();
   const modelRef = useRef<Object3D | null>(null);
   const cameraRef = useRef<ThreePerspectiveCamera>(null!);
   const controlsRef = useRef<any>(null);
@@ -225,40 +227,47 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   // --- Effect to Add/Remove Bounding Box Helper --- START
   useEffect(() => {
-    if (modelRef.current && sceneRef.current) {
-      console.log("Viewer: Model ref updated, adding/updating bounding box helper."); // Changed log message
-      // Calculate bounding box FROM THE NORMALIZED CONTAINER
+    const currentScene = sceneRef.current;
+    let helper: Box3Helper | null = boundingBoxHelper; // Use state variable
+
+    if (modelRef.current && currentScene) {
+      console.log("Viewer: Model ref updated OR adjustment changed, adding/updating bounding box helper.");
       const box = new Box3().setFromObject(modelRef.current);
       
-      // If helper exists, update it, otherwise create it
-      if (boundingBoxHelper) {
-        boundingBoxHelper.box = box;
-        boundingBoxHelper.updateMatrixWorld(true); // Ensure helper updates
-        console.log("Viewer: Updated existing bounding box helper.");
-      } else {
-        const helper = new Box3Helper(box, 0xffff00); // Yellow color
-        setBoundingBoxHelper(helper);
-        sceneRef.current.add(helper);
-        console.log("Viewer: Created new bounding box helper.");
-      }
+      // Calculate the world position of the wrapper group
+      const wrapperWorldPosition = new Vector3(0, userVerticalAdjustment, 0);
 
-      // Cleanup function (only removes if helper exists)
-      return () => {
-        if (boundingBoxHelper && sceneRef.current) {
-           console.log("Viewer: Cleaning up bounding box helper (in cleanup).");
-           sceneRef.current.remove(boundingBoxHelper);
-           setBoundingBoxHelper(null);
-        }
-      };
+      if (helper) {
+        helper.box = box; // Update box geometry
+        helper.position.copy(wrapperWorldPosition); // Update helper position
+        helper.updateMatrixWorld(true);
+        console.log("Viewer: Updated existing bounding box helper position:", helper.position);
+      } else {
+        helper = new Box3Helper(box, 0xffff00);
+        helper.position.copy(wrapperWorldPosition); // Set initial position
+        setBoundingBoxHelper(helper); // Update state ONLY if creating new
+        currentScene.add(helper);
+        console.log("Viewer: Created new bounding box helper at position:", helper.position);
+      }
     } else {
-        // Ensure helper is removed if model becomes null or ref changes
-        if (boundingBoxHelper && sceneRef.current) {
-            console.log("Viewer: Model null or ref changed, cleaning up bounding box helper.");
-            sceneRef.current.remove(boundingBoxHelper);
-            setBoundingBoxHelper(null);
-        }
+      // Cleanup if model is unloaded
+      if (helper && currentScene) {
+        console.log("Viewer: Model null or ref changed, cleaning up bounding box helper (effect).");
+        currentScene.remove(helper);
+        setBoundingBoxHelper(null);
+        helper = null;
+      }
     }
-  }, [modelRef.current]); // Removed modelHeight dependency
+
+    // Cleanup function
+    return () => {
+      if (helper && currentScene) {
+        console.log("Viewer: Cleaning up bounding box helper (in cleanup).");
+        currentScene.remove(helper);
+        setBoundingBoxHelper(null); // Ensure state is cleared on unmount/dependency change
+      }
+    };
+  }, [modelRef.current, userVerticalAdjustment]); // Corrected dependencies
   // --- Effect to Add/Remove Bounding Box Helper --- END
 
   // Handler for grid toggle
@@ -299,6 +308,15 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     }
 
     console.log("PERFORMING STAGE RESET");
+
+    // Use a functional update to ensure we have the latest helper state
+    setBoundingBoxHelper(currentHelper => {
+      if (currentHelper && sceneRef.current) {
+        console.log("Reset: Explicitly removing bounding box helper (functional update).");
+        sceneRef.current.remove(currentHelper);
+      }
+      return null; // Always set state to null after attempting removal
+    });
     
     // 1. Clear Model (Trigger callback passed from parent/page)
     onModelSelect(''); // Pass empty string instead of null
@@ -317,6 +335,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     setDuration(10); // Reset to default duration
     setPlaybackSpeed(1); // Reset to default speed
     setFov(50); // Reset FOV
+    setUserVerticalAdjustment(0);
     setFloorTexture(null); // Reset floor texture
     setGridVisible(true); // Ensure grid is visible
     // Add any other relevant state resets here
@@ -327,6 +346,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     // 5. Feedback & Confirmation Reset
     toast.success("Stage Reset Successfully");
     setIsConfirmingReset(false); 
+
+    // 6. Navigate back to base viewer route
+    router.push('/viewer');
   };
 
   // Handler to REMOVE the texture
@@ -376,15 +398,17 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           {/* Floor */}
           <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />
 
-          {/* Model */}
-          {modelUrl ? (
-            <Model url={modelUrl} modelRef={modelRef} />
-          ) : (
-            <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
-              <boxGeometry args={[1, 1, 1]} />
-              <meshStandardMaterial color="white" />
-            </mesh>
-          )}
+          {/* Model - Now wrapped in a group for user adjustment */} 
+          <group position-y={userVerticalAdjustment}> 
+            {modelUrl ? (
+              <Model url={modelUrl} modelRef={modelRef} />
+            ) : (
+              <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
+                <boxGeometry args={[1, 1, 1]} />
+                <meshStandardMaterial color="white" />
+              </mesh>
+            )}
+          </group>
           
           {/* Environment for realistic lighting */}
           <Environment preset="city" />
@@ -415,6 +439,8 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         </ErrorBoundary>
         
         <SceneControls
+          userVerticalAdjustment={userVerticalAdjustment}
+          onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
           fov={fov}
           onFovChange={setFov}
           gridVisible={gridVisible}
@@ -430,6 +456,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         <CameraAnimationSystem
           // PASS modelId as prop
           modelId={currentModelId}
+          userVerticalAdjustment={userVerticalAdjustment}
           // Pass down relevant state
           isPlaying={isPlaying}
           progress={progress}

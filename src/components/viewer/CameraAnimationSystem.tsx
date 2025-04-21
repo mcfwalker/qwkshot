@@ -52,6 +52,7 @@ interface CameraAnimationSystemProps {
   duration: number;
   playbackSpeed: number;
   fov: number;
+  userVerticalAdjustment: number;
   onPlayPause: () => void;
   onStop: () => void;
   onProgressChange: (progress: number) => void;
@@ -178,6 +179,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   duration,
   playbackSpeed,
   fov,
+  userVerticalAdjustment,
   onPlayPause,
   onStop,
   onProgressChange,
@@ -651,6 +653,13 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       if (!isLocked && cameraRef?.current && controlsRef?.current) {
         console.log('Locking scene, preparing metadata...');
         
+        // Get automatic offset from store
+        const { modelVerticalOffset: automaticOffset } = useViewerStore.getState();
+
+        // Calculate total offset
+        const totalOffset = (automaticOffset || 0) + userVerticalAdjustment;
+        console.log(`Calculated total offset for saving: ${totalOffset} (auto: ${automaticOffset}, user: ${userVerticalAdjustment})`);
+
         // 1. Get current camera state
         const cameraPosition = cameraRef.current.position.clone();
         const cameraTarget = controlsRef.current.target.clone();
@@ -663,7 +672,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 target: serializeVector3(cameraTarget),
                 fov: currentFov
             },
-            modelOffset: 0, // Assuming default modelOffset
+            modelOffset: totalOffset, // Use the calculated total offset
             // Add missing fields with defaults
             lighting: { 
                 intensity: 1, 
