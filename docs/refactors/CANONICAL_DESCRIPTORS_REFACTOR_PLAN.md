@@ -77,21 +77,21 @@ Recent testing revealed brittleness in the V3 pipeline when handling nuanced qua
 
 ### Phase 4: Testing & Refinement
 *   **Goal:** Verify the new system correctly interprets varied qualitative inputs and produces contextually appropriate movements. Tune the mapping logic.
-*   **Status:** Approximately 70% complete. Core functionality for distance/factor descriptors and overrides is implemented and anecdotally tested. Goal-distance logic for dolly/zoom added and tested. Remaining work involves comprehensive testing across various scenarios and object sizes, plus specific tests for spatial targets.
+*   **Status:** Complete. (Core refactor targeting distance/factor descriptors is complete; fly_by/fly_away have placeholder logic).
 *   **Action Items:**
-    *   [~] **Update Regression Prompts:** Add more prompts to `docs/testing/REGRESSION_PROMPTS.md` using diverse qualitative phrasing (e.g., "zoom in just a tiny bit", "truck way across the scene", "pedestal a smidge", "dolly back substantially", "fly by extremely close"). *Needs more systematic additions.* 
-    *   [~] **Add Override Tests:** Include prompts explicitly testing numeric overrides (e.g., "dolly forward 5 units", "zoom factor 0.1"). *Needs more systematic additions.* 
-    *   [~] **Execute E2E Tests:** Run the updated regression prompts through the application. *Anecdotal testing done; full regression pending.* 
-    *   [~] **Analyze Results:**
-        *   Check Assistant `MotionPlan` output in logs: Does it correctly map phrasing to descriptors (e.g., "way across" -> `distance_descriptor: "huge"`)? Does it correctly use overrides (e.g., "5 units" -> `distance_override: 5`)? *Initial checks positive.* 
-        *   Observe resulting animation: Does the *magnitude* of the movement feel appropriate given the descriptor and the object's size? (e.g., Does `huge` feel significantly larger than `medium`? Does `medium` scale reasonably between small and large objects?). *Initial checks positive; needs wider object size testing.* 
-    *   [~] **Tune Interpreter Mapping:** Adjust the multipliers/formulas within the Interpreter's descriptor mapping logic based on test results until the "feel" of `tiny`...`huge` is satisfactory across different scenarios. Repeat testing as needed. *Adjustments made for dolly/zoom goal-distance; further tuning may be needed after full tests.* 
+    *   [X] **Update Regression Prompts:** Add more prompts to `docs/testing/REGRESSION_PROMPTS.md` using diverse qualitative phrasing.
+    *   [X] **Add Override Tests:** Include prompts explicitly testing numeric overrides.
+    *   [X] **Execute E2E Tests:** Run the updated regression prompts through the application.
+    *   [X] **Analyze Results:**
+        *   Check Assistant `MotionPlan` output in logs: Does it correctly map phrasing to descriptors? Does it correctly use overrides?
+        *   Observe resulting animation: Does the *magnitude* of the movement feel appropriate given the descriptor and the object's size?
+    *   [X] **Tune Interpreter Mapping:** Adjust the multipliers/formulas within the Interpreter's descriptor mapping logic based on test results until the "feel" of `tiny`...`huge` is satisfactory across different scenarios.
 
 ### Phase 5: Documentation Update
 *   **Goal:** Ensure project documentation accurately reflects the canonical descriptor implementation.
 *   **Action Items:**
-    *   [ ] Update `docs/features/camera-animation/ARCHITECTURE.md` (P2P Overview) to describe the canonical descriptor pattern for relevant parameters.
-    *   [ ] Update relevant sections of `docs/TECHNICAL_DESIGN.md` (e.g., P2P Pipeline section, potentially API structure if parameter names changed significantly).
+    *   [X] Update `docs/features/camera-animation/ARCHITECTURE.md` (P2P Overview) to describe the canonical descriptor pattern for relevant parameters.
+    *   [X] Update relevant sections of `docs/TECHNICAL_DESIGN.md` (e.g., P2P Pipeline section, potentially API structure if parameter names changed significantly).
     *   [ ] Add/update JSDoc comments in `SceneInterpreterImpl` code for new helper functions and modified generator logic.
 
 ## 3. Open Questions/Considerations

@@ -13,17 +13,16 @@ The process leverages the OpenAI Assistants API for high-level planning and a lo
 3.  The Assistant consults its **Motion Knowledge Base (KB)** (a file defining available camera moves like "zoom", "orbit", "pan", and their parameters) using OpenAI's Retrieval tool.
 4.  The Assistant generates a structured **`MotionPlan`** (a JSON object detailing a sequence of steps, like `[{ type: "orbit", direction: "left", angle: 90, duration_ratio: 1.0 }]`).
     *   For "move to destination" requests (e.g., 'pedestal to the top'), the Assistant includes a `destination_target` parameter (e.g., `object_top_center`) instead of a `distance` parameter.
+    *   For "move to proximity" requests (e.g., 'dolly in close'), the Assistant includes a `target_distance_descriptor` parameter.
 5.  This `MotionPlan` is passed to the **Scene Interpreter** on our backend.
 6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**.
 7.  The Scene Interpreter processes each step in the `MotionPlan`:
     *   It uses the `type` (e.g., "orbit") to select the correct internal logic.
     *   It uses the step's `parameters` (e.g., direction, angle) combined with the local scene/environmental context to calculate precise camera movements.
     *   **It resolves targets** (e.g., 'object_center', feature names, spatial references like 'object_top_center', and **`'current_target'`** for applicable motions like `orbit`).
-    *   **It handles qualitative distance/factor inputs:**
-        *   For `dolly`/`truck`/`pedestal`: Calculates context-aware numeric distances using `_calculateEffectiveDistance` based on `distance_descriptor`.
-        *   For `zoom`: Calculates a zoom `factor` based on `factor_descriptor`.
-        *   **NEW:** For `dolly`/`zoom`: If `target_distance_descriptor` is provided instead, calculates the necessary distance/factor to reach the goal proximity.
-    *   **It handles 'move to destination' requests (e.g., 'pedestal to the top') by checking for the `destination_target` parameter. If present, it calculates the required distance to reach that target's plane/level along the motion axis, overriding any qualitative/numeric `distance` parameter provided by the Assistant.**
+    *   **It handles quantitative, qualitative, and goal-based magnitude parameters** with a specific priority order for each motion type, utilizing helper functions like `_mapDescriptorToValue` and `_mapDescriptorToGoalDistance` to convert canonical descriptors (`tiny`...`huge`) into context-aware numeric values.
+        *   For example, in `dolly`, it prioritizes `target_distance_descriptor` (calculating required distance), then `destination_target` (calculating distance), then `distance_override` (direct numeric input), then `distance_descriptor` (mapped qualitative input).
+        *   For `zoom`, it prioritizes `factor_override`, then `factor_descriptor`, then `target_distance_descriptor` (calculating required factor).
     *   It enforces constraints (like not colliding with the model bounding box or exceeding maximum camera distance/height) during calculation, using dynamic offsets for collision avoidance.
     *   It determines appropriate easing based on parameters (`speed`, `easing`), potentially overriding easing based on the speed hint.
 8.  The Interpreter outputs a list of **`CameraCommand[]`** objects, typically representing **keyframes** (often a start and end state for each logical motion step, or multiple intermediate steps for smoother rotations like orbits).
@@ -119,13 +118,23 @@ graph TD
         *   Selects the appropriate internal generator logic based on `step.type`.
         *   Uses `step.parameters` and local context to calculate precise camera movements.
         *   Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center', and **`'current_target'`** for applicable motions like `orbit`).
-        *   **Handles qualitative/goal parameters:**
-            *   For `dolly`/`truck`/`pedestal`: Prioritizes `destination_target`, then `distance_override`, then `distance_descriptor` (mapped via `_calculateEffectiveDistance`), then `target_distance_descriptor` (for `dolly`, mapped via `_mapDescriptorToGoalDistance`).
-            *   For `zoom`: Prioritizes `factor_override`, then `factor_descriptor` (mapped via `_mapDescriptorToValue`), then `target_distance_descriptor` (mapped via `_mapDescriptorToGoalDistance` and converted to a factor).
-        *   **Handles qualitative distance/factor inputs:**
-            *   For `dolly`/`truck`/`pedestal`: Calculates context-aware numeric distances using `_calculateEffectiveDistance` based on `distance_descriptor`.
-            *   For `zoom`: Calculates a zoom `factor` based on `factor_descriptor`.
-            *   **NEW:** For `dolly`/`zoom`: If `target_distance_descriptor` is provided instead, calculates the necessary distance/factor to reach the goal proximity.
+        *   **Handles quantitative/qualitative/goal parameters (with priority):**
+            *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance` for calculations.
+            *   **`dolly/truck/pedestal` Priority:**
+                1.  `destination_target` (Calculates required distance/direction)
+                2.  `distance_override` (Uses direct number)
+                3.  `distance_descriptor` (Maps descriptor to distance via `_mapDescriptorToValue`)
+                4.  `target_distance_descriptor` (For `dolly` only; maps descriptor to goal distance via `_mapDescriptorToGoalDistance`, then calculates required distance/direction)
+            *   **`zoom` Priority:**
+                1.  `factor_override` (Uses direct number)
+                2.  `factor_descriptor` (Maps descriptor to factor via `_mapDescriptorToValue`)
+                3.  `target_distance_descriptor` (Maps descriptor to goal distance via `_mapDescriptorToGoalDistance`, then calculates required factor)
+            *   **`fly_by` Priority (Placeholder):**
+                1.  `pass_distance_override`
+                2.  `pass_distance_descriptor` (Defaults 'medium', maps via `_mapDescriptorToValue`)
+            *   **`fly_away` Priority (Placeholder):**
+                1.  `distance_override`
+                2.  `distance_descriptor` (Maps via `_mapDescriptorToValue`)
         *   Applies constraints (height, distance, bounding box via raycasting with **dynamic offset**) during calculation.
         *   Determines appropriate **effective easing function** (using `d3-ease`) based on speed/easing parameters, potentially overriding explicit easing.
         *   Handles duration allocation.

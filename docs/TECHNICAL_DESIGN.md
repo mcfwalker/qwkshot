@@ -505,12 +505,18 @@ export async function GET(request: NextRequest) {
     8. Instantiates the `SceneInterpreterImpl`.
     9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
         - Processes the `MotionPlan` steps sequentially.
-        - Resolves targets (including spatial references like `object_top_center`, and `'current_target'` for orbit).
         - Resolves targets (e.g., 'object_center', feature names, spatial references like 'object_top_center', and `'current_target'` for applicable motions like `orbit`).
-        - Handles qualitative/goal parameters:
-            * For `dolly`/`truck`/`pedestal`: Prioritizes `destination_target`, then `distance_override`, then `distance_descriptor` (mapped via `_calculateEffectiveDistance`), then `target_distance_descriptor` (for `dolly`, mapped via `_mapDescriptorToGoalDistance`).
-            * For `zoom`: Prioritizes `factor_override`, then `factor_descriptor` (mapped via `_mapDescriptorToValue`), then `target_distance_descriptor` (mapped via `_mapDescriptorToGoalDistance` and converted to a factor).
-        - Calculates distances based on `destination_target` parameter (if present) or qualitative/numeric `distance`.
+        - **Handles quantitative/qualitative/goal parameters (with priority):**
+            *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance`.
+            *   **`dolly/truck/pedestal` Priority:**
+                1.  `destination_target` (Calculates required distance/direction)
+                2.  `distance_override` (Uses direct number)
+                3.  `distance_descriptor` (Maps descriptor via `_mapDescriptorToValue`)
+                4.  `target_distance_descriptor` (For `dolly` only; maps descriptor via `_mapDescriptorToGoalDistance`, then calculates required distance/direction)
+            *   **`zoom` Priority:**
+                1.  `factor_override` (Uses direct number)
+                2.  `factor_descriptor` (Maps descriptor via `_mapDescriptorToValue`)
+                3.  `target_distance_descriptor` (Maps descriptor via `_mapDescriptorToGoalDistance`, then calculates required factor)
         - Applies constraints and easing.
         - Generates `CameraCommand[]` (keyframes).
    10. Calculates adjusted bounding box using `sceneAnalysis.spatial.bounds` and fetched `modelOffset` from `environmentalMetadata`.
