@@ -16,8 +16,6 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface SceneControlsProps {
-  modelHeight: number;
-  onModelHeightChange: (height: number) => void;
   fov: number;
   onFovChange: (fov: number) => void;
   gridVisible: boolean;
@@ -28,8 +26,6 @@ interface SceneControlsProps {
 }
 
 export function SceneControls({
-  modelHeight,
-  onModelHeightChange,
   fov,
   onFovChange,
   gridVisible,
@@ -39,14 +35,6 @@ export function SceneControls({
   onRemoveTexture,
 }: SceneControlsProps) {
   const { isLocked } = useViewerStore();
-
-  const handleModelHeightChange = (values: number[]) => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to adjust model height.');
-      return;
-    }
-    onModelHeightChange(values[0]);
-  };
 
   const handleFovChange = (values: number[]) => {
     if (isLocked) {
@@ -64,22 +52,6 @@ export function SceneControls({
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase">SCENE</CardTitle>
             
             <div className="space-y-6"> 
-              <div className="space-y-5"> 
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium text-muted-foreground">Model Offset</Label>
-                  <span className="text-sm font-medium text-muted-foreground">{modelHeight.toFixed(2)}</span>
-                </div>
-                <Slider
-                  value={[modelHeight]}
-                  onValueChange={handleModelHeightChange}
-                  min={0}
-                  max={5} 
-                  step={0.1}
-                  className="viewer-slider h-2 disabled:cursor-not-allowed"
-                  disabled={isLocked}
-                />
-              </div>
-
               <div className="space-y-5"> 
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium text-muted-foreground">FOV</Label>

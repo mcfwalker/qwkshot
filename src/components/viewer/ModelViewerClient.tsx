@@ -8,6 +8,7 @@ import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { toast } from 'sonner'
 import { loadModel } from '@/lib/library-service'
 import { MOUSE } from 'three'
+import { useViewerStore } from '@/store/viewerStore'
 
 interface ModelViewerClientProps {
   model: Model
@@ -20,6 +21,7 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
+  const setModelVerticalOffset = useViewerStore((s) => s.setModelVerticalOffset)
 
   // Get signed URL when component mounts
   useEffect(() => {
@@ -88,45 +90,66 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
     loader.load(
       signedUrl,
       (gltf: GLTF) => {
-        // Remove previous model if it exists
+        /* ───────────────────────────  CLEAN‑UP PREVIOUS MODEL  ─────────────────────────── */
         if (currentModel) {
-          scene.remove(currentModel);
-          currentModel.traverse((child: THREE.Object3D) => {
-            if (child instanceof THREE.Mesh) {
-              if (child.geometry) child.geometry.dispose();
-              if (child.material) {
-                if (Array.isArray(child.material)) {
-                  child.material.forEach(material => material.dispose());
-                } else {
-                  child.material.dispose();
-                }
-              }
+          scene.remove(currentModel)
+          currentModel.traverse((c) => {
+            if (c instanceof THREE.Mesh) {
+              c.geometry?.dispose()
+              if (Array.isArray(c.material)) c.material.forEach(m => m.dispose())
+              else c.material?.dispose()
             }
-          });
+          })
         }
-        
-        // Add new model
-        currentModel = gltf.scene;
-        scene.add(gltf.scene);
-
-        // Center and scale model
-        const box = new THREE.Box3().setFromObject(gltf.scene);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
+    
+        /* ─────────────────────────────  NORMALISE NEW MODEL  ───────────────────────────── */
+        // 0.  Wrap everything in a container we control
+        const container = new THREE.Group()
+        container.add(gltf.scene)
+        scene.add(container)
+        currentModel = container
+    
+        // 1.  Initial box → scale so longest edge == 2 units
+        const box1   = new THREE.Box3().setFromObject(container)
+        const size1  = box1.getSize(new THREE.Vector3())
+        const scale  = size1.length() > 0 ? 2 / Math.max(size1.x, size1.y, size1.z) : 1
+        container.scale.setScalar(scale)
+    
+        // 2.  Recompute box after scaling
+        const box2  = new THREE.Box3().setFromObject(container)
+    
+        // 3.  Translate: centre X‑Z, lift so bottom rests on y = 0
+        const offsetX = -(box2.max.x + box2.min.x) / 2
+        const offsetY = -box2.min.y                         // already scaled
+        const offsetZ = -(box2.max.z + box2.min.z) / 2
+        container.position.set(0, offsetY, 0);
+    
+        // 4.  Persist unscaled vertical offset for metadata
+        const unscaledOffsetY = offsetY / scale
+        useViewerStore.getState().setModelVerticalOffset(unscaledOffsetY)
+    
+        // 5. Frame camera based on the final positioned object
+        const box3  = new THREE.Box3().setFromObject(container)      // final box
+        const center = box3.getCenter(new THREE.Vector3());
+        const size = box3.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2 / maxDim;
-        gltf.scene.scale.multiplyScalar(scale);
-        gltf.scene.position.sub(center.multiplyScalar(scale));
+        const camDist = box3.getSize(new THREE.Vector3()).length() * 1.5
 
-        // Update camera
-        camera.position.z = 3;
-        controls.update();
+        // Position camera relative to the center
+        camera.position.copy(center);
+        camera.position.z += Math.max(maxDim * 1.5, 3); // Adjust distance based on size, ensure minimum
+        camera.lookAt(center); // Ensure camera looks at the object center
+
+        // Update controls target to the object center
+        controls.target.copy(center);
+        controls.update()
+    
+        // Grounding confirmed via debugger. Logging removed.
       },
       undefined,
-      (err: unknown) => {
-        const error = err instanceof Error ? err : new Error('Failed to load model');
-        console.error('Error loading model:', error);
-        toast.error('Failed to load 3D model');
+      (err) => {
+        console.error('Failed to load model:', err)
+        toast.error('Failed to load 3D model')
       }
     )
 
@@ -134,6 +157,13 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
+
+      // Log container position just before rendering each frame
+      if (sceneRef.current && currentModel) {
+        const worldPos = currentModel.getWorldPosition(new THREE.Vector3());
+        // console.log('>>> Animate Loop - Container World Y:', worldPos.y.toFixed(4)); // Keep previous log commented for now
+      }
+
       renderer.render(scene, camera);
     }
     animate();

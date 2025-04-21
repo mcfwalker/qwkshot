@@ -2,8 +2,8 @@
 
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
-import { Suspense, useRef, useState, useCallback, useEffect } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
+import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene, Group } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -23,19 +23,70 @@ import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
 import { usePathname } from 'next/navigation';
 
-// Model component that handles GLTF/GLB loading
-function Model({ url, modelRef, height = 0 }: { url: string; modelRef: React.RefObject<Object3D | null>; height?: number }) {
-  const { scene } = useGLTF(url);
-  
-  // Update the ref when the scene changes
-  if (modelRef.current !== scene) {
-    modelRef.current = scene;
-  }
-  
-  // Apply height offset
-  scene.position.y = height;
-  
-  return <primitive object={scene} />;
+// Model component that handles GLTF/GLB loading and NORMALIZATION
+function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
+  const { scene: originalScene } = useGLTF(url);
+  const setModelVerticalOffset = useViewerStore((s) => s.setModelVerticalOffset);
+
+  // Memoize the normalized model to avoid recomputation on every render
+  const normalizedModelContainer = useMemo(() => {
+    if (!originalScene) return null;
+
+    console.log("Viewer.tsx <Model>: Normalizing GLTF scene...");
+
+    // Clone scene to avoid modifying the cache from useGLTF
+    const scene = originalScene.clone();
+
+    /* --- Container-based normalization --- */
+    const container = new Group();
+    container.add(scene);
+    // Note: We don't add container to the main scene here,
+    // it will be returned by this component for the Canvas to render.
+
+    // 1. Initial box -> scale so longest edge == 2 units (or adjust target size)
+    const box1 = new Box3().setFromObject(container);
+    const size1 = box1.getSize(new Vector3());
+    const maxDim = Math.max(size1.x, size1.y, size1.z);
+    const targetSize = 2.0; // Define the target normalized size
+    const scale = maxDim > 0 ? targetSize / maxDim : 1;
+    container.scale.setScalar(scale);
+    console.log(`Viewer.tsx <Model>: Calculated scale: ${scale.toFixed(4)} (maxDim: ${maxDim.toFixed(4)})`);
+
+
+    // 2. Recalculate box after scaling
+    const box2 = new Box3().setFromObject(container);
+
+    // 3. Translate: Lift so bottom rests on y=0 (Only Y translation)
+    // We keep XZ centered around the container's local origin,
+    // which is appropriate if the GLTF itself is reasonably centered.
+    const offsetY = -box2.min.y; // Amount to lift (already scaled)
+    container.position.set(0, offsetY, 0);
+    console.log(`Viewer.tsx <Model>: Calculated offsetY: ${offsetY.toFixed(4)}`);
+
+    // 4. Persist unscaled vertical offset for metadata
+    const unscaledOffsetY = offsetY / scale;
+    setModelVerticalOffset(unscaledOffsetY); // Update Zustand store
+    console.log(`Viewer.tsx <Model>: Stored unscaledOffsetY: ${unscaledOffsetY.toFixed(4)}`);
+
+    // 5. Bounding box after translation (for debugging)
+    const finalBox = new Box3().setFromObject(container);
+    console.log(`Viewer.tsx <Model>: Final container world box min.y: ${finalBox.min.y.toFixed(4)}, max.y: ${finalBox.max.y.toFixed(4)}`);
+
+    return container; // Return the normalized container group
+
+  }, [originalScene, setModelVerticalOffset]); // Dependencies
+
+  // Update the external modelRef with the container group
+  useEffect(() => {
+    if (normalizedModelContainer) {
+       modelRef.current = normalizedModelContainer;
+    }
+    // Cleanup ref when component unmounts or URL changes
+    return () => { modelRef.current = null; };
+  }, [normalizedModelContainer, modelRef]);
+
+  // Render the normalized container or null if not ready
+  return normalizedModelContainer ? <primitive object={normalizedModelContainer} /> : null;
 }
 
 interface ViewerProps {
@@ -46,7 +97,6 @@ interface ViewerProps {
 
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
-  const [modelHeight, setModelHeight] = useState(0);
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -176,103 +226,40 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   // --- Effect to Add/Remove Bounding Box Helper --- START
   useEffect(() => {
     if (modelRef.current && sceneRef.current) {
-      console.log("Viewer: Model loaded, adding bounding box helper.");
-      // Calculate bounding box
+      console.log("Viewer: Model ref updated, adding/updating bounding box helper."); // Changed log message
+      // Calculate bounding box FROM THE NORMALIZED CONTAINER
       const box = new Box3().setFromObject(modelRef.current);
       
-      // Create helper
-      const helper = new Box3Helper(box, 0xffff00); // Yellow color
-      setBoundingBoxHelper(helper);
-      sceneRef.current.add(helper);
+      // If helper exists, update it, otherwise create it
+      if (boundingBoxHelper) {
+        boundingBoxHelper.box = box;
+        boundingBoxHelper.updateMatrixWorld(true); // Ensure helper updates
+        console.log("Viewer: Updated existing bounding box helper.");
+      } else {
+        const helper = new Box3Helper(box, 0xffff00); // Yellow color
+        setBoundingBoxHelper(helper);
+        sceneRef.current.add(helper);
+        console.log("Viewer: Created new bounding box helper.");
+      }
 
-      // Cleanup function
+      // Cleanup function (only removes if helper exists)
       return () => {
-        console.log("Viewer: Cleaning up bounding box helper.");
-        if (helper && sceneRef.current) {
-          sceneRef.current.remove(helper);
+        if (boundingBoxHelper && sceneRef.current) {
+           console.log("Viewer: Cleaning up bounding box helper (in cleanup).");
+           sceneRef.current.remove(boundingBoxHelper);
+           setBoundingBoxHelper(null);
         }
-        setBoundingBoxHelper(null);
       };
     } else {
-        // Ensure helper is removed if model becomes null
+        // Ensure helper is removed if model becomes null or ref changes
         if (boundingBoxHelper && sceneRef.current) {
-            console.log("Viewer: Model removed, cleaning up bounding box helper.");
+            console.log("Viewer: Model null or ref changed, cleaning up bounding box helper.");
             sceneRef.current.remove(boundingBoxHelper);
             setBoundingBoxHelper(null);
         }
     }
-  }, [modelRef.current, modelHeight]); // Line 232: Add modelHeight dependency
+  }, [modelRef.current]); // Removed modelHeight dependency
   // --- Effect to Add/Remove Bounding Box Helper --- END
-
-  // Handle model height changes with validation and feedback
-  const handleModelHeightChange = (newHeight: number) => {
-    try {
-      // Validate height
-      if (typeof newHeight !== 'number' || isNaN(newHeight)) {
-        throw new Error('Invalid height value');
-      }
-
-      // Update height
-      setModelHeight(newHeight);
-
-      // Show success toast - REMOVE THIS
-      // toast.success('Floor offset updated', {
-      //  description: `Model height set to ${newHeight.toFixed(2)} units`
-      // });
-    } catch (error) {
-      console.error('Error updating model height:', error);
-      toast.error('Failed to update floor offset', {
-        description: error instanceof Error ? error.message : 'Invalid height value'
-      });
-    }
-  };
-
-  // --- Lifted Animation Handlers ---
-  const handleAnimationStart = useCallback(() => {
-    setIsPlaying(true);
-    // Reset progress visually when starting playback
-    // if (progress < 1) { 
-    //     setProgress(0); 
-    // }
-    setProgress(0); // Always reset progress when starting play
-    console.log("Viewer: Animation Started");
-  }, []); // Remove progress dependency
-
-  const handleAnimationStop = useCallback(() => {
-    setIsPlaying(false);
-    // Use setTimeout to ensure progress reset happens after final updates
-    setTimeout(() => setProgress(0), 0); 
-    console.log("Viewer: Animation Stopped/Completed");
-  }, [setIsPlaying, setProgress]); // Add setIsPlaying and setProgress
-
-  const handleAnimationPause = useCallback(() => {
-    setIsPlaying(false); 
-    // Progress state is already updated via onProgressUpdate
-    console.log(`Viewer: Animation Paused at ${progress.toFixed(1)}%`);
-  }, [progress]);
-
-  const handlePlaybackSpeedChange = useCallback((speed: number) => {
-    setPlaybackSpeed(speed);
-    console.log(`Viewer: Playback speed set to ${speed}x`);
-  }, []);
-
-  // Handler for scrubbing the progress slider (when not playing)
-  const handleProgressChange = useCallback((newProgress: number) => {
-      if (!isPlaying) {
-          setProgress(newProgress);
-          // Potentially update camera preview based on scrub? (More complex, skip for now)
-      }
-  }, [isPlaying]);
-
-  // Handler to receive new commands/duration from CameraAnimationSystem
-  const handleNewPathGenerated = useCallback((newCommands: CameraCommand[], newDuration: number) => {
-      setCommands(newCommands);
-      setDuration(newDuration);
-      setProgress(0); // Reset progress for new path
-      setIsPlaying(false); // Ensure not playing initially
-      console.log(`Viewer: New path received (${newCommands.length} commands, ${newDuration}s)`);
-  }, []);
-  // --- End Lifted Handlers ---
 
   // Handler for grid toggle
   const handleGridToggle = (visible: boolean) => {
@@ -330,7 +317,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     setDuration(10); // Reset to default duration
     setPlaybackSpeed(1); // Reset to default speed
     setFov(50); // Reset FOV
-    setModelHeight(0); // Reset model offset
     setFloorTexture(null); // Reset floor texture
     setGridVisible(true); // Ensure grid is visible
     // Add any other relevant state resets here
@@ -382,6 +368,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
                   RIGHT: MOUSE.PAN
                 }}
                 enabled={controlsEnabled}
+                target={[0, 1, 0]} // Target the approximate center of the normalized (height=2) model
               />
             );
           })()}
@@ -391,9 +378,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
           {/* Model */}
           {modelUrl ? (
-            <Model url={modelUrl} modelRef={modelRef} height={modelHeight} />
+            <Model url={modelUrl} modelRef={modelRef} />
           ) : (
-            <mesh castShadow receiveShadow ref={modelRef} position={[0, modelHeight, 0]}>
+            <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
               <boxGeometry args={[1, 1, 1]} />
               <meshStandardMaterial color="white" />
             </mesh>
@@ -413,7 +400,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             cameraRef={cameraRef}
             controlsRef={controlsRef}
             onProgressUpdate={setProgress} // Pass setProgress directly
-            onComplete={handleAnimationStop}
+            onComplete={() => { setIsPlaying(false); setProgress(0); }}
             currentProgress={progress} // Pass current progress for pause/resume
             isRecording={isRecording}
           />
@@ -428,8 +415,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         </ErrorBoundary>
         
         <SceneControls
-          modelHeight={modelHeight}
-          onModelHeightChange={handleModelHeightChange}
           fov={fov}
           onFovChange={setFov}
           gridVisible={gridVisible}
@@ -451,14 +436,18 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           duration={duration} 
           playbackSpeed={playbackSpeed}
           fov={fov}
-          modelHeight={modelHeight} // Pass modelHeight prop
           // Pass down relevant handlers/callbacks
-          onPlayPause={isPlaying ? handleAnimationPause : handleAnimationStart}
-          onStop={handleAnimationStop} // Maybe need a dedicated reset handler?
-          onProgressChange={handleProgressChange} // For slider interaction
-          onSpeedChange={handlePlaybackSpeedChange}
-          onDurationChange={setDuration} // Pass down setter for UI input field
-          onGeneratePath={handleNewPathGenerated} // Callback to receive new path
+          onPlayPause={isPlaying ? () => { setIsPlaying(false); setProgress(0); } : () => { setIsPlaying(true); setProgress(0); }}
+          onStop={() => { setIsPlaying(false); setProgress(0); }}
+          onProgressChange={setProgress}
+          onSpeedChange={setPlaybackSpeed}
+          onDurationChange={setDuration}
+          onGeneratePath={(commands, duration) => {
+            setCommands(commands);
+            setDuration(duration);
+            setProgress(0);
+            setIsPlaying(false);
+          }}
           // Pass down refs needed by CameraAnimationSystem (e.g., for lock, download)
           modelRef={modelRef}
           cameraRef={cameraRef}
@@ -469,7 +458,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           isModelLoaded={!!modelUrl}
           isRecording={isRecording}
           setIsRecording={setIsRecording}
-          resetCounter={resetCounter} // Pass reset trigger
+          resetCounter={resetCounter}
         />
       </div>
 

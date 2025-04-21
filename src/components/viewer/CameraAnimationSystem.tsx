@@ -66,7 +66,6 @@ interface CameraAnimationSystemProps {
   isModelLoaded: boolean;
   resetCounter: number;
   modelId: string | null;
-  modelHeight: number;
 }
 
 const CameraSystemFallback = () => (
@@ -193,7 +192,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   isModelLoaded,
   resetCounter,
   modelId,
-  modelHeight,
 }) => {
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -665,7 +663,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 target: serializeVector3(cameraTarget),
                 fov: currentFov
             },
-            modelOffset: modelHeight,
+            modelOffset: 0, // Assuming default modelOffset
             // Add missing fields with defaults
             lighting: { 
                 intensity: 1, 

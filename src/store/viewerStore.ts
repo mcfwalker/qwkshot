@@ -35,9 +35,11 @@ const metadataManager = metadataManagerFactory.create({
 interface ViewerState {
   isLocked: boolean;
   modelId: string | null;
+  modelVerticalOffset: number | null;
   toggleLock: () => void;
   setLock: (locked: boolean) => void;
   setModelId: (id: string | null) => void;
+  setModelVerticalOffset: (v: number | null) => void;
   storeEnvironmentalMetadata: (
     modelRef: Object3D,
     cameraRef: PerspectiveCamera,
@@ -49,6 +51,7 @@ interface ViewerState {
 export const useViewerStore = create<ViewerState>((set, get) => ({
   isLocked: false,
   modelId: null,
+  modelVerticalOffset: null,
   toggleLock: () => {
     const currentState = get();
     console.log('Toggling lock state in store. Current state:', {
@@ -63,6 +66,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
   setLock: (locked) => set({ isLocked: locked }),
   setModelId: (id) => set({ modelId: id }),
+  setModelVerticalOffset: (v) => set({ modelVerticalOffset: v }),
   storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef, fov) => {
     const { modelId } = get();
     if (!modelId) {
