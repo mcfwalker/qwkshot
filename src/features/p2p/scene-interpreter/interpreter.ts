@@ -986,14 +986,19 @@ private _mapDescriptorToValue(
           if (targetName === 'current_target') {
             orbitCenter = currentTarget.clone();
             this.logger.debug('Orbit target resolved to current target.');
-          } else if (targetName === 'object_center' && sceneAnalysis?.spatial?.bounds?.center) {
-            orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
-            this.logger.debug(`Orbit target resolved to object center: ${orbitCenter.toArray()}`);
           } else {
-            // Fall back to object center if we cannot resolve the named target
-            if (sceneAnalysis?.spatial?.bounds?.center) {
-                orbitCenter = sceneAnalysis.spatial.bounds.center.clone();
-                this.logger.warn(`Unsupported orbit target '${targetName}', defaulting to object center.`);
+            // Default to object_center or handle other potential future named targets
+            const baseCenter = sceneAnalysis?.spatial?.bounds?.center;
+            if (baseCenter) {
+                // <<< FIX: Apply modelOffset to the resolved/defaulted center >>>
+                const modelOffsetValue = envAnalysis.modelOffset ?? 0;
+                orbitCenter = baseCenter.clone();
+                orbitCenter.y += modelOffsetValue; // Add the offset
+                // -------------------------------------------------------------
+                if (targetName !== 'object_center') {
+                    this.logger.warn(`Unsupported orbit target '${targetName}', defaulting to offset object center.`);
+                }
+                this.logger.debug(`Orbit center calculated (using offset ${modelOffsetValue.toFixed(4)}): ${orbitCenter.toArray()}`);
             } else {
                 this.logger.error(`Cannot resolve orbit target '${targetName}' and object center is unavailable. Skipping step.`);
                 continue;
