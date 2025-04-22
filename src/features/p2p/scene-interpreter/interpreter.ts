@@ -983,26 +983,30 @@ private _mapDescriptorToValue(
           
           // 1. Resolve target / orbit center
           let orbitCenter: Vector3;
-          if (targetName === 'current_target') {
-            orbitCenter = currentTarget.clone();
-            this.logger.debug('Orbit target resolved to current target.');
+          // Use the centralized resolver function for ALL named targets
+          const resolvedTarget = this._resolveTargetPosition(
+              targetName, // Pass the target name from the step parameters
+              sceneAnalysis,
+              currentTarget, // Pass current target for potential 'current_target' resolution
+              envAnalysis.modelOffset ?? 0 // Pass the correct offset
+          );
+
+          if (resolvedTarget) {
+              orbitCenter = resolvedTarget.clone();
+              this.logger.debug(`Orbit target '${targetName}' resolved to: ${orbitCenter.toArray()}`);
           } else {
-            // Default to object_center or handle other potential future named targets
-            const baseCenter = sceneAnalysis?.spatial?.bounds?.center;
-            if (baseCenter) {
-                // <<< FIX: Apply modelOffset to the resolved/defaulted center >>>
-                const modelOffsetValue = envAnalysis.modelOffset ?? 0;
-                orbitCenter = baseCenter.clone();
-                orbitCenter.y += modelOffsetValue; // Add the offset
-                // -------------------------------------------------------------
-                if (targetName !== 'object_center') {
-                    this.logger.warn(`Unsupported orbit target '${targetName}', defaulting to offset object center.`);
-                }
-                this.logger.debug(`Orbit center calculated (using offset ${modelOffsetValue.toFixed(4)}): ${orbitCenter.toArray()}`);
-            } else {
-                this.logger.error(`Cannot resolve orbit target '${targetName}' and object center is unavailable. Skipping step.`);
-                continue;
-            }
+              // Fallback if resolution fails: Try object_center (with offset)
+              this.logger.warn(`Could not resolve orbit target '${targetName}'. Falling back to offset object_center.`);
+              const baseCenter = sceneAnalysis?.spatial?.bounds?.center;
+              if (baseCenter) {
+                  const modelOffsetValue = envAnalysis.modelOffset ?? 0;
+                  orbitCenter = baseCenter.clone();
+                  orbitCenter.y += modelOffsetValue; // Apply offset to fallback center
+                  this.logger.debug(`Using fallback orbit center: ${orbitCenter.toArray()}`);
+              } else {
+                  this.logger.error(`Cannot resolve orbit target '${targetName}' and fallback object center is unavailable. Skipping step.`);
+                  continue; // Cannot proceed without a valid center
+              }
           }
 
           // 2. Determine rotation axis vector
