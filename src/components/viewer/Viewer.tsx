@@ -23,6 +23,7 @@ import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
 import { CenterReticle } from './CenterReticle';
+import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 // Model component that handles GLTF/GLB loading and NORMALIZATION
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -99,6 +100,7 @@ interface ViewerProps {
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
+  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>('model');
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -438,11 +440,56 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
-      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4">
-        <ErrorBoundary name="ModelSelectorTabs">
-           <ModelSelectorTabs onModelSelect={onModelSelect} />
-        </ErrorBoundary>
+      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Reverted to original narrower width */} 
+        {/* --- NEW Tabbed Panel for Model/Camera --- */}
+        <TabsPrimitive.Root 
+            value={activeLeftPanelTab}
+            onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
+            className="flex flex-col gap-4" // Use flex-col within the tab root
+        >
+          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+            <TabsPrimitive.Trigger 
+              value="model" 
+              className={cn(
+                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+              )}
+            >
+              MODEL
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger 
+              value="camera" 
+              className={cn(
+                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+              )}
+            >
+              CAMERA
+            </TabsPrimitive.Trigger>
+          </TabsPrimitive.List>
+
+          {/* Model Tab Content */}
+          <TabsPrimitive.Content value="model">
+            <ErrorBoundary name="ModelSelectorTabs">
+              <ModelSelectorTabs onModelSelect={onModelSelect} />
+            </ErrorBoundary>
+          </TabsPrimitive.Content>
+
+          {/* Camera Tab Content (Placeholder for now) */}
+          <TabsPrimitive.Content value="camera">
+             <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm border border-dashed rounded-lg">
+               Camera Controls Coming Soon...
+             </div>
+          </TabsPrimitive.Content>
+
+        </TabsPrimitive.Root>
+        {/* --- END Tabbed Panel --- */}
         
+        {/* Scene Controls (Remains separate below the tabs) */}
         <SceneControls
           userVerticalAdjustment={userVerticalAdjustment}
           onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
