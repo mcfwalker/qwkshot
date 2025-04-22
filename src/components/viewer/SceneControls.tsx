@@ -73,7 +73,7 @@ export function SceneControls({
                   value={[userVerticalAdjustment]}
                   onValueChange={handleAdjustmentChange}
                   min={-2}
-                  max={5}
+                  max={5} 
                   step={0.05}
                   className="viewer-slider h-2 disabled:cursor-not-allowed"
                   disabled={isLocked}

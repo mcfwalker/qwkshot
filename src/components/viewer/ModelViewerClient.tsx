@@ -101,7 +101,7 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
             }
           })
         }
-    
+        
         /* ─────────────────────────────  NORMALISE NEW MODEL  ───────────────────────────── */
         // 0.  Wrap everything in a container we control
         const container = new THREE.Group()
@@ -123,7 +123,7 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
         const offsetY = -box2.min.y                         // already scaled
         const offsetZ = -(box2.max.z + box2.min.z) / 2
         container.position.set(0, offsetY, 0);
-    
+
         // 4.  Persist unscaled vertical offset for metadata
         const unscaledOffsetY = offsetY / scale
         useViewerStore.getState().setModelVerticalOffset(unscaledOffsetY)

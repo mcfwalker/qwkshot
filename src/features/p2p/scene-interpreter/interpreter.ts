@@ -1295,19 +1295,19 @@ private _mapDescriptorToValue(
                 initialTarget, // Use initialTarget here
                 envAnalysis.modelOffset ?? 0 // Use correct offset
             ); // Try resolving it
-            if (resolvedExplicitTarget) {
-                finalTarget = resolvedExplicitTarget.clone();
-                this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
-                isAbsoluteTarget = true;
-                // NOTE: The provided 'angle' parameter is ignored when an absolute target is given.
-                // We might want to log a warning or refine the KB/Assistant instructions about this.
-                if (angle) {
-                    this.logger.warn(`Tilt: Explicit target '${targetName}' provided, ignoring angle parameter (${angle} degrees).`);
-                }
-            } else {
-                this.logger.error(`Tilt: Could not resolve explicit target '${targetName}'. Skipping step.`);
-                continue; // Cannot proceed without a valid target
-            }
+              if (resolvedExplicitTarget) {
+                  finalTarget = resolvedExplicitTarget.clone();
+                  this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
+                  isAbsoluteTarget = true; 
+                  // NOTE: The provided 'angle' parameter is ignored when an absolute target is given.
+                  // We might want to log a warning or refine the KB/Assistant instructions about this.
+                  if (angle) { 
+                      this.logger.warn(`Tilt: Explicit target '${targetName}' provided, ignoring angle parameter (${angle} degrees).`);
+                  }
+              } else {
+                  this.logger.error(`Tilt: Could not resolve explicit target '${targetName}'. Skipping step.`);
+                  continue; // Cannot proceed without a valid target
+              }
           } else {
               // No explicit target - perform a relative tilt by the specified angle
               this.logger.debug(`Tilt: No explicit target provided. Performing relative tilt of ${angle} degrees ${direction}.`);
@@ -1661,7 +1661,7 @@ private _mapDescriptorToValue(
                     } else {
                         effectiveDistance = Math.abs(signedDistance);
                     }
-
+                    
                     // Override direction based on calculated distance
                     direction = signedDistance >= 0 ? 'right' : 'left';
                     isDestinationMove = true;
@@ -1863,7 +1863,7 @@ private _mapDescriptorToValue(
 
           const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
-          // --- Check for Destination Target ---
+          // --- Check for Destination Target --- 
           if (destinationTargetName) {
             this.logger.debug(`Pedestal: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
             // Pass the offset from envAnalysis, defaulting to 0
@@ -1886,9 +1886,9 @@ private _mapDescriptorToValue(
                     isDestinationMove = true; // <<< FIX: Ensure flag is set even for zero distance
                 } else { // Case 2: Distance is non-zero
                     effectiveDistance = Math.abs(signedDistance);
-                    direction = signedDistance >= 0 ? 'up' : 'down';
+                direction = signedDistance >= 0 ? 'up' : 'down';
                     isDestinationMove = true; // <<< Ensure flag is set for non-zero distance
-                    this.logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
+                this.logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
                 }
             } else {
                 this.logger.warn(`Pedestal: Could not resolve destination target '${destinationTargetName}'. Falling back to distance parameter.`);
