@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
+import { CenterReticle } from './CenterReticle';
 
 // Model component that handles GLTF/GLB loading and NORMALIZATION
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -359,6 +360,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   return (
     <div className={cn('relative w-full h-full', className)}>
+      {/* Reticle Overlay - Placed after Canvas but inside relative container */}
+      <CenterReticle />
+
       <Canvas
         className="w-full h-full"
         ref={canvasRef}
