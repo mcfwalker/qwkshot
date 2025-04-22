@@ -407,18 +407,19 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             {modelUrl ? (
               <Model url={modelUrl} modelRef={modelRef} />
             ) : (
-              <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
-                <boxGeometry args={[1, 1, 1]} />
-                <meshStandardMaterial color="white" />
-              </mesh>
+              /*{
+                Fallback cube - Commented out
+                <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
+                  <boxGeometry args={[1, 1, 1]} />
+                  <meshStandardMaterial color="white" />
+                </mesh>
+              }*/
+              null // Render nothing if no modelUrl
             )}
           </group>
           
           {/* Environment for realistic lighting */}
           <Environment preset="city" />
-
-          {/* --- Add Axes Helper --- */}
-          <primitive object={new AxesHelper(5)} />
 
           {/* --- Animation Controller (Inside Canvas) --- */}
           <AnimationController 
