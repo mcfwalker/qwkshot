@@ -13,8 +13,8 @@ This document contains a set of standard prompts used for regression testing the
     *   `"Slowly zoom out by a factor of 2."`
     *   `"Zoom in very close to the current target."`
 *   **Orbit:**
-    *   `"Slowly orbit 180 degrees clockwise around the object."`
-    *   `"Orbit 90 degrees left around the object center."`
+    *   `"Slowly orbit 180 degrees clockwise around the object."` xxx repositioned camera
+    *   `"Orbit 90 degrees left around the object center."` xxx repositioned camera
 *   **Pan:**
     *   `"Pan left by 45 degrees."`
     *   `"Look right 90 degrees slowly."`
@@ -24,7 +24,7 @@ This document contains a set of standard prompts used for regression testing the
 *   **Dolly:**
     *   `"Move the camera forward towards the object by 2 units."`
     *   `"Dolly in close."`
-    *   `"Dolly backward a large distance."`
+    *   `"Dolly backward a large distance."` xx large is not large
 *   **Truck:**
     *   `"Move the camera sideways to the right by 3 units."`
     *   `"Truck right a bit."`
@@ -35,22 +35,22 @@ This document contains a set of standard prompts used for regression testing the
     *   `"Pedestal down a medium distance."`
 *   **Focus On (with Spatial References):**
     *   `"Focus on the top of the object."`
-    *   `"Look at the bottom center."`
-    *   `"Center the view on the left side."`
-    *   `"Focus on the front edge."`
+    *   `"Look at the bottom center."` xxx weird spin; camera should be stationary
+    *   `"Center the view on the left side."` x this is my left, not the left of the object
+    *   `"Focus on the front edge."` 
 
 ### 2. Sequential Motions (2-3 Steps)
 
 *   `"Zoom out a little, then orbit 90 degrees counter-clockwise."`
 *   `"Pedestal up slightly, then tilt down to look at the object center."`
 *   `"Truck left, then dolly forward fast."`
-*   `"Orbit 45 degrees clockwise, pause briefly, then zoom in close."`
+*   `"Orbit 45 degrees clockwise, pause briefly, then zoom in close."` xxx orbits recenter to object original center
 *   `"Look up 20 degrees, then pan right 45 degrees."`
 
 ### 3. Qualitative Modifiers & Edge Cases
 
-*   `"Perform a very slow orbit 360 degrees around the entire model."`
-*   `"Rapidly push in towards the object's center."`
+*   `"Perform a very slow orbit 360 degrees around the entire model."`xxx orbit recenters to the og center
+*   `"Rapidly push in towards the object's center."` xxxx complete fail
 *   `"Gently pedestal down while panning right."` (Note: Expected sequential execution)
 *   `"Zoom out factor 0.5"` (Test contradictory parameters - should be handled by Interpreter/Assistant)
 *   `"Zoom in factor 2.0"` (Test contradictory parameters - should be handled by Interpreter/Assistant)
@@ -62,16 +62,16 @@ This document contains a set of standard prompts used for regression testing the
 
 *   **Descriptor Tests:**
     *   `"Zoom in just a tiny bit."`
-    *   `"Truck way across the scene to the right."`
+    *   `"Truck way across the scene to the right."` x distance should be larger?
     *   `"Pedestal a smidge up."` (Should map to 'tiny')
-    *   `"Dolly back substantially."` (Should map to 'large' or 'huge')
+    *   `"Dolly back substantially."` (Should map to 'large' or 'huge') x needs to be larger distance; maps to 'large' but should be 'huge'
     *   `"Fly by extremely close to the object center."` (Requires fly_by implementation)
     *   `"Zoom out a huge amount."`
     *   `"Move forward a medium distance."`
     *   `"Pedestal down small amount."`
 *   **Override Tests:**
     *   `"Dolly forward 5 units."`
-    *   `"Zoom factor 0.1."` (Should zoom in) xxx
+    *   `"Zoom factor 0.1."` (Should zoom in) xx kinda works depending on camera start position
     *   `"Pedestal down 2.5 units."`
     *   `"Truck left 10."`
     *   `"Zoom out with a factor of 3.0."`
@@ -81,9 +81,9 @@ This document contains a set of standard prompts used for regression testing the
 ### 5. Spatial Reference Targeting (Renumbered)
 
 *   `"Tilt down to look at the bottom center."`
-*   `"Orbit 90 degrees around the left side."`
-*   `"Dolly in towards the front edge."`
-*   `"Pan left to face the back center of the object."`
+*   `"Orbit 90 degrees around the left side."` xxx same orbit issues
+*   `"Dolly in towards the front edge."` x might violate clamping
+*   `"Pan left to face the back center of the object."` xxxx animation
 *   `"Pedestal up towards the top edge."`
 
 ---
