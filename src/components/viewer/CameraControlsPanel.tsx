@@ -129,7 +129,7 @@ export function CameraControlsPanel({
       {/* Reset Button Section */}
       <Button 
         variant="secondary" 
-        className="dpad-button w-full" 
+        className="w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#353535] border-0 text-foreground/80 shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040] disabled:opacity-70 disabled:pointer-events-none"
         disabled={isLocked}
         onClick={handleReset}
       >

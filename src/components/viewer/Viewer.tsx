@@ -258,9 +258,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   // State for tracking active camera movement directions
   const [movementDirection, setMovementDirection] = useState<MovementDirection>({ up: false, down: false, left: false, right: false });
 
-  // State to store the calculated default camera position/target after normalization
-  const [defaultCameraState, setDefaultCameraState] = useState<{ position: Vector3, target: Vector3 } | null>(null);
-
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
     let extractedModelId: string | undefined;
@@ -356,16 +353,20 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       toast.error('Cannot reset camera while locked or playing animation.');
       return;
     }
-    if (defaultCameraState && cameraRef.current && controlsRef.current) {
-      cameraRef.current.position.copy(defaultCameraState.position);
-      controlsRef.current.target.copy(defaultCameraState.target);
-      // controlsRef.current.update(); // Let R3F handle update on next frame
+    if (cameraRef.current && controlsRef.current) {
+      // Define hardcoded initial state
+      const initialPosition = new Vector3(5, 5, 5);
+      const initialTarget = new Vector3(0, 0, 0); // Or new Vector3(0, 1, 0) if preferred
+
+      cameraRef.current.position.copy(initialPosition);
+      controlsRef.current.target.copy(initialTarget);
+      // controlsRef.current.update(); // Let R3F handle update
       setMovementDirection({ up: false, down: false, left: false, right: false });
-      toast.info('Camera position reset to default');
+      toast.info('Camera position reset');
     } else {
-      toast.info('Default camera state not captured yet.');
+      toast.error('Camera references not available for reset.');
     }
-  }, [defaultCameraState, isLocked, isPlaying]); // Dependencies
+  }, [isLocked, isPlaying]); // Removed defaultCameraState dependency
   // --- END Camera Movement Handlers ---
 
   // --- Keyboard Controls Effect (Updated Dependencies) ---
