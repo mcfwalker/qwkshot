@@ -24,6 +24,8 @@ import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
 import { CenterReticle } from './CenterReticle';
 import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { CameraControlsPanel } from './CameraControlsPanel';
+import { useFrame } from '@react-three/fiber';
 
 // Model component that handles GLTF/GLB loading and NORMALIZATION
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -91,10 +93,74 @@ function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Objec
   return normalizedModelContainer ? <primitive object={normalizedModelContainer} /> : null;
 }
 
+// Type for movement state
+interface MovementDirection {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+}
+
+// --- <<< NEW: Helper component for useFrame logic >>> ---
+interface CameraMoverProps {
+  movementDirection: MovementDirection;
+  cameraRef: React.RefObject<ThreePerspectiveCamera>;
+  controlsRef: React.RefObject<any>; // Type for OrbitControls is complex
+  isLocked: boolean;
+  isPlaying: boolean;
+}
+
+function CameraMover({ 
+  movementDirection, 
+  cameraRef, 
+  controlsRef, 
+  isLocked, 
+  isPlaying 
+}: CameraMoverProps) {
+
+  const moveSpeed = 5.0; // Adjust speed as needed (units per second)
+
+  // Vectors for calculation (reused to avoid allocations)
+  const cameraRight = useMemo(() => new Vector3(), []);
+  const cameraUp = useMemo(() => new Vector3(), []);
+  const moveVector = useMemo(() => new Vector3(), []);
+
+  // Define World Axes
+  const worldAxisX = useMemo(() => new Vector3(1, 0, 0), []);
+  const worldAxisY = useMemo(() => new Vector3(0, 1, 0), []);
+
+  useFrame((state, delta) => {
+    if (isLocked || isPlaying) return; // Don't move if locked or animating
+    moveVector.set(0, 0, 0); // Reset moveVector for this frame
+
+    // Accumulate movement based on active directions using WORLD axes
+    if (movementDirection.up)    moveVector.add(worldAxisY);
+    if (movementDirection.down)  moveVector.sub(worldAxisY);
+    if (movementDirection.left)  moveVector.sub(worldAxisX);
+    if (movementDirection.right) moveVector.add(worldAxisX);
+
+    if (moveVector.lengthSq() > 0) { // Only move if a direction is active
+      // Normalize the combined direction and scale by speed and frame time
+      moveVector.normalize().multiplyScalar(moveSpeed * delta);
+
+      // Apply the movement to both camera position and target
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (camera && controls) {
+        camera.position.add(moveVector);
+        controls.target.add(moveVector); // Move target parallel to camera
+      }
+    }
+  });
+
+  return null; // This component doesn't render anything itself
+}
+// --- <<< END CameraMover component >>> ---
+
 interface ViewerProps {
-  className?: string;
-  modelUrl: string;
-  onModelSelect: (url: string) => void;
+  className: string;
+  modelUrl: string | null;
+  onModelSelect: (modelId: string | null) => void;
 }
 
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
@@ -189,6 +255,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [boundingBoxHelper, setBoundingBoxHelper] = useState<Box3Helper | null>(null);
   const sceneRef = useRef<Scene | null>(null);
 
+  // State for tracking active camera movement directions
+  const [movementDirection, setMovementDirection] = useState<MovementDirection>({ up: false, down: false, left: false, right: false });
+
+  // State to store the calculated default camera position/target after normalization
+  const [defaultCameraState, setDefaultCameraState] = useState<{ position: Vector3, target: Vector3 } | null>(null);
+
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
     let extractedModelId: string | undefined;
@@ -272,6 +344,60 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     };
   }, [modelRef.current, userVerticalAdjustment]); // Corrected dependencies
   // --- Effect to Add/Remove Bounding Box Helper --- END
+
+  // --- Camera Movement Handlers (Updated Dependencies) ---
+  const handleCameraMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
+    if (isLocked || isPlaying) return;
+    setMovementDirection(prev => ({ ...prev, [direction]: active }));
+  }, [isLocked, isPlaying]); // Dependencies: isLocked, isPlaying
+
+  const handleCameraReset = useCallback(() => {
+    if (isLocked || isPlaying) {
+      toast.error('Cannot reset camera while locked or playing animation.');
+      return;
+    }
+    if (defaultCameraState && cameraRef.current && controlsRef.current) {
+      cameraRef.current.position.copy(defaultCameraState.position);
+      controlsRef.current.target.copy(defaultCameraState.target);
+      // controlsRef.current.update(); // Let R3F handle update on next frame
+      setMovementDirection({ up: false, down: false, left: false, right: false });
+      toast.info('Camera position reset to default');
+    } else {
+      toast.info('Default camera state not captured yet.');
+    }
+  }, [defaultCameraState, isLocked, isPlaying]); // Dependencies
+  // --- END Camera Movement Handlers ---
+
+  // --- Keyboard Controls Effect (Updated Dependencies) ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Prevent handling if focus is inside an input/textarea
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      switch (event.key) {
+        case 'ArrowUp': case 'w': handleCameraMove('up', true); break;
+        case 'ArrowDown': case 's': handleCameraMove('down', true); break;
+        case 'ArrowLeft': case 'a': handleCameraMove('left', true); break;
+        case 'ArrowRight': case 'd': handleCameraMove('right', true); break;
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      switch (event.key) {
+        case 'ArrowUp': case 'w': handleCameraMove('up', false); break;
+        case 'ArrowDown': case 's': handleCameraMove('down', false); break;
+        case 'ArrowLeft': case 'a': handleCameraMove('left', false); break;
+        case 'ArrowRight': case 'd': handleCameraMove('right', false); break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      setMovementDirection({ up: false, down: false, left: false, right: false });
+    };
+  }, [handleCameraMove]); // Dependency is the memoized handler
+  // --- END Keyboard Controls Effect ---
 
   // Handler for grid toggle
   const handleGridToggle = (visible: boolean) => {
@@ -436,6 +562,15 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             isRecording={isRecording}
           />
 
+          {/* --- Render CameraMover inside Canvas --- */}
+          <CameraMover 
+            movementDirection={movementDirection}
+            cameraRef={cameraRef}
+            controlsRef={controlsRef}
+            isLocked={isLocked}
+            isPlaying={isPlaying}
+          />
+
         </Suspense>
       </Canvas>
 
@@ -481,9 +616,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
           {/* Camera Tab Content (Placeholder for now) */}
           <TabsPrimitive.Content value="camera">
-             <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm border border-dashed rounded-lg">
-               Camera Controls Coming Soon...
-             </div>
+            <CameraControlsPanel 
+              fov={fov} 
+              onFovChange={setFov} 
+              onCameraMove={handleCameraMove} // Pass real handler
+              onCameraReset={handleCameraReset} // Pass real handler
+            />
           </TabsPrimitive.Content>
 
         </TabsPrimitive.Root>
@@ -493,8 +631,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         <SceneControls
           userVerticalAdjustment={userVerticalAdjustment}
           onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
-          fov={fov}
-          onFovChange={setFov}
           gridVisible={gridVisible}
           onGridToggle={handleGridToggle}
           onAddTextureClick={handleAddTextureClick}

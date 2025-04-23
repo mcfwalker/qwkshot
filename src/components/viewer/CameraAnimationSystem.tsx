@@ -659,7 +659,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         // Calculate total offset
         const totalOffset = (automaticOffset || 0) + userVerticalAdjustment;
         console.log(`Calculated total offset for saving: ${totalOffset} (auto: ${automaticOffset}, user: ${userVerticalAdjustment})`);
-
+        
         // 1. Get current camera state
         const cameraPosition = cameraRef.current.position.clone();
         const cameraTarget = controlsRef.current.target.clone();

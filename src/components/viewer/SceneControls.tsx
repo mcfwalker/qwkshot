@@ -16,8 +16,6 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface SceneControlsProps {
-  fov: number;
-  onFovChange: (fov: number) => void;
   gridVisible: boolean;
   onGridToggle: (visible: boolean) => void;
   onAddTextureClick?: () => void;
@@ -28,8 +26,6 @@ interface SceneControlsProps {
 }
 
 export function SceneControls({
-  fov,
-  onFovChange,
   gridVisible,
   onGridToggle,
   onAddTextureClick,
@@ -39,14 +35,6 @@ export function SceneControls({
   onUserVerticalAdjustmentChange
 }: SceneControlsProps) {
   const { isLocked } = useViewerStore();
-
-  const handleFovChange = (values: number[]) => {
-    if (isLocked) {
-      toast.error('Viewer is locked. Unlock to adjust field of view.');
-      return;
-    }
-    onFovChange(values[0]);
-  };
 
   const handleAdjustmentChange = (values: number[]) => {
     if (isLocked) {
@@ -83,17 +71,7 @@ export function SceneControls({
               <div className="space-y-5"> 
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium text-muted-foreground">FOV</Label>
-                  <span className="text-sm font-medium text-muted-foreground">{fov}°</span>
                 </div>
-                <Slider
-                  value={[fov]}
-                  onValueChange={handleFovChange}
-                  min={20}
-                  max={120}
-                  step={1}
-                  className="viewer-slider h-2 disabled:cursor-not-allowed"
-                  disabled={isLocked}
-                />
               </div>
 
               <div className="flex items-center justify-between">
