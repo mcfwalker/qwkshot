@@ -49,7 +49,7 @@ export async function prepareModelUpload(args: PrepareUploadArgs): Promise<Prepa
     // }
 
     const modelId = uuidv4();
-    const modelPath = `models/${userId}/${modelId}/${fileName}`;
+    const modelPath = `${userId}/${modelId}/${fileName}`;
     logger.info(`Generated modelId: ${modelId}, path: ${modelPath}`);
 
     try {
