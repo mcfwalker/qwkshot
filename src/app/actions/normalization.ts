@@ -4,9 +4,12 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { Logger } from '@/types/p2p/shared'; 
 // Import other necessary types and libraries as needed (e.g., gltf-transform, Supabase types)
-import { SerializedSceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { SerializedSceneAnalysis, SceneAnalysis } from '@/types/p2p/scene-analyzer';
 import { Document, NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
+import { SceneAnalyzerConfig } from '@/types/p2p/scene-analyzer';
+import { serializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
 // import { SupabaseClient } from '@supabase/supabase-js';
 
 
@@ -146,15 +149,91 @@ export async function normalizeModelAction(modelId: string): Promise<NormalizeAc
         // We now have scaleFactor and translation [x, y, z]
 
         // 6. Apply transforms using gltf-transform
+        const scene = document.getRoot().getDefaultScene();
+        if (!scene) {
+            logger.error(`GLTF document for ${modelId} does not have a default scene.`);
+            throw new Error('Cannot normalize model without a default scene.');
+        }
+        
+        logger.info('Applying calculated transforms to scene root nodes...');
+        scene.listChildren().forEach((node) => {
+            // Important: Apply scale first, then translation.
+            // Set scale - expecting a single number scale factor
+            node.setScale([scaleFactor, scaleFactor, scaleFactor]);
+            // Set translation - expecting [x, y, z] array
+            node.setTranslation(translation);
+            logger.debug(`Applied transform to node: ${node.getName() || '[unnamed]'}`, { scaleFactor, translation });
+        });
+        logger.info(`Successfully applied transforms to ${scene.listChildren().length} root nodes.`);
+
         // 7. Save transformed GLB data (in memory or temp file)
+        logger.info(`Writing normalized GLTF document back to binary GLB...`);
+        const normalizedGlbData: Uint8Array = await io.writeBinary(document);
+        logger.info(`Successfully wrote normalized GLB data, size: ${normalizedGlbData.byteLength} bytes.`);
+        // We now have the normalized GLB content in normalizedGlbData (Uint8Array)
+
         // 8. Upload normalized GLB to storage (overwrite original file_url path)
+        logger.info(`Uploading normalized GLB to storage at path: ${originalFilePath}`);
+        const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('models')
+            .upload(originalFilePath, normalizedGlbData, { 
+                contentType: 'model/gltf-binary',
+                upsert: true
+            });
+
+        if (uploadError) {
+            logger.error(`Error uploading normalized file to storage:`, uploadError);
+            throw new Error(`Failed to upload normalized model file: ${uploadError.message}`);
+        }
+        logger.info(`Successfully uploaded normalized GLB for model ${modelId}`, { path: uploadData?.path });
+
         // 9. (Optional but recommended) Re-run SceneAnalyzer on normalized data
+        logger.info('Re-analyzing normalized GLB data...');
+
+        // Instantiate SceneAnalyzer
+        // TODO: Consider if a shared factory/instance or specific config is needed here.
+        // Mimicking basic config for now.
+        const analyzerFactory = new SceneAnalyzerFactory(logger);
+        const analyzerConfig: SceneAnalyzerConfig = { // Provide a basic config
+            maxFileSize: 100 * 1024 * 1024, // Example: 100MB limit
+            supportedFormats: ['model/gltf-binary'],
+            analysisOptions: { extractFeatures: true, calculateSymmetry: true, analyzeMaterials: false },
+            // Add other required fields from P2PConfig if necessary
+        };
+        const sceneAnalyzer = analyzerFactory.create(analyzerConfig);
+        await sceneAnalyzer.initialize(analyzerConfig); // Initialize if needed
+
+        // Create a File object from the normalized data
+        const fileName = originalFilePath.split('/').pop() || 'normalized_model.glb';
+        const normalizedFile = new File([normalizedGlbData], fileName, { type: 'model/gltf-binary' });
+        
+        // Run analysis
+        const newSceneAnalysis: SceneAnalysis = await sceneAnalyzer.analyzeScene(normalizedFile);
+        logger.info(`Successfully re-analyzed normalized GLB data for model ${modelId}`);
+        // We now have newSceneAnalysis containing analysis of the *normalized* geometry
+        
         // 10. Update scene_analysis in DB with results from normalized data
+        logger.info(`Serializing new scene analysis data for model ${modelId}...`);
+        const serializedNewAnalysis = serializeSceneAnalysis(newSceneAnalysis);
         
-        logger.info(`Placeholder: Normalization logic for ${modelId} needs implementation.`);
+        logger.info(`Updating database record for model ${modelId} with normalized scene_analysis...`);
+        const { error: updateError } = await supabase
+            .from('models')
+            .update({ scene_analysis: serializedNewAnalysis })
+            .eq('id', modelId);
+
+        if (updateError) {
+            logger.error(`Database error updating scene_analysis for model ${modelId}:`, updateError);
+            // Note: Even if DB update fails, the GLB in storage *is* normalized.
+            // Consider potential compensation logic or more robust error handling if needed.
+            throw new Error(`Failed to update database with normalized analysis: ${updateError.message}`);
+        }
         
-        // Placeholder success
-        return { success: true, message: `Normalization initiated for ${modelId} (Implementation Pending)` };
+        logger.info(`Successfully updated scene_analysis for model ${modelId}`);
+        
+        // Placeholder success - All steps completed
+        return { success: true, message: `Model ${modelId} successfully normalized and updated.` };
 
     } catch (error) {
         logger.error(`Error during normalization for modelId ${modelId}:`, error);

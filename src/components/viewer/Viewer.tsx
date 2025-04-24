@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene, Group } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -22,75 +22,37 @@ import { Button } from '@/components/ui/button';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
-import { CenterReticle } from './CenterReticle';
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { CameraControlsPanel } from './CameraControlsPanel';
 import { useFrame } from '@react-three/fiber';
+import { CenterReticle } from './CenterReticle';
 
-// Model component that handles GLTF/GLB loading and NORMALIZATION
+// Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
-  const { scene: originalScene } = useGLTF(url);
-  const setModelVerticalOffset = useViewerStore((s) => s.setModelVerticalOffset);
+  const { scene: originalScene } = useGLTF(url); // Load the scene (now pre-normalized)
 
-  // Memoize the normalized model to avoid recomputation on every render
-  const normalizedModelContainer = useMemo(() => {
+  // Clone the scene to avoid modifying the cache and allow direct manipulation if needed
+  // Memoize the cloned scene based on the original scene
+  const clonedScene = useMemo(() => { 
     if (!originalScene) return null;
-
-    console.log("Viewer.tsx <Model>: Normalizing GLTF scene...");
-
-    // Clone scene to avoid modifying the cache from useGLTF
-    const scene = originalScene.clone();
-
-    /* --- Container-based normalization --- */
-    const container = new Group();
-    container.add(scene);
-    // Note: We don't add container to the main scene here,
-    // it will be returned by this component for the Canvas to render.
-
-    // 1. Initial box -> scale so longest edge == 2 units (or adjust target size)
-    const box1 = new Box3().setFromObject(container);
-    const size1 = box1.getSize(new Vector3());
-    const maxDim = Math.max(size1.x, size1.y, size1.z);
-    const targetSize = 2.0; // Define the target normalized size
-    const scale = maxDim > 0 ? targetSize / maxDim : 1;
-    container.scale.setScalar(scale);
-    console.log(`Viewer.tsx <Model>: Calculated scale: ${scale.toFixed(4)} (maxDim: ${maxDim.toFixed(4)})`);
-
-
-    // 2. Recalculate box after scaling
-    const box2 = new Box3().setFromObject(container);
-
-    // 3. Translate: Lift so bottom rests on y=0 (Only Y translation)
-    // We keep XZ centered around the container's local origin,
-    // which is appropriate if the GLTF itself is reasonably centered.
-    const offsetY = -box2.min.y; // Amount to lift (already scaled)
-    container.position.set(0, offsetY, 0);
-    console.log(`Viewer.tsx <Model>: Calculated offsetY: ${offsetY.toFixed(4)}`);
-
-    // 4. Persist unscaled vertical offset for metadata
-    const unscaledOffsetY = offsetY / scale;
-    setModelVerticalOffset(unscaledOffsetY); // Update Zustand store
-    console.log(`Viewer.tsx <Model>: Stored unscaledOffsetY: ${unscaledOffsetY.toFixed(4)}`);
-
-    // 5. Bounding box after translation (for debugging)
-    const finalBox = new Box3().setFromObject(container);
-    console.log(`Viewer.tsx <Model>: Final container world box min.y: ${finalBox.min.y.toFixed(4)}, max.y: ${finalBox.max.y.toFixed(4)}`);
-
-    return container; // Return the normalized container group
-
-  }, [originalScene, setModelVerticalOffset]); // Dependencies
+    console.log("Viewer.tsx <Model>: Cloning scene...");
+    return originalScene.clone();
+  }, [originalScene]);
 
   // Update the external modelRef with the container group
   useEffect(() => {
-    if (normalizedModelContainer) {
-       modelRef.current = normalizedModelContainer;
+    // Assign the cloned scene directly to the ref
+    if (clonedScene) {
+       modelRef.current = clonedScene;
+       console.log("Viewer.tsx <Model>: Assigned cloned scene to modelRef.");
     }
     // Cleanup ref when component unmounts or URL changes
     return () => { modelRef.current = null; };
-  }, [normalizedModelContainer, modelRef]);
+  }, [clonedScene, modelRef]); // Depend on the cloned scene
 
-  // Render the normalized container or null if not ready
-  return normalizedModelContainer ? <primitive object={normalizedModelContainer} /> : null;
+  // Render the cloned scene directly
+  // The parent <group> in Viewer will handle userVerticalAdjustment
+  return clonedScene ? <primitive object={clonedScene} /> : null;
 }
 
 // Type for movement state

@@ -21,6 +21,7 @@ import { SceneInterpreterFactory } from '@/features/p2p/scene-interpreter/SceneI
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
 import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
+import { normalizeModelAction } from '@/app/actions/normalization';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -205,7 +206,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     }
 
     setLoading(true);
-    setLoadingMessage('Saving model...');
+    setLoadingMessage('Saving model metadata...');
     setShowSaveDialog(false);
 
     try {
@@ -228,8 +229,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           initialMetadata: currentAnalysisMetadata 
       });
 
-      if (prepareResult.error) {
-          throw new Error(prepareResult.error);
+      if (prepareResult.error || !prepareResult.signedUploadUrl) {
+          throw new Error(prepareResult.error || 'Failed to prepare upload (missing URL).');
       }
       
       const { modelId, signedUploadUrl } = prepareResult;
@@ -241,6 +242,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           method: 'PUT',
           body: currentFile,
           headers: {
+              // Supabase signed URL uploads might need content-type depending on policy/setup
+              // 'Content-Type': currentFile.type 
           },
       });
 
@@ -255,6 +258,19 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       }
 
       loggerRef.current.info('File uploaded successfully to storage via fetch.');
+
+      // --- Trigger Backend Normalization --- 
+      setLoadingMessage('Normalizing model geometry...');
+      loggerRef.current.info(`Calling normalizeModelAction for modelId: ${modelId}`);
+      const normalizeResult = await normalizeModelAction(modelId);
+      
+      if (!normalizeResult.success) {
+          loggerRef.current.warn('Backend normalization failed:', normalizeResult.error);
+          toast.warning('Model saved, but normalization failed.', { description: normalizeResult.error });
+      } else {
+          loggerRef.current.info('Backend normalization completed successfully.');
+      }
+      // -------------------------------------
 
       const newPath = `/viewer/${modelId}`;
       window.history.pushState({}, '', newPath);

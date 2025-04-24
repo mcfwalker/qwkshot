@@ -650,63 +650,51 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
     
     try {
-      if (!isLocked && cameraRef?.current && controlsRef?.current) {
-        console.log('Locking scene, preparing metadata...');
-        
-        // Get automatic offset from store
-        const { modelVerticalOffset: automaticOffset } = useViewerStore.getState();
+      // Toggle the lock state in the store first
+      toggleLock(); // This updates isLocked for the next render
+      const willBeLocked = !isLocked; // Check the *intended* state
 
-        // Calculate total offset
-        const totalOffset = (automaticOffset || 0) + userVerticalAdjustment;
-        console.log(`Calculated total offset for saving: ${totalOffset} (auto: ${automaticOffset}, user: ${userVerticalAdjustment})`);
-        
-        // 1. Get current camera state
-        const cameraPosition = cameraRef.current.position.clone();
-        const cameraTarget = controlsRef.current.target.clone();
-        const currentFov = fov; // Get FOV from props
+      if (willBeLocked) {
+        console.log('>>> Locking scene. Saving Environmental Metadata...');
+        toast.info("Saving current scene view...");
 
-        // 2. Construct EnvironmentalMetadata payload with ALL required fields
-        const envMetadataPayload: EnvironmentalMetadata = {
+        try {
+          // Re-check required refs just before using them
+          if (!modelRef.current || !cameraRef.current || !controlsRef.current) {
+            throw new Error("Refs became unavailable before metadata construction.");
+          }
+          
+          // Construct the metadata object 
+          const metadataToSave: EnvironmentalMetadata = {
             camera: {
-                position: serializeVector3(cameraPosition),
-                target: serializeVector3(cameraTarget),
-                fov: currentFov
+              position: serializeVector3(cameraRef.current.position),
+              target: serializeVector3(controlsRef.current.target),
+              fov: fov,
             },
-            modelOffset: totalOffset, // Use the calculated total offset
-            // Add missing fields with defaults
-            lighting: { 
-                intensity: 1, 
-                color: '#FFFFFF',
-                // Add default position for lighting
-                position: { x: 0, y: 10, z: 0 } 
-            }, 
-            constraints: { 
-                minDistance: 0.1, 
-                maxDistance: 100, 
-                minHeight: 0, 
-                maxHeight: 100,
-                // Add missing constraint fields with defaults
-                maxSpeed: 2.0, 
-                maxAngleChange: Math.PI / 4, // 45 degrees
-                minFramingMargin: 0.1 
-            } 
-        };
+            // Store ONLY the userVerticalAdjustment. 
+            // RENAME the field for clarity (ensure backend/types match later)
+            userVerticalAdjustment: userVerticalAdjustment, // <- Use prop directly & rename field
+          };
 
-        console.log('Calling updateEnvironmentalMetadataAction with:', { currentModelId, envMetadataPayload });
+          console.log('handleLockToggle: Metadata to save:', metadataToSave);
 
-        // 3. Call the Server Action
-        const result = await updateEnvironmentalMetadataAction({
-            modelId: currentModelId,
-            metadata: envMetadataPayload
-        });
+          // Call the server action
+          const result = await updateEnvironmentalMetadataAction({
+            modelId: currentModelId, 
+            metadata: metadataToSave,
+          });
 
-        // 4. Handle result
-        if (result.success) {
-            toast.success('Scene composition locked and saved');
-        } else {
-            throw new Error(result.error || 'Failed to save scene composition via server action.');
+          // 4. Handle result
+          if (result.success) {
+              toast.success('Scene composition locked and saved');
+          } else {
+              throw new Error(result.error || 'Failed to save scene composition via server action.');
+          }
+          
+        } catch (error) {
+          console.error('Failed to store/update environmental metadata:', error);
+          toast.error('Failed to save scene composition', { description: error instanceof Error ? error.message : undefined });
         }
-        
       } else if (isLocked) {
         console.log('Unlocking scene...');
         toast.info('Scene unlocked'); // Use info for unlock
