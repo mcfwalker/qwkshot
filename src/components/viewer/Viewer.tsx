@@ -317,8 +317,10 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     }
     if (cameraRef.current && controlsRef.current) {
       // Define hardcoded initial state
-      const initialPosition = new Vector3(5, 5, 5);
-      const initialTarget = new Vector3(0, 0, 0); // Or new Vector3(0, 1, 0) if preferred
+      // Adjust target to be approx center of normalized model (Y=1)
+      // Adjust position to be relative to new target (e.g., higher and back)
+      const initialPosition = new Vector3(0, 2, 5); // Example: Above and in front
+      const initialTarget = new Vector3(0, 1, 0); // Target center of normalized model
 
       cameraRef.current.position.copy(initialPosition);
       controlsRef.current.target.copy(initialTarget);

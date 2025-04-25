@@ -1,17 +1,29 @@
 'use server';
 
+// Polyfill for server-side environment compatibility
+if (typeof self === 'undefined') {
+  global.self = global as any; // Add self polyfill for libraries expecting it
+}
+
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { Logger } from '@/types/p2p/shared'; 
 // Import other necessary types and libraries as needed (e.g., gltf-transform, Supabase types)
-import { SerializedSceneAnalysis, SceneAnalysis } from '@/types/p2p/scene-analyzer';
+import { SerializedSceneAnalysis, SceneAnalysis, SceneAnalyzerConfig } from '@/types/p2p/scene-analyzer';
 import { Document, NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
-import { SceneAnalyzerConfig } from '@/types/p2p/scene-analyzer';
-import { serializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
+import { center } from '@gltf-transform/functions';
 // import { SupabaseClient } from '@supabase/supabase-js';
-
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { ModelMetadata } from '@/types/p2p/metadata-manager';
+import { EnvironmentalAnalysis, EnvironmentalAnalyzerConfig } from '@/types/p2p/environmental-analyzer';
+import { deserializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
+import { OpenAIAssistantAdapter } from '@/lib/motion-planning/providers/openai-assistant';
+// Correctly import THREE types needed
+import * as THREE from 'three';
+import { Box3, Vector3, Matrix4 } from 'three';
+import { serializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
 
 // Placeholder logger (replace with shared logger if available)
 const logger: Logger = {
@@ -107,65 +119,68 @@ export async function normalizeModelAction(modelId: string): Promise<NormalizeAc
         logger.info('Parsing GLB data with gltf-transform...');
         const document: Document = await io.readBinary(new Uint8Array(glbArrayBuffer));
         logger.info('Successfully parsed GLB into gltf-transform document.');
-        // We now have the GLTF document object ready for manipulation
         
-        // 4. Get original scene_analysis data (for bbox/center) from DB <-- Already done in step 1
-        // 5. Calculate scale and translation needed for normalization
-        logger.info('Calculating normalization transform...');
-        
-        // Extract necessary data from the original analysis (these are serialized vectors)
-        const min = originalSceneAnalysis.glb.geometry.boundingBox.min;
-        const max = originalSceneAnalysis.glb.geometry.boundingBox.max;
-        const center = originalSceneAnalysis.glb.geometry.center; // Center of the original bounding box
-        
-        const currentDimensions = {
-            x: max.x - min.x,
-            y: max.y - min.y,
-            z: max.z - min.z,
-        };
-        
-        // Define target normalized height (adjust as needed)
-        const TARGET_NORMALIZED_HEIGHT = 2.0; 
-        
-        let scaleFactor = 1.0;
-        // Check for non-zero height to avoid division by zero or excessive scaling
-        if (Math.abs(currentDimensions.y) > 1e-6) { 
-            scaleFactor = TARGET_NORMALIZED_HEIGHT / currentDimensions.y;
-        } else {
-            logger.warn(`Model ${modelId} has zero or near-zero height (${currentDimensions.y}). Skipping scaling.`);
-            // Optionally set scaleFactor to 1.0 explicitly or handle differently
-            scaleFactor = 1.0; 
+        // --- Calculate scale/translation based on ORIGINAL analysis ---
+        logger.info('Calculating scaling and grounding transform based on original analysis...');
+        const originalBounds = originalSceneAnalysis.glb.geometry.boundingBox;
+        const originalMin = originalBounds.min;
+        const originalMax = originalBounds.max;
+        const originalCenter = originalSceneAnalysis.glb.geometry.center;
+        if (!originalMin || !originalMax || !originalCenter) {
+            logger.error(`Original scene analysis for ${modelId} is missing bounds or center.`);
+            throw new Error('Cannot normalize: Original scene analysis data incomplete.');
         }
-        
-        // Calculate translation needed AFTER scaling is applied, to center X/Z and ground Y.
-        // The final translation moves the scaled model's origin (center.x * scale, min.y * scale, center.z * scale) to the world origin (0, 0, 0).
-        const translation: [number, number, number] = [
-            -(center.x * scaleFactor), // Move scaled center X to 0
-            -(min.y * scaleFactor),   // Move scaled min Y to 0 (grounding)
-            -(center.z * scaleFactor)  // Move scaled center Z to 0
-        ];
-        
-        logger.info(`Calculated normalization transform for ${modelId}`, { scaleFactor, translation });
-        // We now have scaleFactor and translation [x, y, z]
+        // const originalDimensions = {
+        //     x: originalMax.x - originalMin.x,
+        //     y: originalMax.y - originalMin.y,
+        //     z: originalMax.z - originalMin.z,
+        // };
+        // const TARGET_NORMALIZED_HEIGHT = 2.0; 
+        // let scaleFactor = 1.0;
+        // if (Math.abs(originalDimensions.y) > 1e-6) { 
+        //     scaleFactor = TARGET_NORMALIZED_HEIGHT / originalDimensions.y;
+        // } else {
+        //     logger.warn(`Original model ${modelId} has zero or near-zero height (${originalDimensions.y}). Skipping scaling.`);
+        // }
 
-        // 6. Apply transforms using gltf-transform
-        const scene = document.getRoot().getDefaultScene();
-        if (!scene) {
-            logger.error(`GLTF document for ${modelId} does not have a default scene.`);
-            throw new Error('Cannot normalize model without a default scene.');
+        // Calculate translation needed ONLY to ground the model
+        const translationY = -originalMin.y; // Translation needed to bring original min Y to 0.
+        const translationVec: [number, number, number] = [0, translationY, 0];
+        
+        logger.info(`Calculated grounding-only transform for ${modelId}`, { translationVec });
+
+        // --- Apply ONLY grounding translation directly to vertex positions ---
+        logger.info('Applying grounding translation directly to vertex positions...');
+        let verticesModified = 0;
+        for (const mesh of document.getRoot().listMeshes()) {
+            for (const prim of mesh.listPrimitives()) {
+                const position = prim.getAttribute('POSITION');
+                if (!position) continue;
+
+                // Get the underlying typed array (Float32Array for VEC3 positions)
+                const buffer = position.getBuffer();
+                if (!buffer) continue;
+                const array = position.getArray(); // Get Float32Array view
+                if (!array) continue;
+
+                const numVertices = position.getCount();
+                for (let i = 0; i < numVertices; i++) {
+                    const yIndex = i * 3 + 1; // Index of the Y component (X=i*3, Y=i*3+1, Z=i*3+2)
+                    if (yIndex < array.length) {
+                        array[yIndex] += translationVec[1]; // Modify Y component directly in the typed array
+                        verticesModified++;
+                    } else {
+                        logger.warn(`Vertex index ${i} out of bounds for position array.`);
+                    }
+                }
+                // Modification happens directly on the array view, potentially no need to set it back explicitly?
+                // If issues persist, might need position.setArray(array);
+                position.setArray(array); // <-- Explicitly set the modified array back
+            }
         }
+        logger.info(`Applied grounding translation directly to ${verticesModified} vertices via typed array.`);
+        // --- End Vertex Modification ---
         
-        logger.info('Applying calculated transforms to scene root nodes...');
-        scene.listChildren().forEach((node) => {
-            // Important: Apply scale first, then translation.
-            // Set scale - expecting a single number scale factor
-            node.setScale([scaleFactor, scaleFactor, scaleFactor]);
-            // Set translation - expecting [x, y, z] array
-            node.setTranslation(translation);
-            logger.debug(`Applied transform to node: ${node.getName() || '[unnamed]'}`, { scaleFactor, translation });
-        });
-        logger.info(`Successfully applied transforms to ${scene.listChildren().length} root nodes.`);
-
         // 7. Save transformed GLB data (in memory or temp file)
         logger.info(`Writing normalized GLTF document back to binary GLB...`);
         const normalizedGlbData: Uint8Array = await io.writeBinary(document);

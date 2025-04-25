@@ -1,8 +1,8 @@
 # Refactor Specification: Backend Model Normalization
 
 **Original Date:** 2025-04-22
-**Updated Date:** 2025-04-23
-**Status:** In Progress - Revising After Initial Attempt
+**Updated Date:** 2025-04-24
+**Status:** Testing - Implementation Complete
 
 ## 1. Overview
 
@@ -36,87 +36,91 @@ This refactor addresses recurring inconsistencies and complexities arising from 
 
 > **Note:** Based on the initial refactor attempt, addressing these infrastructure issues is now a prerequisite phase.
 
-- [ ] 1. **File Storage Path Construction:**
-   - [ ] Review storage path construction in server actions to ensure proper paths without doubled prefixes
-   - [ ] Fix path construction in `prepareModelUpload` and `processAndUploadModelAction` functions
-   - [ ] Test storage operations with correct paths
-   - [ ] Correct pattern: `const storagePath = '${modelId}/${fileName}'` (no "models/" prefix when inside "models" bucket)
+- [x] 1. **File Storage Path Construction:**
+   - [x] Review storage path construction in server actions to ensure proper paths without doubled prefixes
+   - [x] Fix path construction in `prepareModelUpload` (`src/app/actions/models.ts`)
+   - [ ] Test storage operations with correct paths (Covered in Phase 6 Testing)
+   - [x] Correct pattern: `${userId}/${modelId}/${fileName}` (within `models` bucket context)
 
-- [ ] 2. **Supabase Storage Access:**
-   - [ ] Document the current storage bucket access strategy (private bucket with RLS or other mechanism)
-   - [ ] Ensure all components needing to access files use consistent access patterns
-   - [ ] Test thoroughly before continuing with primary refactor
+- [x] 2. **Supabase Storage Access:**
+   - [x] Document the current storage bucket access strategy (private bucket, signed URLs for access)
+   - [x] Ensure all components needing to access files use consistent access patterns (Verified via `loadModel` usage)
+   - [x] Add missing `UPDATE` RLS policy for `storage.objects` on `models` bucket to allow `upsert` during normalization.
+   - [ ] Test thoroughly before continuing with primary refactor (Covered in Phase 6 Testing)
 
-- [ ] 3. **Next.js Environment Compatibility:**
-   - [ ] Upgrade Next.js to latest version (^15.x) to take advantage of improved server actions
-   - [ ] Update `next.config.js` to properly configure serverActions under the experimental block
-   - [ ] Add necessary polyfills for browser APIs used in server components/actions
-   - [ ] Ensure `self` and other browser globals are handled correctly in both client and server contexts
+- [x] 3. **Next.js Environment Compatibility:**
+   - [x] Upgrade Next.js to latest version (^15.x) to take advantage of improved server actions (Verified `15.2.3`)
+   - [x] Update `next.config.js` to properly configure serverActions under the experimental block (Confirmed no config needed for Next.js >= 14)
+   - [x] Add necessary polyfills for browser APIs used in server components/actions (Added `self` polyfill for `SceneAnalyzer`)
+   - [x] Ensure `self` and other browser globals are handled correctly in both client and server contexts (Addressed `self` error)
 
 ### Phase 1: Backend Normalization Implementation
 
-- [ ] 1.  **Choose GLTF Library:** Select and integrate a suitable Node.js library for parsing, manipulating, and saving GLTF/GLB files (e.g., `gltf-transform`, `@gltf-transform/core`).
-- [ ] 2.  **Modify Processing Logic:** Update the backend service/function responsible for handling model uploads *after* initial analysis (`SceneAnalyzer`) but *before* saving the final data.
-- [ ] 3.  **Calculate Transform:**
-    -   [ ] Use the original `scene_analysis` data (bounding box min/max/center, dimensions) calculated by `SceneAnalyzer`.
-    -   [ ] Determine the required `scale` factor to achieve the target normalized size (e.g., height = 2 units).
-    -   [ ] Determine the required `translation` vector (offsetX = `-center.x`, offsetY = `-min.y`, offsetZ = `-center.z`). Remember to apply scale *before* calculating the final translation needed based on the scaled bounds.
-- [ ] 4.  **Apply Transform:**
-    -   [ ] Load the original GLB file data into the chosen library.
-    -   [ ] Apply the calculated `scale` and `translation` transformations directly to the relevant nodes or vertex data within the GLTF structure.
-- [ ] 5.  **Save Normalized GLB:** Save the *modified* GLB data back to storage, replacing or versioning the original file.
-- [ ] 6.  **Re-Analyze (Optional but Recommended):** Run `SceneAnalyzer` *again* on the *normalized* geometry data to get accurate bounding box, dimensions, center, etc., for the *normalized* state.
-- [ ] 7.  **Update Database Logic:** Modify the code that saves data to the `models` table:
-    -   [ ] The `scene_analysis` column should now store the analysis results from the **normalized** geometry (where `min.y ≈ 0`, `center.x/z ≈ 0`).
-    -   [ ] *(Decision Point):* Decide whether to store original analysis/transform. Option A (simpler) seems feasible given the testing nature of current models.
+- [x] 1.  **Choose GLTF Library:** Select and integrate a suitable Node.js library for parsing, manipulating, and saving GLTF/GLB files (Selected and installed `@gltf-transform/core`, `@gltf-transform/extensions`, `@gltf-transform/functions`).
+- [x] 2.  **Modify Processing Logic:** Update the backend service/function responsible for handling model uploads *after* initial analysis (`SceneAnalyzer`) but *before* saving the final data.
+    > **Note:** Implemented as a *new* server action `normalizeModelAction` in `src/app/actions/normalization.ts`, triggered by the client (`ModelLoader.tsx`) after successful initial file upload.
+- [x] 3.  **Calculate Transform:**
+    - [x] Use the original `scene_analysis` data (bounding box min/max/center) fetched by `normalizeModelAction`.
+    - [x] Determine the required `scale` factor to achieve the target normalized size (height = 2.0 units).
+    - [x] Determine the required `translation` vector (offsetX = `-center.x * scale`, offsetY = `-min.y * scale`, offsetZ = `-center.z * scale`). (Implemented via vertex manipulation based on original bounds).
+- [x] 4.  **Apply Transform:**
+    - [x] Load the original GLB file data into the chosen library (`NodeIO.readBinary`).
+    - [x] Apply the calculated `scale` and `translation` transformations directly to vertex data.
+- [x] 5.  **Save Normalized GLB:** Save the *modified* GLB data back to storage, replacing the original file (`NodeIO.writeBinary` then `supabase.storage.upload` with `upsert: true`).
+- [x] 6.  **Re-Analyze (Optional but Recommended):** Run `SceneAnalyzer` *again* on the *normalized* geometry data (`normalizedFile`) to get accurate bounding box, dimensions, center, etc., for the *normalized* state.
+- [x] 7.  **Update Database Logic:** Modify the code that saves data to the `models` table:
+    - [x] The `scene_analysis` column is now updated (`supabase.from('models').update`) with the analysis results from the **normalized** geometry (where `min.y ≈ 0`, `center.x/z ≈ 0`).
+    - [x] *(Decision Point):* Decided not to store original analysis/transform for now.
 
 ### Phase 2: Client Viewer Refactor
 
-- [ ] 1.  **File:** `src/components/viewer/Viewer.tsx`
-- [ ] 2.  **`<Model>` Component:**
-    -   [ ] Remove the `useMemo` hook containing the normalization logic (container group, scaling, translation).
-    -   [ ] Remove the call to `setModelVerticalOffset`.
-    -   [ ] The component should simplify to essentially just loading the `url` via `useGLTF` and rendering `<primitive object={scene} />` (potentially cloned).
-    -   [ ] The `modelRef` should point directly to the loaded (and now pre-normalized) scene or its container if one is still needed for structure.
-    -   [ ] **IMPORTANT:** Maintain React hook ordering rules during refactoring to avoid runtime errors.
-- [ ] 3.  **`Viewer` Component:**
-    -   [ ] Remove the `useEffect` hook that previously stored the "default" camera state based on the now-removed client normalization.
-    -   [ ] The `<group position-y={userVerticalAdjustment}>` wrapper around `<Model />` remains to handle manual adjustments.
-    -   [ ] The `handleCameraReset` logic needs updating (see Phase 4).
+- [x] 1.  **File:** `src/components/viewer/Viewer.tsx`
+- [x] 2.  **`<Model>` Component:**
+    - [x] Remove the `useMemo` hook containing the normalization logic (container group, scaling, translation).
+    - [x] Remove the call to `setModelVerticalOffset`.
+    - [x] The component now simplifies to loading the `url` via `useGLTF` and rendering `<primitive object={clonedScene} />`.
+    - [x] The `modelRef` points directly to the loaded (and now pre-normalized) cloned scene.
+    - [x] Ensured React hook ordering rules maintained.
+- [x] 3.  **`Viewer` Component:**
+    - [x] Removed the `useEffect` hook that previously stored the "default" camera state based on the now-removed client normalization (Confirmed no specific effect existed for this).
+    - [x] The `<group position-y={userVerticalAdjustment}>` wrapper around `<Model />` remains to handle manual adjustments (Verified).
+    - [ ] The `handleCameraReset` logic needs updating (Deferred to Phase 6 Testing/Refinement).
+> **Note:** Updated `ModelLoader.tsx` to only call `onModelLoad` *after* backend normalization completes and the final signed URL is fetched via `loadModel`, preventing visual "snap".
 
 ### Phase 3: State and Metadata Updates
 
-- [ ] 1.  **File:** `src/store/viewerStore.ts`
-    -   [ ] Remove the `modelVerticalOffset` state property.
-    -   [ ] Remove the `setModelVerticalOffset` action.
-- [ ] 2.  **File:** `src/components/viewer/CameraAnimationSystem.tsx` (and potentially `Viewer.tsx`'s lock logic if it moves)
-    -   [ ] Modify `handleLockToggle` (or the function calling the server action):
-        -   [ ] Remove the retrieval of `automaticOffset` from the store (it no longer exists).
-        -   [ ] Calculate the value to be saved for the backend's `modelOffset` field in `environmental_metadata`. This should now **only** be the `userVerticalAdjustment` value from the `Viewer` state. *(Consider renaming this field in `EnvironmentalMetadata` and the DB to `userOffset` or similar for clarity)*.
-        -   [ ] Ensure the server action (`updateEnvironmentalMetadataAction`) correctly receives and saves this `userVerticalAdjustment` value under the appropriate field name.
+- [x] 1.  **File:** `src/store/viewerStore.ts`
+    - [x] Remove the `modelVerticalOffset` state property.
+    - [x] Remove the `setModelVerticalOffset` action.
+- [x] 2.  **File:** `src/components/viewer/CameraAnimationSystem.tsx`
+    - [x] Modify `handleLockToggle` (or the function calling the server action):
+        - [x] Remove the retrieval of `automaticOffset` (`modelVerticalOffset`) from the store.
+        - [x] Calculate the value to be saved for the backend's field in `environmental_metadata`. Changed to save only `userVerticalAdjustment` under the key `userVerticalAdjustment`.
+        - [x] Updated `EnvironmentalMetadata` type definition accordingly.
+        - [x] Ensured the server action (`updateEnvironmentalMetadataAction`) correctly receives and saves this object.
 
 ### Phase 4: Backend Interpreter Refactor
 
-- [ ] 1.  **File:** `src/features/p2p/scene-interpreter/interpreter.ts`
-- [ ] 2.  **`_resolveTargetPosition` Function:**
-    -   [ ] Remove the `modelOffset` parameter from its signature.
-    -   [ ] Inside the function, use the coordinates directly from the `sceneAnalysis` bounding box/center (which are now normalized).
-    -   [ ] **Crucially:** Fetch or receive the `userVerticalAdjustment` (potentially renamed, e.g., `userOffset`) from the `envAnalysis` object.
-    -   [ ] **Apply ONLY the `userVerticalAdjustment`** to the Y-coordinate calculated from the (normalized) `sceneAnalysis` data before returning the final `Vector3`.
-- [ ] 3.  **Other Logic (`pedestal`, `truck`, constraints):**
-    -   [ ] Review logic that uses `sceneAnalysis` dimensions or bounding box data (e.g., `_calculateEffectiveDistance`, `_mapDescriptorToValue`, `_clampPositionWithRaycast`, height/distance constraints). Ensure they are correctly interpreting the now-normalized values from `scene_analysis`. The logic might become simpler as the base `min.y` is 0.
-    -   [ ] Ensure the `userVerticalAdjustment` is correctly factored in where necessary (e.g., when checking against height constraints defined relative to the world, the object's effective min/max Y are `0 + userAdjustment` and `normalizedHeight + userAdjustment`).
+- [x] 1.  **File:** `src/features/p2p/scene-interpreter/interpreter.ts`
+- [x] 2.  **`_resolveTargetPosition` Function:**
+    - [x] Remove the `modelOffset` parameter from its signature.
+    - [x] Inside the function, use the coordinates directly from the `sceneAnalysis` bounding box/center (which are now normalized).
+    - [x] Fetch `userVerticalAdjustment` from the `envAnalysis` object (passed into `interpretPath`).
+    - [x] **Apply ONLY the `userVerticalAdjustment`** to the Y-coordinate calculated from the (normalized) `sceneAnalysis` data before returning the final `Vector3`.
+- [x] 3.  **Other Logic (`pedestal`, `truck`, constraints):**
+    - [x] Reviewed logic that uses `sceneAnalysis` dimensions or bounding box data. Logic should now correctly interpret normalized values from `scene_analysis` (e.g., `min.y` ≈ 0).
+    - [x] Ensured `_clampPositionWithRaycast` accounts for `userVerticalAdjustment` when checking against the (normalized) `objectBounds`.
 
 ### Phase 5: API Route Verification
 
-- [ ] 1.  **File:** `/api/camera-path/route.ts`
-- [ ] 2.  **Verify Data Passing:** Double-check that it fetches the **normalized `scene_analysis`** and the **`environmental_metadata` containing the `userVerticalAdjustment`** and passes these correctly packaged within the `envAnalysis` object (or separately) to `interpreter.interpretPath`. Remove the code that was manually injecting `modelOffset` into `envAnalysis`.
+- [x] 1.  **File:** `/api/camera-path/route.ts`
+- [x] 2.  **Verify Data Passing:** Double-checked that it fetches the **normalized `scene_analysis`** and the **`environmental_metadata` containing the `userVerticalAdjustment`** and passes these correctly packaged within the `envAnalysis` object to `interpreter.interpretPath`. Removed manual injection of `modelOffset`.
 
 ### Phase 6: Testing
 
-- [ ] 1.  **Normalization:** Verify models load visually grounded and centered without client-side adjustments.
+- [x] 1.  **Normalization:** Verify models load visually grounded and centered without client-side adjustments. (Initial tests confirm grounding works after client-side loading fix).
 - [ ] 2.  **User Adjustment:** Verify the manual offset slider still works correctly.
-- [ ] 3.  **Reset Camera:** Verify it resets to the correct default view relative to the normalized model.
+- [ ] 3.  **Reset Camera:** Verify it resets to the correct default view relative to the normalized model. (Refinement needed).
 - [ ] 4.  **Locking:** Verify the correct `userVerticalAdjustment` is saved to `environmental_metadata`.
 - [ ] 5.  **Path Generation:** Thoroughly test various prompts involving geometric targets (top, bottom, center), destination targets, and constraints to ensure the backend interpreter uses the normalized coordinates + user adjustment correctly.
 - [ ] 6.  **React Component Stability:** Verify all component changes maintain proper hooks ordering and React patterns.
@@ -193,3 +197,8 @@ This refactor addresses recurring inconsistencies and complexities arising from 
 6. **Separate Concerns** - Keep infrastructure fixes separate from feature development to avoid scope creep.
 
 This post-mortem led to the creation of "Phase 0: Critical Infrastructure Fixes" in the updated refactor plan to address these issues before proceeding with the core normalization work. 
+
+## 8. Limitations (NEW)
+
+-   **Single Model Focus:** The current normalization strategy (scaling individual models to a fixed height, centering at origin) is optimized for the single-model viewer context. It simplifies camera defaults and interpreter logic.
+-   **Not Suitable for Multi-Model Scenes:** This approach discards the inherent relative scale between different models. Loading multiple models normalized this way into the same scene would result in incorrect relative sizing and positional overlap at the origin. A different normalization/loading strategy would be required to support multi-model scenarios. 

@@ -143,9 +143,11 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     }
 
     setLoadingMessage('Analyzing scene...');
-    const url = URL.createObjectURL(file);
-    onModelLoad(url);
+    // Create object URL for analysis but DON'T load it visually yet
+    // const url = URL.createObjectURL(file); 
+    // onModelLoad(url); // <-- REMOVED: Do not load visually until normalization is done
 
+    // Run client-side analysis to get metadata for saving
     const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
       file,
       userId: 'current-user-id'
@@ -272,9 +274,25 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       }
       // -------------------------------------
 
+      // --- Load the final (normalized) model URL for display --- 
+      setLoadingMessage('Loading final model...');
+      try {
+        // Regardless of normalization success/failure for now, try loading the model from storage
+        // If normalization failed, this loads the original. If succeeded, loads normalized.
+        // Future improvement: Only load if normalization succeeded?
+        const finalUrl = await loadModel(modelId); 
+        onModelLoad(finalUrl); // Update the viewer with the URL from storage
+        loggerRef.current.info('Viewer updated with final model URL from storage.');
+      } catch (loadError) {
+        loggerRef.current.error('Failed to load final model URL after save/normalization:', loadError);
+        toast.error('Failed to display final model', { description: loadError instanceof Error ? loadError.message : undefined });
+        // Fallback? Maybe leave the old URL displayed? For now, just log and error.
+      }
+      // -----------------------------------------------------------
+
       const newPath = `/viewer/${modelId}`;
       window.history.pushState({}, '', newPath);
-      toast.success('Model saved successfully!');
+      toast.success('Model saved successfully!'); // Keep original success message for now
 
     } catch (error) {
       console.error('Error saving model:', error);
