@@ -62,7 +62,6 @@ interface ViewerState {
 
   // Model State
   currentModelId: string | null;
-  modelVerticalOffset: number | null; // Auto-calculated offset based on geometry (Stored in Zustand)
   isModelLoading: boolean;
   // ... methods to load/unload models
 
@@ -92,7 +91,7 @@ interface ViewerState {
         - Generating a signed URL for client-side file upload directly to storage.
         - Calling the server-side `MetadataManager` to store the full `ModelMetadata` (including `sceneAnalysis`) using the appropriate database adapter logic (saving to `metadata` and `scene_analysis` columns).
     - **Environmental Metadata:** The `CameraAnimationSystem.tsx` component calls the `updateEnvironmentalMetadataAction` Server Action in `src/app/actions/models.ts` when the scene is locked. This action handles:
-        - Calling the server-side `MetadataManager` to update/store the `EnvironmentalMetadata` (which includes camera state and `modelOffset`) in the `models` table (`environmental_metadata` column).
+        - Calling the server-side `MetadataManager` to update/store the `EnvironmentalMetadata` (which includes camera state and `userVerticalAdjustment`) in the `models` table (`environmental_metadata` column).
     - **Other Mutations (Example):** Simpler updates like changing a model name might still use Supabase RPC functions called directly from Server Actions if complex validation/logic resides in the database.
 - **Client Usage (Server Action Example):**
 ```typescript
@@ -477,8 +476,8 @@ export async function GET(request: NextRequest) {
 ### 4.3 Database Storage (`models` Table)
 - **Metadata Storage:** Model-specific metadata is stored across multiple columns for clarity and potential query performance:
     - `metadata` (jsonb): Stores general metadata fields like `orientation`, `preferences`, `geometry`, `performance_metrics` (excluding `sceneAnalysis`).
-    - `scene_analysis` (jsonb): Stores the detailed, serialized `SceneAnalysis` object generated during model processing.
-    - `environmental_metadata` (jsonb): Stores the latest camera/environment state captured when the scene is locked (including `modelOffset`).
+    - `scene_analysis` (jsonb): Stores the detailed, serialized `SceneAnalysis` object generated during model processing (reflecting the **normalized** geometry).
+    - `environmental_metadata` (jsonb): Stores the latest camera/environment state captured when the scene is locked (including `userVerticalAdjustment`).
 - **Adapter Logic (`SupabaseAdapter.ts`):
     - `storeModelMetadata`:** Separates the `sceneAnalysis` from the rest of the `ModelMetadata` object and saves them to the `scene_analysis` and `metadata` columns respectively in a single `update` call.
     - `getModelMetadata`:** Selects `id`, `created_at`, `metadata`, `scene_analysis`, `user_id`, `file_url` and reconstructs the full `ModelMetadata` object, combining data from the `metadata` and `scene_analysis` columns.
@@ -487,15 +486,15 @@ export async function GET(request: NextRequest) {
 ## 5. Feature Specifications (Data Structures)
 
 ### 5.1. P2P Pipeline Architecture
-- **Overview:** Translates user prompts into camera commands. Leverages the OpenAI Assistants API for planning and a deterministic Scene Interpreter which uses crucial local context (`SceneAnalysis` and `EnvironmentalAnalysis` - including the final `modelOffset`) for accurate geometric execution.
+- **Overview:** Translates user prompts into camera commands. Leverages the OpenAI Assistants API for planning and a deterministic Scene Interpreter which uses crucial local context (`SceneAnalysis` and `EnvironmentalAnalysis` - including the final `userVerticalAdjustment`) for accurate geometric execution.
 - **Client Interaction:**
     - **Model Processing/Saving:** Client (`ModelLoader`) runs analysis via `P2PPipeline.processModel`, then calls `prepareModelUpload` Server Action with results and file info. Client uploads file directly to storage using signed URL from action response.
-    - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state and `modelHeight` (as `modelOffset`).
+    - **Environment Saving:** Client (`CameraAnimationSystem`) calls `updateEnvironmentalMetadataAction` Server Action on lock, passing current camera state and `userVerticalAdjustment` (user's manual offset) in the metadata payload.
     - **Path Generation:** Client (`CameraAnimationSystem`) calls `/api/camera-path` API route with prompt, duration, and model ID.
 - **Backend Flow (`/api/camera-path`):**
     1. Route handler receives request.
     2. Initializes server-side components (`MetadataManager`).
-    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including camera state and `modelOffset`).
+    3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including camera state and `userVerticalAdjustment`).
     4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data to get `SceneAnalysis` object.
     5. Constructs `initialCameraState` from fetched environmental metadata.
     6. Instantiates the `OpenAIAssistantAdapter` (LLM Engine implementation) with necessary configuration (API Key, Assistant ID).
@@ -508,7 +507,7 @@ export async function GET(request: NextRequest) {
     8. Instantiates the `SceneInterpreterImpl`.
     9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
         - Processes the `MotionPlan` steps sequentially.
-        - Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **by applying the `modelOffset` from the provided `EnvironmentalAnalysis` to the base coordinates from `SceneAnalysis`**, ensuring alignment with the normalized visual model.
+        - Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **using the normalized coordinates from `SceneAnalysis` and applying the `userVerticalAdjustment` from the provided `EnvironmentalAnalysis` to the Y coordinate**, ensuring alignment with the user-adjusted visual model.
         - **Handles quantitative/qualitative/goal parameters (with priority):**
             *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance`.
             *   **`fly_away` Priority (Placeholder):**
@@ -516,8 +515,8 @@ export async function GET(request: NextRequest) {
                 2.  `distance_descriptor` (Maps via `_mapDescriptorToValue`)
         - Applies constraints and easing.
         - Generates `CameraCommand[]` (keyframes).
-    10. Calls `interpreter.validateCommands` passing the generated commands and the *original* bounding box from `SceneAnalysis`. *(Note: Current validation might not account for `modelOffset`, potentially leading to false positives/negatives if the model is significantly adjusted vertically).*
-    11. If validation fails (e.g., bounding box violation based on original bounds), returns specific 422 error.
+    10. Calls `interpreter.validateCommands` passing the generated commands and the **normalized** bounding box from `SceneAnalysis`.
+    11. If validation fails (e.g., bounding box violation), returns specific 422 error.
     12. Otherwise, returns final serialized `CameraCommand[]` to client (or other error).
 
 ## 6. External Integrations
