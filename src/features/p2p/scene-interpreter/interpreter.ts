@@ -2221,6 +2221,73 @@ private _mapDescriptorToValue(
 
           break;
         }
+        case 'focus_on': { // <<< NEW CASE
+          const {
+            target: rawTargetName,
+            adjust_framing: rawAdjustFraming = true, // Default true per instructions
+            speed: rawSpeed = 'medium', // Speed might influence blend/settle
+            easing: rawEasingName = DEFAULT_EASING 
+          } = step.parameters;
+
+          // Validate target
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
+          if (!targetName) {
+            this.logger.error(`FocusOn: Missing required target parameter. Skipping step.`);
+            continue;
+          }
+
+          // Resolve the new target position
+          const newTarget = this._resolveTargetPosition(
+            targetName,
+            sceneAnalysis,
+            envAnalysis,
+            currentTarget // Pass current target for context
+          );
+
+          if (!newTarget) {
+            this.logger.error(`FocusOn: Could not resolve target position for '${targetName}'. Skipping step.`);
+            continue;
+          }
+
+          // Validate adjust_framing (just log for now)
+          const adjustFraming = typeof rawAdjustFraming === 'boolean' ? rawAdjustFraming : true;
+          if (adjustFraming) {
+              this.logger.warn('FocusOn: adjust_framing=true is requested, but automatic framing adjustment is not yet implemented. Only changing target.');
+              // TODO: Implement dolly/zoom logic here based on distance to newTarget if needed.
+          }
+          
+          // Validate speed/easing for potential use in blending (though focus_on itself is just target change)
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+          let effectiveEasingName = easingName;
+          // Apply speed logic similar to other non-instant moves
+          if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
+          // Create CameraCommands (Position stays same, Target changes)
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+              position: currentPosition.clone(), 
+              target: currentTarget.clone(), // Start at current target
+              duration: 0,
+              easing: effectiveEasingName
+          });
+          commandsList.push({
+              position: currentPosition.clone(), // Position does not change
+              target: newTarget.clone(), // End looking at the new target
+              duration: stepDuration > 0 ? stepDuration : 0.1, // Use allocated duration or small default
+              easing: effectiveEasingName
+          });
+          this.logger.debug(`Generated focus_on commands:`, commandsList);
+          commands.push(...commandsList);
+
+          // Update state for the next step (Only target changes)
+          currentTarget = newTarget.clone();
+          // currentPosition remains the same
+          break;
+        }
         default: {
           this.logger.error(`Unknown motion type: ${step.type}. Skipping step.`);
           continue;
