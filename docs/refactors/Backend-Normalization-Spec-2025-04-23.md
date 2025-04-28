@@ -1,8 +1,8 @@
 # Refactor Specification: Backend Model Normalization
 
 **Original Date:** 2025-04-22
-**Updated Date:** 2025-04-24
-**Status:** Testing - Implementation Complete
+**Updated Date:** 2025-04-28
+**Status:** Complete
 
 ## 1. Overview
 
@@ -119,11 +119,11 @@ This refactor addresses recurring inconsistencies and complexities arising from 
 ### Phase 6: Testing
 
 - [x] 1.  **Normalization:** Verify models load visually grounded and centered without client-side adjustments. (Initial tests confirm grounding works after client-side loading fix).
-- [ ] 2.  **User Adjustment:** Verify the manual offset slider still works correctly.
-- [ ] 3.  **Reset Camera:** Verify it resets to the correct default view relative to the normalized model. (Refinement needed).
-- [ ] 4.  **Locking:** Verify the correct `userVerticalAdjustment` is saved to `environmental_metadata`.
-- [ ] 5.  **Path Generation:** Thoroughly test various prompts involving geometric targets (top, bottom, center), destination targets, and constraints to ensure the backend interpreter uses the normalized coordinates + user adjustment correctly.
-- [ ] 6.  **React Component Stability:** Verify all component changes maintain proper hooks ordering and React patterns.
+- [x] 2.  **User Adjustment:** Verify the manual offset slider still works correctly. (Verified)
+- [x] 3.  **Reset Camera:** Verify it resets to the correct default view relative to the normalized model. (Functionality verified, minor refinement possible later).
+- [x] 4.  **Locking:** Verify the correct `userVerticalAdjustment` is saved to `environmental_metadata`. (Verified)
+- [x] 5.  **Path Generation:** Thoroughly test various prompts involving geometric targets (top, bottom, center), destination targets, and constraints to ensure the backend interpreter uses the normalized coordinates + user adjustment correctly. (Passed regression tests).
+- [x] 6.  **React Component Stability:** Verify all component changes maintain proper hooks ordering and React patterns. (Verified)
 
 ## 5. Assistant/KB Impact
 
