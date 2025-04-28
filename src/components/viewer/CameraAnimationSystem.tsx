@@ -651,8 +651,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     
     try {
       // Toggle the lock state in the store first
-      toggleLock(); // This updates isLocked for the next render
-      const willBeLocked = !isLocked; // Check the *intended* state
+      // toggleLock(); 
+      const willBeLocked = !isLocked; // Check the *intended* state based on current value
 
       if (willBeLocked) {
         console.log('>>> Locking scene. Saving Environmental Metadata...');
@@ -700,7 +700,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         toast.info('Scene unlocked'); // Use info for unlock
       }
       
-      // Toggle lock state (likely via Zustand action)
+      // Toggle lock state AFTER potential async operations succeed
       console.log('Toggling lock state in store...');
       toggleLock(); 
       console.log('Lock state toggle processed.');
