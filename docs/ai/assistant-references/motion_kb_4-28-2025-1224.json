@@ -425,21 +425,91 @@
     ]
   },
   {
-    "name": "rotate",
-    "description": "Rotate the camera around a specified axis (yaw, pitch, or roll).",
+    "name": "fly_by",
+    "description": "Moves the camera along a path that passes near a specified target or region, often implying speed. The camera might briefly look at the target as it passes.",
     "parameters": [
       {
-        "name": "axis",
+        "name": "target",
         "type": "string",
-        "enum": ["yaw", "pitch", "roll"],
-        "description": "Which axis to rotate around. Yaw = pan, pitch = tilt, roll = bank.",
+        "description": "The primary target or region to fly past (e.g., 'object_center', 'object_left_center', 'feature_X', 'edge_of_model'). Interpreter resolves.",
         "required": true
       },
       {
-        "name": "angle",
+        "name": "pass_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Optional: Canonical descriptor for the approximate closest distance the camera should pass by the target. Default: 'medium'. Interpreter maps this to a context-aware numeric distance. Overridden by pass_distance_override.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "pass_distance_override",
         "type": "number",
-        "description": "Degrees to rotate (+ is right/up/clockwise by right-hand rule).",
-        "required": true
+        "description": "Optional: Explicit numeric distance for the closest pass. If provided, overrides pass_distance_descriptor. Interpreter determines units/calculation.",
+        "required": false 
+      },
+       {
+        "name": "look_at_target",
+        "type": "boolean",
+        "description": "Whether the camera should attempt to keep the target in frame during the fly-by. Default: true.",
+        "required": false,
+        "default": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["medium", "fast", "very_fast"],
+        "description": "Qualitative speed hint, typically medium or faster for fly-by.",
+        "required": false,
+        "default": "fast"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "linear" 
+      }
+    ],
+    "examples": [
+      "Fly by the object quickly",
+      "Race past the edge of the model",
+      "Swoop by the antenna",
+      "Perform a fast pass near the center"
+    ]
+  },
+  {
+    "name": "fly_away",
+    "description": "Moves the camera away from its current position or a target, potentially backwards or upwards, often while keeping the target in view.",
+    "parameters": [
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Optional: The target to look back at while flying away (e.g., 'object_center', 'last_target', 'object_back_center'). If omitted, might fly straight back. Default: 'current_target'. Interpreter resolves.",
+        "required": false,
+        "default": "current_target"
+      },
+       {
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to move away. Required if distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to move away. If provided, overrides distance_descriptor. Interpreter determines units.",
+        "required": false
+      },
+      {
+        "name": "direction_hint",
+        "type": "string",
+        "enum": ["backward", "up_and_back", "away_from_target", "custom"],
+        "description": "Hint for the direction of departure relative to current orientation or target. Default: 'away_from_target'. Interpreter calculates path.",
+        "required": false,
+        "default": "away_from_target"
       },
       {
         "name": "speed",
@@ -453,50 +523,51 @@
         "name": "easing",
         "type": "string",
         "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
-        "description": "Easing function to apply.",
+        "description": "Easing function type hint.",
         "required": false,
-        "default": "easeInOut"
+        "default": "easeOut" 
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
       }
     ],
     "examples": [
-      "Roll left 30°",
-      "Rotate yaw right 45 degrees",
-      "Pitch down slightly"
+      "Fly away looking back at the object",
+      "Pull back slowly from the scene",
+      "Move away quickly",
+      "Retreat from the target"
     ]
   },
   {
-    "name": "move_to",
-    "description": "Move (or cut) the camera to a named point of interest in the scene.",
+    "name": "set_view",
+    "description": "Instantly sets the camera to a predefined position and orientation (e.g., standard orthographic views or saved custom views). Represents a camera 'cut' or snap.",
     "parameters": [
       {
-        "name": "target",
+        "name": "view_name",
         "type": "string",
-        "description": "ID of the saved point of interest (e.g. 'war_hammer', 'object_top_center').",
+        "enum": ["front", "back", "top", "bottom", "left", "right", "iso", "perspective", "saved_view_1"], 
+        "description": "Name of the predefined view to snap to. Interpreter needs mapping for these names.",
         "required": true
-      },
-      {
-        "name": "speed",
-        "type": "string",
-        "enum": ["instant", "slow", "medium", "fast"],
-        "description": "'instant' = cut, others = smooth move.",
-        "required": false,
-        "default": "medium"
-      },
-      {
-        "name": "easing",
-        "type": "string",
-        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
-        "description": "Easing for non-instant moves.",
-        "required": false,
-        "default": "easeInOut"
       }
     ],
     "examples": [
-      "Move to war_hammer instantly",
-      "Go to object_left_hand smoothly"
+      "Cut to front view",
+      "Show top-down perspective",
+      "Snap to iso view",
+      "Go to saved view 1"
     ]
   },
-  {
+   {
     "name": "focus_on",
     "description": "Adjusts the camera's target point or orientation to center on a specified feature or object, potentially with a slight camera position adjustment for better framing. Does not usually involve large positional movement.",
     "parameters": [
@@ -535,6 +606,118 @@
       "Look at feature C",
       "Center the view on the object",
       "Shift attention to the wheel"
+    ]
+  },
+  {
+    "name": "arc",
+    "description": "Moves the camera along a curved path (part of a circle) around a target, potentially changing distance (radius) or elevation simultaneously. More complex than simple orbit.",
+    "parameters": [
+       {
+        "name": "direction",
+        "type": "string",
+        "enum": ["clockwise", "counter-clockwise", "left", "right", "up", "down"],
+        "description": "Primary direction of the arc movement.",
+        "required": true
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Total angle sweep of the arc in degrees.",
+        "required": true
+      },
+       {
+        "name": "target",
+        "type": "string",
+        "description": "Reference point to arc around (e.g., 'object_center', 'object_front_center'). Default: 'object_center'. Interpreter resolves.",
+        "required": false,
+        "default": "object_center"
+      },
+      {
+        "name": "radius_change_factor",
+        "type": "number",
+        "description": "Multiplier for starting radius to ending radius (1.0 = constant, <1 moves closer, >1 moves farther). Default: 1.0.",
+        "required": false,
+        "default": 1.0
+      },
+      {
+        "name": "elevation_change",
+        "type": "number",
+        "description": "Vertical distance or angle change during the arc (positive=up, negative=down). Default: 0. Interpreter determines units/method.",
+        "required": false,
+        "default": 0
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Arc upwards around the object for 90 degrees",
+      "Swing left while moving closer",
+      "Perform a high arc shot over the model",
+      "Curve downwards and right around the target"
+    ]
+  },
+   {
+    "name": "reveal",
+    "description": "Moves the camera to gradually uncover or show a target or scene, often starting from an obscured, close-up, or edge position.",
+    "parameters": [
+       {
+        "name": "reveal_target",
+        "type": "string",
+        "description": "The main subject or view to be revealed at the end of the motion (e.g., 'object_center', 'full_model_view'). Interpreter resolves.",
+        "required": true
+      },
+       {
+        "name": "start_hint",
+        "type": "string",
+        "enum": ["close_up", "obscured", "from_below", "from_side", "edge"],
+        "description": "Hint about the starting state or position relative to the target. Interpreter uses this to calculate starting point.",
+        "required": false,
+        "default": "close_up"
+      },
+       {
+        "name": "motion_type_hint",
+        "type": "string",
+        "enum": ["dolly_out", "pedestal_up", "truck_left", "arc_away", "complex"],
+        "description": "Hint about the primary type of movement used for the reveal (e.g. pulling back, rising up). Default: 'complex'. Interpreter determines path.",
+        "required": false,
+        "default": "complex"
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint for the reveal.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeOut"
+      }
+    ],
+    "examples": [
+      "Pull back slowly to reveal the whole model",
+      "Start close on the wheel, then reveal the car",
+      "Rise up from below to show the object",
+      "Sweep from the side to reveal the front"
     ]
   }
 ] 
