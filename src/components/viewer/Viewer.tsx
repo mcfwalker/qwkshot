@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene, Group } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -22,83 +22,113 @@ import { Button } from '@/components/ui/button';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
+import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { CameraControlsPanel } from './CameraControlsPanel';
+import { useFrame } from '@react-three/fiber';
 import { CenterReticle } from './CenterReticle';
 
-// Model component that handles GLTF/GLB loading and NORMALIZATION
+// Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
-  const { scene: originalScene } = useGLTF(url);
-  const setModelVerticalOffset = useViewerStore((s) => s.setModelVerticalOffset);
+  const { scene: originalScene } = useGLTF(url); // Load the scene (now pre-normalized)
 
-  // Memoize the normalized model to avoid recomputation on every render
-  const normalizedModelContainer = useMemo(() => {
+  // Clone the scene to avoid modifying the cache and allow direct manipulation if needed
+  // Memoize the cloned scene based on the original scene
+  const clonedScene = useMemo(() => { 
     if (!originalScene) return null;
-
-    console.log("Viewer.tsx <Model>: Normalizing GLTF scene...");
-
-    // Clone scene to avoid modifying the cache from useGLTF
-    const scene = originalScene.clone();
-
-    /* --- Container-based normalization --- */
-    const container = new Group();
-    container.add(scene);
-    // Note: We don't add container to the main scene here,
-    // it will be returned by this component for the Canvas to render.
-
-    // 1. Initial box -> scale so longest edge == 2 units (or adjust target size)
-    const box1 = new Box3().setFromObject(container);
-    const size1 = box1.getSize(new Vector3());
-    const maxDim = Math.max(size1.x, size1.y, size1.z);
-    const targetSize = 2.0; // Define the target normalized size
-    const scale = maxDim > 0 ? targetSize / maxDim : 1;
-    container.scale.setScalar(scale);
-    console.log(`Viewer.tsx <Model>: Calculated scale: ${scale.toFixed(4)} (maxDim: ${maxDim.toFixed(4)})`);
-
-
-    // 2. Recalculate box after scaling
-    const box2 = new Box3().setFromObject(container);
-
-    // 3. Translate: Lift so bottom rests on y=0 (Only Y translation)
-    // We keep XZ centered around the container's local origin,
-    // which is appropriate if the GLTF itself is reasonably centered.
-    const offsetY = -box2.min.y; // Amount to lift (already scaled)
-    container.position.set(0, offsetY, 0);
-    console.log(`Viewer.tsx <Model>: Calculated offsetY: ${offsetY.toFixed(4)}`);
-
-    // 4. Persist unscaled vertical offset for metadata
-    const unscaledOffsetY = offsetY / scale;
-    setModelVerticalOffset(unscaledOffsetY); // Update Zustand store
-    console.log(`Viewer.tsx <Model>: Stored unscaledOffsetY: ${unscaledOffsetY.toFixed(4)}`);
-
-    // 5. Bounding box after translation (for debugging)
-    const finalBox = new Box3().setFromObject(container);
-    console.log(`Viewer.tsx <Model>: Final container world box min.y: ${finalBox.min.y.toFixed(4)}, max.y: ${finalBox.max.y.toFixed(4)}`);
-
-    return container; // Return the normalized container group
-
-  }, [originalScene, setModelVerticalOffset]); // Dependencies
+    console.log("Viewer.tsx <Model>: Cloning scene...");
+    return originalScene.clone();
+  }, [originalScene]);
 
   // Update the external modelRef with the container group
   useEffect(() => {
-    if (normalizedModelContainer) {
-       modelRef.current = normalizedModelContainer;
+    // Assign the cloned scene directly to the ref
+    if (clonedScene) {
+       modelRef.current = clonedScene;
+       console.log("Viewer.tsx <Model>: Assigned cloned scene to modelRef.");
     }
     // Cleanup ref when component unmounts or URL changes
     return () => { modelRef.current = null; };
-  }, [normalizedModelContainer, modelRef]);
+  }, [clonedScene, modelRef]); // Depend on the cloned scene
 
-  // Render the normalized container or null if not ready
-  return normalizedModelContainer ? <primitive object={normalizedModelContainer} /> : null;
+  // Render the cloned scene directly
+  // The parent <group> in Viewer will handle userVerticalAdjustment
+  return clonedScene ? <primitive object={clonedScene} /> : null;
 }
 
+// Type for movement state
+interface MovementDirection {
+  up: boolean;
+  down: boolean;
+  left: boolean;
+  right: boolean;
+}
+
+// --- <<< NEW: Helper component for useFrame logic >>> ---
+interface CameraMoverProps {
+  movementDirection: MovementDirection;
+  cameraRef: React.RefObject<ThreePerspectiveCamera>;
+  controlsRef: React.RefObject<any>; // Type for OrbitControls is complex
+  isLocked: boolean;
+  isPlaying: boolean;
+}
+
+function CameraMover({ 
+  movementDirection, 
+  cameraRef, 
+  controlsRef, 
+  isLocked, 
+  isPlaying 
+}: CameraMoverProps) {
+
+  const moveSpeed = 5.0; // Adjust speed as needed (units per second)
+
+  // Vectors for calculation (reused to avoid allocations)
+  const cameraRight = useMemo(() => new Vector3(), []);
+  const cameraUp = useMemo(() => new Vector3(), []);
+  const moveVector = useMemo(() => new Vector3(), []);
+
+  // Define World Axes
+  const worldAxisX = useMemo(() => new Vector3(1, 0, 0), []);
+  const worldAxisY = useMemo(() => new Vector3(0, 1, 0), []);
+
+  useFrame((state, delta) => {
+    if (isLocked || isPlaying) return; // Don't move if locked or animating
+    moveVector.set(0, 0, 0); // Reset moveVector for this frame
+
+    // Accumulate movement based on active directions using WORLD axes
+    if (movementDirection.up)    moveVector.add(worldAxisY);
+    if (movementDirection.down)  moveVector.sub(worldAxisY);
+    if (movementDirection.left)  moveVector.sub(worldAxisX);
+    if (movementDirection.right) moveVector.add(worldAxisX);
+
+    if (moveVector.lengthSq() > 0) { // Only move if a direction is active
+      // Normalize the combined direction and scale by speed and frame time
+      moveVector.normalize().multiplyScalar(moveSpeed * delta);
+
+      // Apply the movement to both camera position and target
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (camera && controls) {
+        camera.position.add(moveVector);
+        controls.target.add(moveVector); // Move target parallel to camera
+      }
+    }
+  });
+
+  return null; // This component doesn't render anything itself
+}
+// --- <<< END CameraMover component >>> ---
+
 interface ViewerProps {
-  className?: string;
-  modelUrl: string;
-  onModelSelect: (url: string) => void;
+  className: string;
+  modelUrl: string | null;
+  onModelSelect: (modelId: string | null) => void;
 }
 
 export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
+  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>('model');
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -187,6 +217,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [boundingBoxHelper, setBoundingBoxHelper] = useState<Box3Helper | null>(null);
   const sceneRef = useRef<Scene | null>(null);
 
+  // State for tracking active camera movement directions
+  const [movementDirection, setMovementDirection] = useState<MovementDirection>({ up: false, down: false, left: false, right: false });
+
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
     let extractedModelId: string | undefined;
@@ -270,6 +303,66 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     };
   }, [modelRef.current, userVerticalAdjustment]); // Corrected dependencies
   // --- Effect to Add/Remove Bounding Box Helper --- END
+
+  // --- Camera Movement Handlers (Updated Dependencies) ---
+  const handleCameraMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
+    if (isLocked || isPlaying) return;
+    setMovementDirection(prev => ({ ...prev, [direction]: active }));
+  }, [isLocked, isPlaying]); // Dependencies: isLocked, isPlaying
+
+  const handleCameraReset = useCallback(() => {
+    if (isLocked || isPlaying) {
+      toast.error('Cannot reset camera while locked or playing animation.');
+      return;
+    }
+    if (cameraRef.current && controlsRef.current) {
+      // Define hardcoded initial state
+      // Adjust target to be approx center of normalized model (Y=1)
+      // Adjust position to be relative to new target (e.g., higher and back)
+      const initialPosition = new Vector3(0, 2, 5); // Example: Above and in front
+      const initialTarget = new Vector3(0, 1, 0); // Target center of normalized model
+
+      cameraRef.current.position.copy(initialPosition);
+      controlsRef.current.target.copy(initialTarget);
+      // controlsRef.current.update(); // Let R3F handle update
+      setMovementDirection({ up: false, down: false, left: false, right: false });
+      toast.info('Camera position reset');
+    } else {
+      toast.error('Camera references not available for reset.');
+    }
+  }, [isLocked, isPlaying]); // Removed defaultCameraState dependency
+  // --- END Camera Movement Handlers ---
+
+  // --- Keyboard Controls Effect (Updated Dependencies) ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Prevent handling if focus is inside an input/textarea
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      switch (event.key) {
+        case 'ArrowUp': case 'w': handleCameraMove('up', true); break;
+        case 'ArrowDown': case 's': handleCameraMove('down', true); break;
+        case 'ArrowLeft': case 'a': handleCameraMove('left', true); break;
+        case 'ArrowRight': case 'd': handleCameraMove('right', true); break;
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      switch (event.key) {
+        case 'ArrowUp': case 'w': handleCameraMove('up', false); break;
+        case 'ArrowDown': case 's': handleCameraMove('down', false); break;
+        case 'ArrowLeft': case 'a': handleCameraMove('left', false); break;
+        case 'ArrowRight': case 'd': handleCameraMove('right', false); break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      setMovementDirection({ up: false, down: false, left: false, right: false });
+    };
+  }, [handleCameraMove]); // Dependency is the memoized handler
+  // --- END Keyboard Controls Effect ---
 
   // Handler for grid toggle
   const handleGridToggle = (visible: boolean) => {
@@ -434,20 +527,75 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             isRecording={isRecording}
           />
 
+          {/* --- Render CameraMover inside Canvas --- */}
+          <CameraMover 
+            movementDirection={movementDirection}
+            cameraRef={cameraRef}
+            controlsRef={controlsRef}
+            isLocked={isLocked}
+            isPlaying={isPlaying}
+          />
+
         </Suspense>
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
-      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4">
-        <ErrorBoundary name="ModelSelectorTabs">
-           <ModelSelectorTabs onModelSelect={onModelSelect} />
-        </ErrorBoundary>
+      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Reverted to original narrower width */} 
+        {/* --- NEW Tabbed Panel for Model/Camera --- */}
+        <TabsPrimitive.Root 
+            value={activeLeftPanelTab}
+            onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
+            className="flex flex-col gap-4" // Use flex-col within the tab root
+        >
+          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+            <TabsPrimitive.Trigger 
+              value="model" 
+              className={cn(
+                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+              )}
+            >
+              MODEL
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger 
+              value="camera" 
+              className={cn(
+                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+              )}
+            >
+              CAMERA
+            </TabsPrimitive.Trigger>
+          </TabsPrimitive.List>
+
+          {/* Model Tab Content */}
+          <TabsPrimitive.Content value="model">
+            <ErrorBoundary name="ModelSelectorTabs">
+              <ModelSelectorTabs onModelSelect={onModelSelect} />
+            </ErrorBoundary>
+          </TabsPrimitive.Content>
+
+          {/* Camera Tab Content (Placeholder for now) */}
+          <TabsPrimitive.Content value="camera">
+            <CameraControlsPanel 
+              fov={fov} 
+              onFovChange={setFov} 
+              onCameraMove={handleCameraMove} // Pass real handler
+              onCameraReset={handleCameraReset} // Pass real handler
+            />
+          </TabsPrimitive.Content>
+
+        </TabsPrimitive.Root>
+        {/* --- END Tabbed Panel --- */}
         
+        {/* Scene Controls (Remains separate below the tabs) */}
         <SceneControls
           userVerticalAdjustment={userVerticalAdjustment}
           onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
-          fov={fov}
-          onFovChange={setFov}
           gridVisible={gridVisible}
           onGridToggle={handleGridToggle}
           onAddTextureClick={handleAddTextureClick}

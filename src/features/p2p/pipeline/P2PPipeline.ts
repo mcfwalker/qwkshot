@@ -401,15 +401,35 @@ export class P2PPipelineImpl implements IP2PPipeline {
       const startTime = Date.now();
 
       // Convert animation to camera commands
-      const commands = this.sceneInterpreter.interpretPath({
-        keyframes: animation.keyframes,
-        duration: animation.duration,
+      const motionPlan = {
+        steps: animation.keyframes.map(kf => ({
+          type: 'custom',
+          parameters: {
+            positionX: kf.position.x,
+            positionY: kf.position.y,
+            positionZ: kf.position.z,
+            targetX: kf.target.x,
+            targetY: kf.target.y,
+            targetZ: kf.target.z,
+          },
+          duration_ratio: kf.duration / animation.duration,
+        })),
         metadata: {
-          style: animation.metadata.style,
-          focus: animation.metadata.focus,
-          safetyConstraints: animation.metadata.safetyConstraints,
-        },
-      });
+          requested_duration: animation.duration,
+          original_prompt: animation.metadata?.focus || ''
+        }
+      };
+      
+      const commands = this.sceneInterpreter.interpretPath(
+        motionPlan,
+        // Add missing required parameters
+        {} as SceneAnalysis,
+        {} as EnvironmentalAnalysis,
+        {
+          position: new Vector3(0, 0, 0),
+          target: new Vector3(0, 0, 0)
+        }
+      );
 
       // Execute the specific keyframe
       if (keyframeIndex >= 0 && keyframeIndex < commands.length) {
@@ -442,18 +462,41 @@ export class P2PPipelineImpl implements IP2PPipeline {
       const startTime = Date.now();
 
       // Convert animation to camera commands
-      const commands = this.sceneInterpreter.interpretPath({
-        keyframes: animation.keyframes,
-        duration: animation.duration,
+      const motionPlan = {
+        steps: animation.keyframes.map(kf => ({
+          type: 'custom',
+          parameters: {
+            positionX: kf.position.x,
+            positionY: kf.position.y,
+            positionZ: kf.position.z,
+            targetX: kf.target.x,
+            targetY: kf.target.y,
+            targetZ: kf.target.z,
+          },
+          duration_ratio: kf.duration / animation.duration,
+        })),
         metadata: {
-          style: animation.metadata.style,
-          focus: animation.metadata.focus,
-          safetyConstraints: animation.metadata.safetyConstraints,
-        },
-      });
+          requested_duration: animation.duration,
+          original_prompt: animation.metadata?.focus || ''
+        }
+      };
+      
+      const commands = this.sceneInterpreter.interpretPath(
+        motionPlan,
+        // Add missing required parameters
+        {} as SceneAnalysis,
+        {} as EnvironmentalAnalysis,
+        {
+          position: new Vector3(0, 0, 0),
+          target: new Vector3(0, 0, 0)
+        }
+      );
 
       // Validate commands
-      const validation = this.sceneInterpreter.validateCommands(commands);
+      const validation = this.sceneInterpreter.validateCommands(
+        commands,
+        new Box3() // Add missing required Box3 parameter
+      );
       if (!validation.isValid) {
         // Use validation.errors as per potential type definition
         throw new AnimationError(validation.errors?.join(', ') || 'Invalid commands');
@@ -521,9 +564,12 @@ export class P2PPipelineImpl implements IP2PPipeline {
 
       // Perform environmental analysis using ONLY sceneAnalysis
       const envAnalysis = await this.envAnalyzer.analyzeEnvironment(
-        sceneAnalysis // Pass ONLY scene analysis
-        // envMetadata removed
-        // modelMetadata removed
+        sceneAnalysis, // Pass ONLY scene analysis
+        {
+          position: new Vector3(0, 0, 0),
+          target: new Vector3(0, 0, 0),
+          fov: 50
+        } // Add missing required second parameter
       );
 
       // Update model metadata with environmental analysis results

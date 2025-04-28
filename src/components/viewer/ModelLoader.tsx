@@ -21,6 +21,7 @@ import { SceneInterpreterFactory } from '@/features/p2p/scene-interpreter/SceneI
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
 import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
+import { normalizeModelAction } from '@/app/actions/normalization';
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -142,9 +143,11 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     }
 
     setLoadingMessage('Analyzing scene...');
-    const url = URL.createObjectURL(file);
-    onModelLoad(url);
+    // Create object URL for analysis but DON'T load it visually yet
+    // const url = URL.createObjectURL(file); 
+    // onModelLoad(url); // <-- REMOVED: Do not load visually until normalization is done
 
+    // Run client-side analysis to get metadata for saving
     const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
       file,
       userId: 'current-user-id'
@@ -205,7 +208,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     }
 
     setLoading(true);
-    setLoadingMessage('Saving model...');
+    setLoadingMessage('Saving model metadata...');
     setShowSaveDialog(false);
 
     try {
@@ -228,8 +231,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           initialMetadata: currentAnalysisMetadata 
       });
 
-      if (prepareResult.error) {
-          throw new Error(prepareResult.error);
+      if (prepareResult.error || !prepareResult.signedUploadUrl) {
+          throw new Error(prepareResult.error || 'Failed to prepare upload (missing URL).');
       }
       
       const { modelId, signedUploadUrl } = prepareResult;
@@ -241,6 +244,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           method: 'PUT',
           body: currentFile,
           headers: {
+              // Supabase signed URL uploads might need content-type depending on policy/setup
+              // 'Content-Type': currentFile.type 
           },
       });
 
@@ -256,9 +261,38 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
 
       loggerRef.current.info('File uploaded successfully to storage via fetch.');
 
+      // --- Trigger Backend Normalization --- 
+      setLoadingMessage('Normalizing model geometry...');
+      loggerRef.current.info(`Calling normalizeModelAction for modelId: ${modelId}`);
+      const normalizeResult = await normalizeModelAction(modelId);
+      
+      if (!normalizeResult.success) {
+          loggerRef.current.warn('Backend normalization failed:', normalizeResult.error);
+          toast.warning('Model saved, but normalization failed.', { description: normalizeResult.error });
+      } else {
+          loggerRef.current.info('Backend normalization completed successfully.');
+      }
+      // -------------------------------------
+
+      // --- Load the final (normalized) model URL for display --- 
+      setLoadingMessage('Loading final model...');
+      try {
+        // Regardless of normalization success/failure for now, try loading the model from storage
+        // If normalization failed, this loads the original. If succeeded, loads normalized.
+        // Future improvement: Only load if normalization succeeded?
+        const finalUrl = await loadModel(modelId); 
+        onModelLoad(finalUrl); // Update the viewer with the URL from storage
+        loggerRef.current.info('Viewer updated with final model URL from storage.');
+      } catch (loadError) {
+        loggerRef.current.error('Failed to load final model URL after save/normalization:', loadError);
+        toast.error('Failed to display final model', { description: loadError instanceof Error ? loadError.message : undefined });
+        // Fallback? Maybe leave the old URL displayed? For now, just log and error.
+      }
+      // -----------------------------------------------------------
+
       const newPath = `/viewer/${modelId}`;
       window.history.pushState({}, '', newPath);
-      toast.success('Model saved successfully!');
+      toast.success('Model saved successfully!'); // Keep original success message for now
 
     } catch (error) {
       console.error('Error saving model:', error);

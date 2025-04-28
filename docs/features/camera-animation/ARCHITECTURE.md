@@ -15,11 +15,11 @@ The process leverages the OpenAI Assistants API for high-level planning and a lo
     *   For "move to destination" requests (e.g., 'pedestal to the top'), the Assistant includes a `destination_target` parameter (e.g., `object_top_center`) instead of a `distance` parameter.
     *   For "move to proximity" requests (e.g., 'dolly in close'), the Assistant includes a `target_distance_descriptor` parameter.
 5.  This `MotionPlan` is passed to the **Scene Interpreter** on our backend.
-6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**. The EnvironmentalAnalysis context provided to the interpreter includes the modelOffset.
+6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**. The EnvironmentalAnalysis context provided to the interpreter includes the userVerticalAdjustment.
 7.  The Scene Interpreter processes each step in the `MotionPlan`:
     *   It uses the `type` (e.g., "orbit") to select the correct internal logic.
     *   It uses the step's `parameters` (e.g., direction, angle) combined with the local scene/environmental context to calculate precise camera movements.
-    *   It resolves targets (e.g., 'object_center', feature names). **Crucially, it resolves spatial references like 'object_top_center' using coordinates adjusted by the provided `modelOffset`** to match the normalized model's visual position. It also handles `'current_target'` for applicable motions.
+    *   It resolves targets (e.g., 'object_center', feature names). **Crucially, it resolves spatial references like 'object_top_center' using the *normalized coordinates* from `SceneAnalysis` and applies the `userVerticalAdjustment` (from `EnvironmentalAnalysis`)** to the Y-component, ensuring alignment with the model's visually adjusted position. It also handles `'current_target'` for applicable motions.
     *   **It handles quantitative, qualitative, and goal-based magnitude parameters** with a specific priority order for each motion type, utilizing helper functions like `_mapDescriptorToValue` and `_mapDescriptorToGoalDistance` to convert canonical descriptors (`tiny`...`huge`) into context-aware numeric values.
         *   For example, in `dolly`, it prioritizes `target_distance_descriptor` (calculating required distance), then `destination_target` (calculating distance), then `distance_override` (direct numeric input), then `distance_descriptor` (mapped qualitative input).
         *   For `zoom`, it prioritizes `factor_override`, then `factor_descriptor`, then `target_distance_descriptor` (calculating required factor).
@@ -117,7 +117,7 @@ graph TD
     *   For each step:
         *   Selects the appropriate internal generator logic based on `step.type`.
         *   Uses `step.parameters` and local context to calculate precise camera movements.
-        *   Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **by applying the `modelOffset` from the provided `EnvironmentalAnalysis` to the base coordinates from `SceneAnalysis`**, ensuring alignment with the normalized visual model.
+        *   Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **using the normalized coordinates from `SceneAnalysis` and applying the `userVerticalAdjustment` from the provided `EnvironmentalAnalysis` to the Y coordinate**, ensuring alignment with the normalized visual model.
         *   **Handles quantitative/qualitative/goal parameters (with priority):**
             *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance` for calculations.
             *   **`dolly/truck/pedestal` Priority:**

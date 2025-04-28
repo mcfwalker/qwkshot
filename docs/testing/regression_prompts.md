@@ -28,7 +28,7 @@ This document contains a set of standard prompts used for regression testing the
 *   **Truck:**
     *   `"Move the camera sideways to the right by 3 units."`
     *   `"Truck right a bit."`
-    *   `"Truck left significantly."`
+    *   `"Truck left significantly."` x significantly not large enough
 *   **Pedestal:**
     *   `"Move the camera straight up by 1 unit."`
     *   `"Pedestal up slightly."`
@@ -66,7 +66,7 @@ This document contains a set of standard prompts used for regression testing the
     *   `"Pedestal a smidge up."` (Should map to 'tiny')
     *   `"Dolly back substantially."` (Should map to 'large' or 'huge') x needs to be larger distance; maps to 'large' but should be 'huge'
     *   `"Fly by extremely close to the object center."` (Requires fly_by implementation)
-    *   `"Zoom out a huge amount."`
+    *   `"Zoom out a huge amount."`x not a great deal of distance covered
     *   `"Move forward a medium distance."`
     *   `"Pedestal down small amount."`
 *   **Override Tests:**

@@ -1,6 +1,7 @@
 import { Box3, Object3D, Plane, Vector3, Mesh, Matrix4, Matrix3, Quaternion, Euler, Layers } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Logger, SceneAnalyzerConfig, SceneAnalyzer, Feature, PerformanceMetrics } from '../../../types/p2p';
+import { Logger, SceneAnalyzerConfig, SceneAnalyzer, Feature, PerformanceMetrics, ValidationResult } from '../../../types/p2p';
+import { SceneSafetyConstraints, ModelOrientation, SceneAnalysis as ImportedSceneAnalysis } from '../../../types/p2p/scene-analyzer';
 import * as THREE from 'three';
 import { OrientationDetector } from './OrientationDetector';
 
@@ -80,7 +81,8 @@ interface Orientation {
   scale: number;
 }
 
-interface SceneAnalysis {
+// Rename this to avoid conflicts with the imported interface
+interface InternalSceneAnalysis {
   glb: GLBAnalysis;
   spatial: SpatialAnalysis;
   featureAnalysis: FeatureAnalysis;
@@ -319,21 +321,36 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
     };
   }
 
-  // Scene-level safety boundary calculation
-  public async calculateSafetyBoundaries(scene: SceneAnalysis): Promise<SafetyConstraints> {
-    return scene.safetyConstraints;
+  // Scene-level safety boundary calculation - fix the type to match the interface
+  public async calculateSafetyBoundaries(scene: ImportedSceneAnalysis): Promise<SceneSafetyConstraints> {
+    return scene.safetyConstraints as SceneSafetyConstraints;
   }
 
   // Analysis-level safety boundary retrieval
-  async getSafetyBoundaries(analysis: SceneAnalysis): Promise<SafetyConstraints> {
-    return analysis.safetyConstraints;
+  async getSafetyBoundaries(analysis: ImportedSceneAnalysis): Promise<SceneSafetyConstraints> {
+    return analysis.safetyConstraints as SceneSafetyConstraints;
   }
 
-  protected async calculateOrientation(scene: Object3D): Promise<Orientation> {
-    return this.orientationDetector.detectOrientation(scene);
+  // Change from protected to public to match the interface
+  public async calculateOrientation(scene: Object3D): Promise<ModelOrientation> {
+    const baseOrientation = await this.orientationDetector.detectOrientation(scene);
+    
+    // Convert to ModelOrientation with required properties
+    return {
+      front: baseOrientation.front,
+      back: new Vector3().copy(baseOrientation.front).negate(),
+      left: new Vector3().copy(baseOrientation.right).negate(),
+      right: baseOrientation.right,
+      // "up" doesn't exist on ModelOrientation, use "top" instead
+      top: new Vector3(0, 1, 0),
+      bottom: new Vector3(0, -1, 0),
+      center: baseOrientation.center,
+      scale: baseOrientation.scale,
+      confidence: 0.9 // Add confidence value
+    };
   }
 
-  protected async calculateSymmetry(analysis: SceneAnalysis): Promise<SpatialAnalysis['symmetry']> {
+  protected async calculateSymmetry(analysis: InternalSceneAnalysis): Promise<SpatialAnalysis['symmetry']> {
     const startTime = performance.now();
     const symmetryPlanes: Plane[] = [];
     let hasSymmetry = false;
@@ -396,7 +413,7 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
     return volume > 1.0;
   }
 
-  private checkReflectionSymmetry(analysis: SceneAnalysis, center: Vector3, axis: Vector3): boolean {
+  private checkReflectionSymmetry(analysis: InternalSceneAnalysis, center: Vector3, axis: Vector3): boolean {
     // Implement reflection symmetry check
     // For now, use a simple check based on feature positions
     const features = analysis.features;
@@ -424,11 +441,21 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
     );
   }
 
-  async extractReferencePoints(analysis: SceneAnalysis) {
-    return analysis.spatial.referencePoints;
+  // Fix the interface parameter type
+  async extractReferencePoints(scene: ImportedSceneAnalysis): Promise<{
+    center: Vector3;
+    highest: Vector3;
+    lowest: Vector3;
+    leftmost: Vector3;
+    rightmost: Vector3;
+    frontmost: Vector3;
+    backmost: Vector3;
+  }> {
+    return scene.spatial.referencePoints as any;
   }
 
-  async analyzeScene(file: File): Promise<SceneAnalysis> {
+  // Convert the internal analysis to the expected type
+  async analyzeScene(file: File): Promise<ImportedSceneAnalysis> {
     const startTime = performance.now();
     const operations: PerformanceOperation[] = [];
 
@@ -448,7 +475,8 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
       const featureAnalysis = await this.analyzeFeatures(gltf.scene);
       operations.push({ name: 'analyzeFeatures', duration: 0, success: true });
 
-      const safetyConstraints = await this.calculateSafetyBoundaries({
+      // Create initial internal analysis
+      const internalAnalysis: InternalSceneAnalysis = {
         glb: glbAnalysis,
         spatial: spatialAnalysis,
         featureAnalysis,
@@ -477,35 +505,21 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
           databaseQueries: 0,
           averageResponseTime: 0
         }
-      });
+      };
+
+      const safetyConstraints = await this.calculateSafetyBoundaries(internalAnalysis as any);
       operations.push({ name: 'calculateSafetyBoundaries', duration: 0, success: true });
 
-      const orientation = await this.calculateOrientation(gltf.scene);
+      const modelOrientation = await this.calculateOrientation(gltf.scene);
       operations.push({ name: 'calculateOrientation', duration: 0, success: true });
 
-      const symmetry = await this.calculateSymmetry({
-        glb: glbAnalysis,
-        spatial: spatialAnalysis,
-        featureAnalysis,
-        safetyConstraints,
-        orientation,
-        features: featureAnalysis.features,
-        performance: {
-          startTime,
-          endTime: performance.now(),
-          duration: 0,
-          operations: [],
-          cacheHits: 0,
-          cacheMisses: 0,
-          databaseQueries: 0,
-          averageResponseTime: 0
-        }
-      });
+      const symmetry = await this.calculateSymmetry(internalAnalysis);
       operations.push({ name: 'calculateSymmetry', duration: 0, success: true });
 
       const endTime = performance.now();
       const duration = endTime - startTime;
 
+      // Return the result in the expected ImportedSceneAnalysis format
       return {
         glb: glbAnalysis,
         spatial: {
@@ -524,7 +538,7 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
         },
         featureAnalysis,
         safetyConstraints,
-        orientation,
+        orientation: modelOrientation,
         features: featureAnalysis.features,
         performance: {
           startTime,
@@ -536,22 +550,28 @@ export class SceneAnalyzerImpl implements SceneAnalyzer {
           databaseQueries: 0,
           averageResponseTime: 0
         }
-      };
+      } as ImportedSceneAnalysis;
     } catch (error) {
       this.logger.error('Scene analysis failed:', error instanceof Error ? error : new Error('Unknown error'));
       throw error;
     }
   }
 
-  async getSceneUnderstanding(scene: SceneAnalysis) {
+  // Fix the interface parameter type
+  async getSceneUnderstanding(scene: ImportedSceneAnalysis): Promise<{
+    complexity: 'simple' | 'moderate' | 'high';
+    symmetry: { hasSymmetry: boolean; symmetryPlanes: Plane[] };
+    features: Feature[];
+  }> {
     return {
       complexity: scene.spatial.complexity,
       symmetry: scene.spatial.symmetry,
       features: scene.features
-    };
+    } as any;
   }
 
-  validateAnalysis(analysis: SceneAnalysis) {
+  // Fix the interface parameter type and return type
+  validateAnalysis(analysis: ImportedSceneAnalysis): ValidationResult {
     const errors: string[] = [];
 
     if (!analysis.glb) {

@@ -251,15 +251,12 @@ export async function POST(request: Request) {
         ); 
         if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
-        // <<< FIX: Manually add the CORRECT modelOffset to the analysis object >>>
-        if (fetchedEnvironmentalMetadata?.modelOffset !== undefined) {
-          (environmentalAnalysis as any).modelOffset = fetchedEnvironmentalMetadata.modelOffset;
-          logger.debug(`Added correct modelOffset (${fetchedEnvironmentalMetadata.modelOffset}) to environmentalAnalysis object.`);
-        } else {
-          logger.warn('Could not find modelOffset in fetchedEnvironmentalMetadata to add to analysis.');
-          (environmentalAnalysis as any).modelOffset = 0; // Default if missing
+        // Check if userVerticalAdjustment is present after analysis
+        if (environmentalAnalysis.userVerticalAdjustment === undefined) {
+             logger.warn('EnvironmentalAnalysis missing userVerticalAdjustment after analyzeEnvironment. Defaulting to 0.');
+             // Optionally try fetching from metadata again, or just default:
+             environmentalAnalysis.userVerticalAdjustment = fetchedEnvironmentalMetadata?.userVerticalAdjustment ?? 0;
         }
-        // <<< END FIX >>>
         
         logger.debug('Successfully fetched and analyzed context data');
 
@@ -347,25 +344,25 @@ export async function POST(request: Request) {
         
         return NextResponse.json(serializableCommands); // Return the serialized commands
 
-      } catch (interpreterError: any) {
+      } catch (interpreterError: any) { // Catch block for interpreter errors
         logger.error('Error during Scene Interpreter execution:', interpreterError);
         const errorMessage = interpreterError instanceof Error ? interpreterError.message : 'Unknown interpretation error';
         return NextResponse.json(
             { error: `Scene Interpretation Failed: ${errorMessage}` },
             { status: 500 }
-        );
-      }
-      // --- End Scene Interpreter Call ---
+        ); // <-- Ensure this block is closed properly
+      } // <-- Added closing brace for inner catch
 
-    } catch (plannerError: any) { // Catch errors from the adapter
-      // --- NEW: Log specific error type --- 
-      const errorName = plannerError instanceof Error ? plannerError.name : 'UnknownError';
+    } catch (motionPlannerError: any) { // Catch errors from the adapter (outer catch)
+      // --- Log specific error type --- 
+      const errorName = motionPlannerError instanceof Error ? motionPlannerError.name : 'UnknownError';
       // Sanitize the error message: replace newlines with spaces
-      let errorMessage = plannerError instanceof Error ? plannerError.message : 'Unknown motion planning error';
+      // Define errorMessage within this scope
+      let errorMessage = motionPlannerError instanceof Error ? motionPlannerError.message : 'Unknown motion planning error';
       errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns with spaces
       
       // Log the FULL error object for detailed debugging
-      logger.error(`Error during Motion Planner execution (${errorName}):`, plannerError); 
+      logger.error(`Error during Motion Planner execution (${errorName}):`, motionPlannerError); 
       // Also log the sanitized message just to be sure
       logger.error(`Sanitized error message for response: ${errorMessage}`);
       
@@ -374,14 +371,13 @@ export async function POST(request: Request) {
           { error: `Motion Planning Failed: ${errorMessage}`, code: errorName }, // Include error name/code
           { status: 500 }
       );
-    }
+    } // <-- Ensure this block is closed properly
 
-  } catch (requestError: any) { // Add type annotation
-    logger.error('Unhandled error in camera path route:', requestError);
-    const errorMessage = requestError instanceof Error ? requestError.message : 'Unknown server error';
-    return NextResponse.json(
-        { error: `Internal Server Error: ${errorMessage}` },
-        { status: 500 }
-    );
+  } catch (requestError: any) { // Catch for the outermost try block
+    logger.error('Error during request processing:', requestError);
+    // Sanitize the error message
+    let errorMessage = requestError instanceof Error ? requestError.message : 'Unknown request error';
+    errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns
+    return NextResponse.json({ error: `Request processing failed: ${errorMessage}` }, { status: 500 });
   }
-} 
+}

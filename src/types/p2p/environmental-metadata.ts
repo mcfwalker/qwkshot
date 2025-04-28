@@ -48,7 +48,7 @@ export interface EnvironmentalMetadata {
     maxAngleChange: number;
     minFramingMargin: number;
   };
-  modelOffset?: number;
+  userVerticalAdjustment?: number;
   performance?: {
     startTime: number;
     endTime: number;

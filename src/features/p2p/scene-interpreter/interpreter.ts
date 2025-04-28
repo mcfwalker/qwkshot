@@ -130,10 +130,14 @@ export class SceneInterpreterImpl implements SceneInterpreter {
   private _resolveTargetPosition(
     targetName: string,
     sceneAnalysis: SceneAnalysis,
-    currentTarget: Vector3,
-    modelOffset: number = 0 // Add modelOffset parameter with default
+    envAnalysis: EnvironmentalAnalysis, // <-- Pass full envAnalysis
+    currentTarget: Vector3
   ): Vector3 | null {
     this.logger.debug(`Resolving target name: '${targetName}'`);
+
+    // Extract user offset (use optional chaining and nullish coalescing)
+    const userVerticalAdjustment = envAnalysis?.userVerticalAdjustment ?? 0;
+    this.logger.debug(`Using userVerticalAdjustment: ${userVerticalAdjustment}`);
 
     if (targetName === 'current_target') {
       this.logger.debug('Resolved target to current_target');
@@ -150,32 +154,32 @@ export class SceneInterpreterImpl implements SceneInterpreter {
         switch (targetName) {
             case 'object_center':
                 this.logger.debug('Resolved target to object_center');
-                // Apply offset to Y component
-                return new Vector3(center.x, center.y + modelOffset, center.z);
+                // Apply user offset to Y component
+                return new Vector3(center.x, center.y + userVerticalAdjustment, center.z);
             case 'object_top_center':
                 this.logger.debug('Resolved target to object_top_center');
-                // Apply offset to Y component
-                return new Vector3(center.x, max.y + modelOffset, center.z);
+                // Apply user offset to Y component
+                return new Vector3(center.x, max.y + userVerticalAdjustment, center.z);
             case 'object_bottom_center':
                 this.logger.debug('Resolved target to object_bottom_center');
-                // Apply offset to Y component
-                return new Vector3(center.x, min.y + modelOffset, center.z);
+                // Apply user offset to Y component
+                return new Vector3(center.x, min.y + userVerticalAdjustment, center.z);
             case 'object_left_center': // Assuming -X is left
                 this.logger.debug('Resolved target to object_left_center');
-                // Apply offset to Y component
-                return new Vector3(min.x, center.y + modelOffset, center.z);
+                // Apply user offset to Y component
+                return new Vector3(min.x, center.y + userVerticalAdjustment, center.z);
             case 'object_right_center': // Assuming +X is right
                 this.logger.debug('Resolved target to object_right_center');
-                // Apply offset to Y component
-                return new Vector3(max.x, center.y + modelOffset, center.z);
+                // Apply user offset to Y component
+                return new Vector3(max.x, center.y + userVerticalAdjustment, center.z);
             case 'object_front_center': // Assuming +Z is front
                 this.logger.debug('Resolved target to object_front_center');
-                // Apply offset to Y component
-                return new Vector3(center.x, center.y + modelOffset, max.z);
+                // Apply user offset to Y component
+                return new Vector3(center.x, center.y + userVerticalAdjustment, max.z);
             case 'object_back_center': // Assuming -Z is back
                 this.logger.debug('Resolved target to object_back_center');
-                // Apply offset to Y component
-                return new Vector3(center.x, center.y + modelOffset, min.z);
+                // Apply user offset to Y component
+                return new Vector3(center.x, center.y + userVerticalAdjustment, min.z);
             // Add corners if needed later, e.g., object_top_left_front
         }
     } else if (['object_center', 'object_top_center', 'object_bottom_center', 'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center'].includes(targetName)) {
@@ -215,7 +219,8 @@ export class SceneInterpreterImpl implements SceneInterpreter {
   private _clampPositionWithRaycast(
     startPosition: Vector3,
     intendedEndPosition: Vector3,
-    objectBounds: Box3
+    objectBounds: Box3,
+    userVerticalAdjustment: number // <-- ADDED userVerticalAdjustment parameter
   ): Vector3 {
     const movementVector = new Vector3().subVectors(intendedEndPosition, startPosition);
     const distanceToEnd = movementVector.length();
@@ -241,7 +246,12 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     const ray = new THREE.Ray(startPosition, movementDirection); // Use normalized direction
     const intersectionPoint = new Vector3();
 
-    if (ray.intersectBox(objectBounds, intersectionPoint)) {
+    // Create an offset bounding box based on the user adjustment
+    const offsetBounds = objectBounds.clone().translate(new Vector3(0, userVerticalAdjustment, 0));
+    this.logger.debug(`Raycast check using offset bounds: MinY=${offsetBounds.min.y.toFixed(2)}, MaxY=${offsetBounds.max.y.toFixed(2)}`);
+
+    // Use the offsetBounds for collision checks
+    if (ray.intersectBox(offsetBounds, intersectionPoint)) { // <-- Use offsetBounds
       const distanceToIntersection = startPosition.distanceTo(intersectionPoint);
       
       if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
@@ -253,11 +263,12 @@ export class SceneInterpreterImpl implements SceneInterpreter {
       }
     }
 
-    if (objectBounds.containsPoint(intendedEndPosition)) {
-        this.logger.warn('Raycast: Intended end position is inside bounds. Clamping to surface as fallback with dynamic offset.');
-        const clampedToSurface = objectBounds.clampPoint(intendedEndPosition, new Vector3());
-        // Calculate outward normal (approximate)
-        const outwardNormal = new Vector3().subVectors(intendedEndPosition, objectBounds.getCenter(new Vector3())).normalize();
+    // Use the offsetBounds for containsPoint check
+    if (offsetBounds.containsPoint(intendedEndPosition)) { // <-- Use offsetBounds
+        this.logger.warn('Raycast: Intended end position is inside offset bounds. Clamping to surface as fallback with dynamic offset.');
+        const clampedToSurface = offsetBounds.clampPoint(intendedEndPosition, new Vector3()); // <-- Use offsetBounds
+        // Calculate outward normal (approximate) based on offset center
+        const outwardNormal = new Vector3().subVectors(intendedEndPosition, offsetBounds.getCenter(new Vector3())).normalize(); // <-- Use offsetBounds
         // Ensure normal is valid before applying offset
         if (Number.isFinite(outwardNormal.x) && Number.isFinite(outwardNormal.y) && Number.isFinite(outwardNormal.z) && outwardNormal.lengthSq() > 1e-6) {
              return clampedToSurface.addScaledVector(outwardNormal, dynamicOffset); // Use dynamicOffset
@@ -564,7 +575,7 @@ private _mapDescriptorToValue(
   interpretPath(
     plan: MotionPlan,
     sceneAnalysis: SceneAnalysis,
-    envAnalysis: EnvironmentalAnalysis,
+    envAnalysis: EnvironmentalAnalysis, 
     // Add initial state, crucial for the first step
     initialCameraState: { position: Vector3; target: Vector3 }
   ): CameraCommand[] {
@@ -653,8 +664,9 @@ private _mapDescriptorToValue(
       const nextTarget = this._resolveTargetPosition(
         nextTargetName,
         sceneAnalysis,
-        currentTarget,
-        envAnalysis.modelOffset ?? 0 // Use correct offset from top-level analysis object
+        envAnalysis, // <-- Pass full envAnalysis
+        currentTarget
+        // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
       ); // Pass currentTarget as fallback for 'current_target'
 
       if (nextTarget && !currentTarget.equals(nextTarget)) {
@@ -789,8 +801,9 @@ private _mapDescriptorToValue(
           const zoomTargetPosition = this._resolveTargetPosition(
               targetName,
               sceneAnalysis,
-              currentTarget,
-              envAnalysis.modelOffset ?? 0 // Use correct offset
+              envAnalysis, // <-- Pass full envAnalysis
+              currentTarget
+              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
           );
           if (!zoomTargetPosition) {
             this.logger.error(`Could not resolve zoom target '${targetName}'. Skipping step.`);
@@ -896,7 +909,8 @@ private _mapDescriptorToValue(
               const clampedPosition = this._clampPositionWithRaycast(
                   currentPosition, // Start from previous position
                   newPositionCandidate, // Target the candidate position
-                  objectBounds
+                  objectBounds, // Pass normalized bounds
+                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -987,21 +1001,23 @@ private _mapDescriptorToValue(
           const resolvedTarget = this._resolveTargetPosition(
               targetName, // Pass the target name from the step parameters
               sceneAnalysis,
-              currentTarget, // Pass current target for potential 'current_target' resolution
-              envAnalysis.modelOffset ?? 0 // Pass the correct offset
+              envAnalysis, // <-- Pass full envAnalysis
+              currentTarget // Pass current target for potential 'current_target' resolution
+              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
           );
 
           if (resolvedTarget) {
               orbitCenter = resolvedTarget.clone();
               this.logger.debug(`Orbit target '${targetName}' resolved to: ${orbitCenter.toArray()}`);
           } else {
-              // Fallback if resolution fails: Try object_center (with offset)
-              this.logger.warn(`Could not resolve orbit target '${targetName}'. Falling back to offset object_center.`);
+              // Fallback if resolution fails: Try object_center (now uses normalized data)
+              this.logger.warn(`Could not resolve orbit target '${targetName}'. Falling back to normalized object_center.`);
               const baseCenter = sceneAnalysis?.spatial?.bounds?.center;
               if (baseCenter) {
-                  const modelOffsetValue = envAnalysis.modelOffset ?? 0;
+                  // Get the user adjustment for the fallback
+                  const userVerticalAdjustment = envAnalysis?.userVerticalAdjustment ?? 0; 
                   orbitCenter = baseCenter.clone();
-                  orbitCenter.y += modelOffsetValue; // Apply offset to fallback center
+                  orbitCenter.y += userVerticalAdjustment; // Apply offset to fallback center
                   this.logger.debug(`Using fallback orbit center: ${orbitCenter.toArray()}`);
               } else {
                   this.logger.error(`Cannot resolve orbit target '${targetName}' and fallback object center is unavailable. Skipping step.`);
@@ -1142,7 +1158,8 @@ private _mapDescriptorToValue(
                   const clampedPositionStep = this._clampPositionWithRaycast(
                       previousPosition, // Raycast from previous step's position
                       newPositionCandidateStep,
-                      objectBounds
+                      objectBounds,
+                      envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
                   );
                   if (!clampedPositionStep.equals(newPositionCandidateStep)) {
                       finalPositionStep.copy(clampedPositionStep);
@@ -1301,8 +1318,9 @@ private _mapDescriptorToValue(
               const resolvedExplicitTarget = this._resolveTargetPosition(
                 targetName,
                 sceneAnalysis,
-                initialTarget, // Use initialTarget here
-                envAnalysis.modelOffset ?? 0 // Use correct offset
+                envAnalysis, // <-- Pass full envAnalysis
+                initialTarget // Use initialTarget here
+                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
             ); // Try resolving it
               if (resolvedExplicitTarget) {
                   finalTarget = resolvedExplicitTarget.clone();
@@ -1449,8 +1467,9 @@ private _mapDescriptorToValue(
             const destinationTarget = this._resolveTargetPosition(
               destinationTargetName,
               sceneAnalysis,
-              currentTarget,
-              envAnalysis.modelOffset ?? 0 // Use correct offset
+              envAnalysis, // <-- Pass full envAnalysis
+              currentTarget
+              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
             );
             if (destinationTarget) {
               const viewDirectionVec = new Vector3().subVectors(currentTarget, currentPosition).normalize();
@@ -1576,7 +1595,8 @@ private _mapDescriptorToValue(
               const clampedPosition = this._clampPositionWithRaycast(
                   currentPosition,
                   newPositionCandidate,
-                  objectBounds
+                  objectBounds,
+                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -1648,8 +1668,9 @@ private _mapDescriptorToValue(
             const destinationTarget = this._resolveTargetPosition(
                 destinationTargetName,
                 sceneAnalysis,
-                currentTarget,
-                envAnalysis.modelOffset ?? 0 // Use correct offset
+                envAnalysis, // <-- Pass full envAnalysis
+                currentTarget
+                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
             );
 
             if (destinationTarget) {
@@ -1800,7 +1821,8 @@ private _mapDescriptorToValue(
               const clampedPosition = this._clampPositionWithRaycast(
                   currentPosition,
                   newPositionCandidate,
-                  objectBounds
+                  objectBounds,
+                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -1877,13 +1899,14 @@ private _mapDescriptorToValue(
             this.logger.debug(`Pedestal: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
             // Pass the offset from envAnalysis, defaulting to 0
             // Assuming modelOffset is directly on envAnalysis or fetched separately
-            const modelOffsetValue = envAnalysis.modelOffset ?? 0; // Use ?? 0 for null/undefined fallback
-            this.logger.debug(`Using modelOffsetValue: ${modelOffsetValue}`); // Add log
+            const userVerticalAdjustmentValue = envAnalysis.userVerticalAdjustment ?? 0; // Use ?? 0 for null/undefined fallback // <-- FIX LINTER ERROR
+            this.logger.debug(`Using userVerticalAdjustmentValue: ${userVerticalAdjustmentValue}`); // Add log
             const destinationTarget = this._resolveTargetPosition(
                 destinationTargetName,
                 sceneAnalysis,
-                currentTarget,
-                modelOffsetValue // Pass the resolved offset value
+                envAnalysis, // <-- Pass full envAnalysis
+                currentTarget
+                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
             );
 
             if (destinationTarget) {
@@ -2031,7 +2054,8 @@ private _mapDescriptorToValue(
               const clampedPosition = this._clampPositionWithRaycast(
                   currentPosition,
                   newPositionCandidate,
-                  objectBounds
+                  objectBounds,
+                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -2103,8 +2127,9 @@ private _mapDescriptorToValue(
           const flyByTarget = this._resolveTargetPosition(
             targetName,
             sceneAnalysis,
-            currentTarget,
-            envAnalysis.modelOffset ?? 0 // Use correct offset
+            envAnalysis, // <-- Pass full envAnalysis
+            currentTarget
+            // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
           );
           if (!flyByTarget) {
             this.logger.error(`FlyBy: Could not resolve target '${targetName}'. Skipping step.`);
@@ -2193,8 +2218,9 @@ private _mapDescriptorToValue(
           const flyAwayTarget = this._resolveTargetPosition(
             flyAwayTargetName,
             sceneAnalysis,
-            currentTarget,
-            envAnalysis.modelOffset ?? 0 // Use correct offset
+            envAnalysis, // <-- Pass full envAnalysis
+            currentTarget
+            // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
           );
           if (!flyAwayTarget) {
             this.logger.error(`FlyAway: Could not resolve target '${flyAwayTargetName}'. Skipping step.`);
