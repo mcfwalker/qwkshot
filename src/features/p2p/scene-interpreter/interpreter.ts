@@ -502,8 +502,7 @@ private _mapDescriptorToValue(
     switch (motionType) {
         case 'pedestal': baseMetric = objectHeight; break;
         case 'truck': baseMetric = objectWidth; break;
-        case 'dolly': case 'fly_away': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break;
-        case 'fly_by': baseMetric = objectSize; break;
+        case 'dolly': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break; // Adjusted dolly case
         default: baseMetric = objectSize;
     }
     baseMetric = Math.max(baseMetric, 0.1);
