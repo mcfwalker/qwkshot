@@ -2285,6 +2285,114 @@ private _mapDescriptorToValue(
           currentTarget = finalTarget.clone();
           break;
         }
+        case 'rotate': { // <<< NEW CASE
+          const {
+            axis: rawAxisName = 'yaw', // Default to yaw if missing
+            angle: rawAngle,
+            speed: rawSpeed = 'medium',
+            easing: rawEasingName = DEFAULT_EASING
+          } = step.parameters;
+
+          // Validate parameters
+          type RotationAxis = 'yaw' | 'pitch' | 'roll';
+          const allowedAxes: RotationAxis[] = ['yaw', 'pitch', 'roll'];
+          let axis: RotationAxis = 'yaw'; // Default
+          if (typeof rawAxisName === 'string' && allowedAxes.includes(rawAxisName.toLowerCase() as RotationAxis)) {
+              axis = rawAxisName.toLowerCase() as RotationAxis;
+          } else if (typeof rawAxisName === 'string') {
+              this.logger.warn(`Rotate: Invalid axis '${rawAxisName}', defaulting to 'yaw'.`);
+          }
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+
+          if (angle === null) {
+            this.logger.error(`Rotate: Invalid, missing, or zero angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          if (rawAxisName !== axis && typeof rawAxisName === 'string') {
+            this.logger.warn(`Rotate: Invalid axis '${rawAxisName}', defaulting to '${axis}'.`);
+          }
+          
+          if (axis === 'roll') {
+             this.logger.warn('Rotate: 'roll' axis is not fully implemented for visual effect. Applying yaw/pitch logic only for target change. Camera will not visually roll.');
+             // For now, treat roll like a no-op in terms of camera state change, 
+             // though we could add a small placeholder command if needed.
+             // Add a static command to consume duration if provided
+             if (stepDuration > 0) {
+                commands.push({
+                    position: currentPosition.clone(),
+                    target: currentTarget.clone(),
+                    duration: stepDuration, 
+                    easing: 'linear'
+                });
+             }
+             continue; // Skip actual rotation for roll
+          }
+
+          // 1. Calculate rotation axis vector (Camera local axes)
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          let cameraUp = new Vector3(0, 1, 0); // World Up initially
+          let cameraRight = new Vector3();
+          
+          // Calculate stable Right and Up vectors
+          if (Math.abs(viewDirection.y) > 0.999) { // Looking straight up/down
+              cameraRight.set(1, 0, 0); // Use World X if looking straight up/down
+              cameraUp.crossVectors(viewDirection, cameraRight).normalize(); // Calculate Up based on that Right
+          } else {
+              cameraRight.crossVectors(viewDirection, cameraUp).normalize(); // Right = View x WorldUp
+              cameraUp.crossVectors(cameraRight, viewDirection).normalize(); // True Up = Right x View
+          }
+
+          let rotationAxis: Vector3;
+          if (axis === 'yaw') { // Yaw rotates around Camera Up
+              rotationAxis = cameraUp;
+          } else { // Pitch rotates around Camera Right
+              rotationAxis = cameraRight;
+          }
+
+          // 2. Calculate rotation (Angle degrees to radians, apply direction implicitly)
+          // Yaw: Positive angle = right turn (target moves left). Negative = left turn.
+          // Pitch: Positive angle = down tilt (target moves up). Negative = up tilt.
+          // We apply rotation to the vector FROM camera TO target
+          const angleRad = THREE.MathUtils.degToRad(angle);
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+
+          // 3. Rotate target vector relative to camera position
+          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
+          targetVector.applyQuaternion(quaternion);
+          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
+          
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') effectiveEasingName = 'linear'; // Add very_fast
+          else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
+          // 4. Create CameraCommands (Position stays same, Target changes)
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+              position: currentPosition.clone(),
+              target: currentTarget.clone(), // Start at current target
+              duration: 0,
+              easing: effectiveEasingName
+          });
+          commandsList.push({
+              position: currentPosition.clone(), // Position doesn't change
+              target: newTarget.clone(), // End at new target
+              duration: stepDuration > 0 ? stepDuration : 0.1,
+              easing: effectiveEasingName
+          });
+          this.logger.debug(`Generated rotate (${axis}) commands:`, commandsList);
+          commands.push(...commandsList);
+
+          // 5. Update state for next step
+          currentTarget = newTarget.clone();
+          // currentPosition remains the same
+          break;
+        }
         default: {
           this.logger.error(`Unknown motion type: ${step.type}. Skipping step.`);
           continue;

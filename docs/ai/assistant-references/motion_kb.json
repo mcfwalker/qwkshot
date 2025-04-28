@@ -433,7 +433,8 @@
         "type": "string",
         "enum": ["yaw", "pitch", "roll"],
         "description": "Which axis to rotate around. Yaw = pan, pitch = tilt, roll = bank.",
-        "required": true
+        "required": false,
+        "default": "yaw"
       },
       {
         "name": "angle",
@@ -444,7 +445,7 @@
       {
         "name": "speed",
         "type": "string",
-        "enum": ["slow", "medium", "fast"],
+        "enum": ["slow", "medium", "fast", "very_fast"],
         "description": "Qualitative speed hint.",
         "required": false,
         "default": "medium"
@@ -452,7 +453,7 @@
       {
         "name": "easing",
         "type": "string",
-        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut", "easeInQuad", "easeOutQuad", "easeInOutQuad"],
         "description": "Easing function to apply.",
         "required": false,
         "default": "easeInOut"
