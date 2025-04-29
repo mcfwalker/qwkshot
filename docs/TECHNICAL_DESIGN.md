@@ -510,9 +510,6 @@ export async function GET(request: NextRequest) {
         - Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **using the normalized coordinates from `SceneAnalysis` and applying the `userVerticalAdjustment` from the provided `EnvironmentalAnalysis` to the Y coordinate**, ensuring alignment with the user-adjusted visual model.
         - **Handles quantitative/qualitative/goal parameters (with priority):**
             *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance`.
-            *   **`fly_away` Priority (Placeholder):**
-                1.  `distance_override`
-                2.  `distance_descriptor` (Maps via `_mapDescriptorToValue`)
         - Applies constraints and easing.
         - Generates `CameraCommand[]` (keyframes).
     10. Calls `interpreter.validateCommands` passing the generated commands and the **normalized** bounding box from `SceneAnalysis`.

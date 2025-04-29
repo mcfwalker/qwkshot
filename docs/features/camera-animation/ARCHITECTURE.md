@@ -129,12 +129,6 @@ graph TD
                 1.  `factor_override` (Uses direct number)
                 2.  `factor_descriptor` (Maps descriptor to factor via `_mapDescriptorToValue`)
                 3.  `target_distance_descriptor` (Maps descriptor to goal distance via `_mapDescriptorToGoalDistance`, then calculates required factor)
-            *   **`fly_by` Priority (Placeholder):**
-                1.  `pass_distance_override`
-                2.  `pass_distance_descriptor` (Defaults 'medium', maps via `_mapDescriptorToValue`)
-            *   **`fly_away` Priority (Placeholder):**
-                1.  `distance_override`
-                2.  `distance_descriptor` (Maps via `_mapDescriptorToValue`)
         *   Applies constraints (height, distance, bounding box via raycasting with **dynamic offset**) during calculation.
         *   Determines appropriate **effective easing function** (using `d3-ease`) based on speed/easing parameters, potentially overriding explicit easing.
         *   Handles duration allocation.
