@@ -25,6 +25,8 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 ## Current Instruction Version
 *(Latest file represents the instructions configured in the OpenAI Assistant)*
 
+*   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-29-1322.txt` - Failed implementation of the motion type roll.
+*   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-29-0658.txt` - 
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1737.txt` - Refined Step 3 to emphasize extracting ALL required parameters.
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1730.txt` - Base ...1429 + new primitives, pattern layer, rule refinements (no-op, focus_on, roll, override).
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1654.txt` - Reverted JSON example to concrete, added no-op/focus_on clarifications, noted roll unimplemented.
