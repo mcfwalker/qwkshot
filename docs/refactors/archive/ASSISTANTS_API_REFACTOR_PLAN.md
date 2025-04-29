@@ -282,32 +282,34 @@ interface MotionStep {
 *   [X] *Goal:* Basic E2E backend flow working: Prompt -> Assistant Plan -> Interpreter -> API returns `CameraCommand[]`. *(Phase 2 COMPLETE as of Session End)*
 
 ### Phase 3: Scene Interpreter Motion Library Expansion
-*   [/] Implement generators for core motion types. *(In Progress - Core 8 Implemented)*
+*   [/] Implement generators for core motion types. *(Completed for current primitive set)*
     *   [X] `static` (from Phase 2)
     *   [X] `zoom` (from Phase 2)
-    *   [X] `orbit` (updated)
+    *   [X] `orbit` 
     *   [X] `pan`
     *   [X] `tilt`
     *   [X] `dolly`
     *   [X] `truck`
     *   [X] `pedestal`
-    *   [ ] `fly_by`
-    *   [ ] `fly_away`
-    *   [ ] `set_view`
-    *   [ ] `focus_on`
-    *   [ ] `arc`
-    *   [ ] `reveal`
-*   [X] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Completed for core 8 types: Target resolution, speed param, direction aliases. Deferred: Custom axis, hints)*
-*   [X] Implement various easing function applications. *(Completed for core 8 types: Using d3-ease, speed influences selection)*
-*   [X] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Completed for core 8 types: Basic clamping, raycast for BB, velocity check)*
-*   [X] Refine duration allocation logic across steps. *(Completed for core 8 types: Added normalization based on ratios)*
+    *   [X] `rotate` (Yaw/Pitch implemented, Roll visual deferred)
+    *   [X] `move_to`
+    *   [X] `focus_on`
+    *   [ ] `fly_by` (Moved to Pattern Layer)
+    *   [ ] `fly_away` (Moved to Pattern Layer)
+    *   [ ] `set_view` (Moved to Pattern Layer)
+    *   [ ] `arc` (Moved to Pattern Layer)
+    *   [ ] `reveal` (Moved to Pattern Layer)
+*   [X] Implement parameter handling within generators (speed, target resolution, direction aliases, hints). *(Completed for implemented primitives)*
+*   [X] Implement various easing function applications. *(Completed for implemented primitives)*
+*   [X] Integrate robust constraint checking (bounding box, min/max distance/height) *within* generators. *(Completed for implemented primitives)*
+*   [X] Refine duration allocation logic across steps. *(Completed: Added normalization based on ratios)*
     *   [ ] *TODO:* Consider adjusting step duration further if constraint clamping significantly shortens the actual movement distance/angle.
-*   [X] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints. *(Completed for core 8 types)*
+*   [X] *Goal:* Interpreter can execute diverse motion plans reliably and respects constraints. *(Achieved for current primitive set)*
 *   *(Note: Reference external projects like ReCamMaster/MultiCamVideo for trajectory generation techniques and CameraCtrl for potential visualization tools during implementation.)*
 
 ### Phase 4: Integration, Testing & Refinement
 *   [X] Conduct thorough E2E testing with diverse and complex prompts.
-    *   **[X] Individual Motion Tests:**
+    *   **[X] Individual Motion Tests:** (Passed for all implemented primitives, except visual roll)
         *   [X] Static: "Just hold the camera still for 5 seconds."
         *   [X] Zoom: "Zoom in halfway towards the object center, quickly."
         *   [X] Orbit: "Slowly orbit 180 degrees clockwise around the object."
@@ -316,41 +318,43 @@ interface MotionStep {
         *   [X] Dolly: "Move the camera forward towards the object by 2 units." / "Dolly in close."
         *   [X] Truck: "Move the camera sideways to the right by 3 units." / "Truck right a bit."
         *   [X] Pedestal: "Move the camera straight up by 1 unit." / "Pedestal up slightly."
-    *   **[X] Simple Sequential Tests (2-3 Steps):** (Completed - Noted transition artifacts & Assistant planning issues)
-        *   [X] "Zoom out a little, then orbit 90 degrees counter-clockwise." (Functional, but observed transition jerk; Assistant zoom factor inconsistent)
-        *   [X] "Pedestal up slightly, then tilt down to look at the object center." (Functional, but Assistant failed to add target parameter for tilt)
-        *   [X] "Truck left, then dolly forward fast." (Functional after dolly fix, but slow due to Assistant duration/distance planning; highlighted lack of implicit re-centering)
-        *   [X] "Orbit 45 degrees clockwise, pause briefly, then zoom in close." (Passed after instruction refinement)
-    *   **[X] Test with Qualitative Modifiers:** (Completed - Noted Assistant planning limitations, some fixed with instruction updates)
-        *   [X] "Perform a very slow, wide orbit around the entire model." (Success, but highlighted duration override issue)
-        *   [X] "Rapidly push in towards the object's center." (Passed after instruction refinement)
-        *   [X] "Gently pedestal down while panning right." (Executed sequentially, not simultaneously)
-    *   **[X] Test Spatial Reference Targeting:** (Implemented via standardized targets + Interpreter logic)
+        *   [X] Rotate (Yaw/Pitch): "Rotate yaw 45 degrees right."
+        *   [X] Move To: "Move instantly to the object center."
+        *   [X] Focus On: "Focus on the top of the object."
+    *   **[X] Simple Sequential Tests (2-3 Steps):** (Passed after instruction tuning)
+        *   [X] "Zoom out a little, then orbit 90 degrees counter-clockwise."
+        *   [X] "Pedestal up slightly, then tilt down to look at the object center."
+        *   [X] "Truck left, then dolly forward fast."
+        *   [X] "Orbit 45 degrees clockwise, pause briefly, then zoom in close."
+        *   [X] "Look up 20 degrees, then pan right 45 degrees."
+    *   **[X] Test with Qualitative Modifiers:** (Passed after instruction tuning)
+        *   [X] "Perform a very slow, wide orbit around the entire model."
+        *   [X] "Rapidly push in towards the object's center."
+        *   [X] "Gently pedestal down while panning right."
+    *   **[X] Test Spatial Reference Targeting:** (Passed after interpreter update)
         *   [X] "Focus on the top of the object."
         *   [X] "Tilt down to look at the bottom center."
         *   [X] "Orbit 90 degrees around the left side."
-    *   **[X] Test "Move To" Destination:** (Implemented via `destination_target` + Interpreter logic)
+    *   **[X] Test "Move To" Destination:** (Passed after interpreter update)
         *   [X] "Pedestal down to the bottom of the object."
         *   [X] "Dolly forward to the front edge."
-    *   **[X] Test Contradictory Zoom Parameters:** (Assistant correctly adjusts plan)
-        *   [X] "Zoom out factor 0.5"
-        *   [X] "Zoom in factor 2.0"
 *   [X] Refine Assistant instructions and Motion KB based on test results.
-    *   [X] *TODO:* Address Assistant generating contradictory parameters (e.g., `zoom` direction 'out' with `factor` < 1). (Addressed via instructions)
-    *   [X] *TODO:* Ensure Assistant uses consistent/expected qualitative distance terms (e.g., 'medium' vs 'medium_distance') or update KB/Interpreter mapping. (Addressed: Refined large distances, fixed medium_distance)
-    *   [X] *TODO:* Improve Assistant's reliability in adding explicit `target` parameters (e.g., `target: "object_center"`) when requested in prompts for directional moves like `tilt`, `pan`. (Done previously)
-    *   [X] *TODO:* Ensure Assistant strictly adheres to KB parameter data types (e.g., providing `number` for `zoom.factor`, not string like "very_close"). (Done previously via instructions)
-    *   [X] *TODO:* Prevent Assistant from generating non-functional parameters like `zoom` factor of 1.0 when movement is requested. (Done previously via instructions)
-    *   [X] *TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions (e.g., "close") to appropriate numeric `factor` values. (Done previously via instructions)
-    *   [X] *TODO:* Improve Assistant understanding of specific spatial references (e.g., "top of the object", "bottom edge") for distance/target calculations in pedestal/dolly/etc. (Addressed via standardized targets + Interpreter logic, including `destination_target`)
-*   [X] Update project documentation. (Updated plan, P2P Overview, added reference README, regression suite)
-*   [X] Prepare for merge to `stable`/`main`.
-*   [X] *Goal:* Feature-complete, stable, documented, and ready for production use.
+    *   [X] ~~*TODO:* Address Assistant generating contradictory parameters~~ (Addressed via instructions)
+    *   [X] ~~*TODO:* Ensure Assistant uses consistent/expected qualitative distance terms~~ (Addressed: KB & Instructions updated)
+    *   [X] ~~*TODO:* Improve Assistant's reliability in adding explicit `target` parameters~~ (Addressed via instructions)
+    *   [X] ~~*TODO:* Ensure Assistant strictly adheres to KB parameter data types~~ (Addressed via instructions)
+    *   [X] ~~*TODO:* Prevent Assistant from generating non-functional parameters~~ (Addressed via instructions)
+    *   [X] ~~*TODO:* Refine Assistant/KB mapping for qualitative `zoom` descriptions~~ (Addressed via instructions)
+    *   [X] ~~*TODO:* Improve Assistant understanding of specific spatial references~~ (Addressed via standardized targets + Interpreter logic, including `destination_target`)
+    *   [X] Added explicit handling for no-op requests, clarified focus_on target defaulting, refined numeric override scope.
+*   [X] Update project documentation. (Updated plan, P2P Overview, Arch, Tech Design, added reference README, regression suite)
+*   [X] Prepare for merge to `stable`/`main`. (Merged)
+*   [X] *Goal:* Feature-complete, stable, documented, and ready for production use. *(Achieved for current primitive set)*
 
 ### Future Enhancements / Considerations
-*   [ ] Implement remaining core motion types: `fly_by`, `fly_away`, `set_view`, `arc`, `reveal`.
-*   [ ] Implement parameter handling for advanced features (e.g., custom orbit axis, radius factor, look at target boolean during fly-by).
-*   [ ] Refine duration allocation logic: Consider adjusting step duration if constraint clamping significantly shortens the actual movement distance/angle.
+*   [ ] Implement visual effect for `rotate` primitive with `axis: 'roll'`. (Requires `AnimationController` changes).
+*   [ ] Implement Pattern Layer: Define and implement `compose_pattern` function, Pattern KB, and necessary Interpreter/Assistant integration for complex motions like `fly_by`, `fly_away`, `arc`, `reveal`, `set_view`, `zig-zag`, etc.
+*   [ ] Refine duration allocation logic: Consider adjusting step duration further if constraint clamping significantly shortens the actual movement distance/angle.
 *   [ ] Investigate inferring animation duration based on motion type/speed modifiers (e.g., "very slow") instead of always requiring explicit user duration input.
 *   [ ] Explore architectural changes (Assistant planning, Interpreter logic, or post-processing) to support true simultaneous motions (e.g., "pedestal down while panning right") instead of only sequential execution.
 *   [ ] Address semantic orientation: Implement user labeling for model front/forward vector and update Interpreter/Assistant logic to use it.

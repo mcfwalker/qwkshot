@@ -180,9 +180,36 @@ export class SceneInterpreterImpl implements SceneInterpreter {
                 this.logger.debug('Resolved target to object_back_center');
                 // Apply user offset to Y component
                 return new Vector3(center.x, center.y + userVerticalAdjustment, min.z);
-            // Add corners if needed later, e.g., object_top_left_front
+            // --- ADDED Corner Cases --- 
+            case 'object_bottom_left': 
+            case 'object_bottom_left_center': // Alias
+            case 'object_bottom_left_corner': // Alias
+                this.logger.debug('Resolved target to object_bottom_left');
+                return new Vector3(min.x, min.y + userVerticalAdjustment, center.z);
+            case 'object_bottom_right': 
+            case 'object_bottom_right_center': // Alias
+            case 'object_bottom_right_corner': // Alias
+                this.logger.debug('Resolved target to object_bottom_right');
+                return new Vector3(max.x, min.y + userVerticalAdjustment, center.z);
+            case 'object_top_left': 
+            case 'object_top_left_center': // Alias
+            case 'object_top_left_corner': // Alias
+                this.logger.debug('Resolved target to object_top_left');
+                return new Vector3(min.x, max.y + userVerticalAdjustment, center.z);
+            case 'object_top_right': 
+            case 'object_top_right_center': // Alias
+            case 'object_top_right_corner': // Alias
+                this.logger.debug('Resolved target to object_top_right');
+                return new Vector3(max.x, max.y + userVerticalAdjustment, center.z);
+            // TODO: Add front/back corner combinations if needed later
         }
-    } else if (['object_center', 'object_top_center', 'object_bottom_center', 'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center'].includes(targetName)) {
+    } else if ([
+        'object_center', 'object_top_center', 'object_bottom_center', 
+        'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center',
+        'object_bottom_left', 'object_bottom_right', 'object_top_left', 'object_top_right',
+        'object_bottom_left_center', 'object_bottom_right_center', 'object_top_left_center', 'object_top_right_center', // Add center aliases here too
+        'object_bottom_left_corner', 'object_bottom_right_corner', 'object_top_left_corner', 'object_top_right_corner' // Add corner aliases here too
+        ].includes(targetName)) {
         this.logger.warn(`Cannot resolve target '${targetName}': SceneAnalysis missing required spatial bounds (center, min, max).`);
         return null; // Cannot calculate without bounds
     }
@@ -502,8 +529,7 @@ private _mapDescriptorToValue(
     switch (motionType) {
         case 'pedestal': baseMetric = objectHeight; break;
         case 'truck': baseMetric = objectWidth; break;
-        case 'dolly': case 'fly_away': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break;
-        case 'fly_by': baseMetric = objectSize; break;
+        case 'dolly': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break; // Adjusted dolly case
         default: baseMetric = objectSize;
     }
     baseMetric = Math.max(baseMetric, 0.1);
@@ -724,6 +750,8 @@ private _mapDescriptorToValue(
       }
       // --- END Target Blending Logic ---
 
+      // Add debug log before switch
+      this.logger.debug(`Switching on type: '${step.type}' (Length: ${step.type?.length ?? 'undefined'})`);
       // Pass stepDuration down to generators (already done implicitly as it's in scope)
       switch (step.type) {
         case 'static': {          
@@ -2105,184 +2133,278 @@ private _mapDescriptorToValue(
           // --- End Pedestal Logic ---
           break;
         }
-        // TODO: Implement other motion generators like fly_by, fly_away, set_view, focus_on, arc, reveal
-        case 'fly_by': { // <<< Placeholder
-          this.logger.warn('Fly-by motion generator is not fully implemented. Skipping step.');
-          // --- START FlyBy Logic --- 
+        case 'move_to': { // <<< NEW CASE
           const {
-              target: rawTargetName,
-              // pass_distance: rawPassDistance, // OLD
-              pass_distance_descriptor: rawPassDistanceDescriptor, // NEW
-              pass_distance_override: rawPassDistanceOverride, // NEW
-              look_at_target: rawLookAtTarget = true,
-              speed: rawSpeed = 'fast',
-              easing: rawEasingName = 'linear'
+            target: rawTargetName,
+            speed: rawSpeed = 'medium', // Default to medium
+            easing: rawEasingName = DEFAULT_EASING
           } = step.parameters;
 
+          // Validate target
           const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
           if (!targetName) {
-              this.logger.error('FlyBy: Missing target parameter. Skipping step.');
-              continue;
+            this.logger.error(`MoveTo: Missing required target parameter. Skipping step.`);
+            continue;
           }
-          const flyByTarget = this._resolveTargetPosition(
+
+          // Resolve the destination target position
+          const destinationPosition = this._resolveTargetPosition(
             targetName,
             sceneAnalysis,
-            envAnalysis, // <-- Pass full envAnalysis
-            currentTarget
-            // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+            envAnalysis,
+            currentTarget // Pass currentTarget for context, though move_to doesn't use it directly
           );
-          if (!flyByTarget) {
-            this.logger.error(`FlyBy: Could not resolve target '${targetName}'. Skipping step.`);
+
+          if (!destinationPosition) {
+            this.logger.error(`MoveTo: Could not resolve target position for '${targetName}'. Skipping step.`);
             continue;
           }
 
-          let effectivePassDistance: number | null = null;
-
-          // 1. Check Override
-          if (typeof rawPassDistanceOverride === 'number' && rawPassDistanceOverride > 0) {
-            effectivePassDistance = rawPassDistanceOverride;
-            this.logger.debug(`FlyBy: Using pass_distance_override: ${effectivePassDistance}`);
-          } else {
-            // 2. Check Descriptor (or use default)
-            let passDistanceDescriptor = typeof rawPassDistanceDescriptor === 'string' && [
-              'tiny', 'small', 'medium', 'large', 'huge'
-            ].includes(rawPassDistanceDescriptor) ? rawPassDistanceDescriptor as Descriptor : 'medium'; // Default to medium
-            
-            if (rawPassDistanceDescriptor && rawPassDistanceDescriptor !== passDistanceDescriptor) {
-                this.logger.warn(`FlyBy: Invalid pass_distance_descriptor '${rawPassDistanceDescriptor}'. Defaulting to '${passDistanceDescriptor}'.`);
-            } else if (!rawPassDistanceDescriptor) {
-                 this.logger.debug(`FlyBy: No pass_distance_descriptor provided. Defaulting to '${passDistanceDescriptor}'.`);
-            }
-
-            effectivePassDistance = this._mapDescriptorToValue(
-              passDistanceDescriptor,
-              'pass_distance',
-              'fly_by',
-              sceneAnalysis,
-              envAnalysis,
-              { position: currentPosition, target: currentTarget }
-            );
-            this.logger.debug(`FlyBy: Mapped pass_distance_descriptor '${passDistanceDescriptor}' to distance: ${effectivePassDistance}`);
+          // Validate speed
+          const speed = typeof rawSpeed === 'string' && ['instant', 'slow', 'medium', 'fast'].includes(rawSpeed) 
+              ? rawSpeed 
+              : 'medium';
+          if (rawSpeed !== speed && typeof rawSpeed === 'string') { // Check type again before warning
+             this.logger.warn(`MoveTo: Invalid speed '${rawSpeed}', defaulting to 'medium'.`);
           }
-          
-          // --- Placeholder for FlyBy Path Calculation using effectivePassDistance ---
-          this.logger.warn(`FlyBy Path calculation using target ${flyByTarget.toArray()} and passDistance ${effectivePassDistance.toFixed(2)} needs implementation.`);
-          // Example: Generate simple path (replace with actual logic)
-          const flyByStartPos = currentPosition.clone();
-          // Calculate a point offset from target using passDistance
-          const offsetDir = new Vector3().subVectors(currentPosition, flyByTarget).normalize().cross(new Vector3(0,1,0)).normalize(); // Side vector
-          const passPoint = new Vector3().copy(flyByTarget).addScaledVector(offsetDir, effectivePassDistance);
-          // Simple end point further along initial direction
-          const flyByEndPos = new Vector3().copy(currentPosition).add(new Vector3().subVectors(currentPosition, currentTarget).normalize().multiplyScalar(effectivePassDistance * 2)); 
-          
-          const finalPosition = flyByEndPos; // Use calculated end pos
-          const finalTarget = rawLookAtTarget ? flyByTarget.clone() : currentTarget.clone(); // Look at target or keep looking forward
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
 
-          // --- Create Commands (Example: Simple 2-point move) ---
+          // Determine effective easing (ignored for instant)
+          let effectiveEasingName = easingName;
+          if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
           const commandsList: CameraCommand[] = [];
-          commandsList.push({
-            position: currentPosition.clone(),
-            target: currentTarget.clone(), 
-            duration: 0,
-            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : 'linear'
-          });
-           commandsList.push({
-            position: finalPosition.clone(), 
-            target: finalTarget.clone(), 
-            duration: stepDuration > 0 ? stepDuration : 1.0, // Use calculated duration or default
-            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : 'linear'
-          });
-          this.logger.debug('Generated fly_by commands (placeholder):', commandsList);
-          commands.push(...commandsList);
-          // --- End Placeholder ---
+          let finalPosition: Vector3; // Declare finalPosition outside the if/else
+          let finalTarget: Vector3;   // Declare finalTarget outside the if/else
 
-          // Update state
-          currentPosition = finalPosition.clone();
-          currentTarget = finalTarget.clone();
+          if (speed === 'instant') {
+            this.logger.debug(`MoveTo: Generating instant cut to ${destinationPosition.toArray()}`);
+            // Instant cut: Determine final state and add one command
+            const offsetDirection = new Vector3(0, 0.5, 1.5); // Simple offset
+            finalPosition = new Vector3().copy(destinationPosition).add(offsetDirection);
+            finalTarget = destinationPosition.clone(); // Look directly at the target
+
+            commandsList.push({
+                position: finalPosition,
+                target: finalTarget,
+                duration: 0.01, // Very small duration for a cut 
+                easing: 'linear' 
+            });
+            // Update state immediately
+            currentPosition = finalPosition.clone();
+            currentTarget = finalTarget.clone();
+          } else {
+            // Smooth move: Generate start and end commands
+            this.logger.debug(`MoveTo: Generating smooth move to ${destinationPosition.toArray()}`);
+            // Determine end state positioning logic
+            const offsetDirection = new Vector3(0, 0.5, 1.5);
+            const endPositionCandidate = new Vector3().copy(destinationPosition).add(offsetDirection);
+            const endTargetCandidate = destinationPosition.clone();
+
+            // Apply constraints to the end position candidate
+            finalPosition = endPositionCandidate.clone(); // Initialize finalPosition
+            const { cameraConstraints } = envAnalysis;
+            const { spatial } = sceneAnalysis;
+            let clamped = false;
+            if (cameraConstraints) {
+                if (finalPosition.y < cameraConstraints.minHeight) { finalPosition.y = cameraConstraints.minHeight; clamped = true; }
+                if (finalPosition.y > cameraConstraints.maxHeight) { finalPosition.y = cameraConstraints.maxHeight; clamped = true; }
+                // Add min/max distance checks if needed relative to finalTarget
+            }
+            if (spatial?.bounds) {
+                const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+                const clampedPos = this._clampPositionWithRaycast(currentPosition, endPositionCandidate, objectBounds, envAnalysis.userVerticalAdjustment ?? 0);
+                if (!clampedPos.equals(endPositionCandidate)) {
+                    finalPosition.copy(clampedPos);
+                    clamped = true;
+                }
+            } // If clamping occurred, finalPosition holds the clamped position
+            finalTarget = endTargetCandidate.clone(); // Target remains the resolved destination
+            if (clamped) this.logger.warn('MoveTo: Final position was clamped by constraints.');
+
+            // Add start command
+            commandsList.push({
+                position: currentPosition.clone(),
+                target: currentTarget.clone(), 
+                duration: 0,
+                easing: effectiveEasingName 
+            });
+            // Add end command
+            commandsList.push({
+                position: finalPosition.clone(), // Use clamped final position
+                target: finalTarget.clone(), // Use final target
+                duration: stepDuration > 0 ? stepDuration : 1.0, // Use step duration or default
+                easing: effectiveEasingName
+            });
+            // Update state for next step
+            currentPosition = finalPosition.clone();
+            currentTarget = finalTarget.clone();
+          }
+
+          this.logger.debug(`Generated move_to commands:`, commandsList);
+          commands.push(...commandsList);
+
           break;
         }
-        case 'fly_away': { // <<< Placeholder
-          this.logger.warn('Fly-away motion generator is not fully implemented. Skipping step.');
-          // --- START FlyAway Logic --- 
+        case 'focus_on': { // <<< NEW CASE
           const {
-              target: rawTargetName = 'current_target', 
-              // distance: rawDistance, // OLD
-              distance_descriptor: rawDistanceDescriptor, // NEW
-              distance_override: rawDistanceOverride, // NEW
-              direction_hint: rawDirectionHint = 'away_from_target',
-              speed: rawSpeed = 'medium',
-              easing: rawEasingName = 'easeOut'
+            target: rawTargetName,
+            adjust_framing: rawAdjustFraming = true, // Default true per instructions
+            speed: rawSpeed = 'medium', // Speed might influence blend/settle
+            easing: rawEasingName = DEFAULT_EASING 
           } = step.parameters;
 
-          const flyAwayTargetName = typeof rawTargetName === 'string' ? rawTargetName : 'current_target';
-          const flyAwayTarget = this._resolveTargetPosition(
-            flyAwayTargetName,
-            sceneAnalysis,
-            envAnalysis, // <-- Pass full envAnalysis
-            currentTarget
-            // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
-          );
-          if (!flyAwayTarget) {
-            this.logger.error(`FlyAway: Could not resolve target '${flyAwayTargetName}'. Skipping step.`);
+          // Validate target
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
+          if (!targetName) {
+            this.logger.error(`FocusOn: Missing required target parameter. Skipping step.`);
             continue;
           }
 
-          let effectiveDistance: number | null = null;
+          // Resolve the new target position
+          const newTarget = this._resolveTargetPosition(
+            targetName,
+            sceneAnalysis,
+            envAnalysis,
+            currentTarget // Pass current target for context
+          );
 
-          // 1. Check Override
-          if (typeof rawDistanceOverride === 'number' && rawDistanceOverride > 0) {
-            effectiveDistance = rawDistanceOverride;
-            this.logger.debug(`FlyAway: Using distance_override: ${effectiveDistance}`);
-          } else {
-            // 2. Check Descriptor
-            const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
-
-            if (distanceDescriptor) {
-              effectiveDistance = this._mapDescriptorToValue(
-                distanceDescriptor,
-                'distance',
-                'fly_away',
-                sceneAnalysis,
-                envAnalysis,
-                { position: currentPosition, target: currentTarget }
-              );
-              this.logger.debug(`FlyAway: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
-            } else {
-               this.logger.error(`FlyAway: Missing or invalid distance_override AND distance_descriptor. Skipping step.`);
-               continue; 
-            }
+          if (!newTarget) {
+            this.logger.error(`FocusOn: Could not resolve target position for '${targetName}'. Skipping step.`);
+            continue;
           }
 
-          // --- Placeholder for FlyAway Path Calculation ---
-          this.logger.warn(`FlyAway Path calculation using target ${flyAwayTarget.toArray()}, distance ${effectiveDistance.toFixed(2)}, hint ${rawDirectionHint} needs implementation.`);
-          // Example: Simple move backward
-          const directionVec = new Vector3().subVectors(currentPosition, flyAwayTarget).normalize(); // Direction away from target
-          if (rawDirectionHint === 'up_and_back') directionVec.add(new Vector3(0,0.5,0)).normalize(); // Add upward component
+          // Validate adjust_framing (just log for now)
+          const adjustFraming = typeof rawAdjustFraming === 'boolean' ? rawAdjustFraming : true;
+          if (adjustFraming) {
+              this.logger.warn('FocusOn: adjust_framing=true is requested, but automatic framing adjustment is not yet implemented. Only changing target.');
+              // TODO: Implement dolly/zoom logic here based on distance to newTarget if needed.
+          }
           
-          const finalPosition = new Vector3().copy(currentPosition).addScaledVector(directionVec, effectiveDistance);
-          const finalTarget = flyAwayTarget.clone(); // Keep looking at the target
+          // Validate speed/easing for potential use in blending (though focus_on itself is just target change)
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+          let effectiveEasingName = easingName;
+          // Apply speed logic similar to other non-instant moves
+          if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
 
-          // --- Create Commands (Example) ---
+          // Create CameraCommands (Position stays same, Target changes)
           const commandsList: CameraCommand[] = [];
-           commandsList.push({
-            position: currentPosition.clone(),
-            target: currentTarget.clone(), 
-            duration: 0,
-            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : DEFAULT_EASING // Use DEFAULT_EASING
+          commandsList.push({
+              position: currentPosition.clone(), 
+              target: currentTarget.clone(), // Start at current target
+              duration: 0,
+              easing: effectiveEasingName
           });
-           commandsList.push({
-            position: finalPosition.clone(), 
-            target: finalTarget.clone(), 
-            duration: stepDuration > 0 ? stepDuration : 1.0, // Use calculated duration or default
-            easing: typeof rawEasingName === 'string' ? rawEasingName as EasingFunctionName : DEFAULT_EASING // Use DEFAULT_EASING
+          commandsList.push({
+              position: currentPosition.clone(), // Position does not change
+              target: newTarget.clone(), // End looking at the new target
+              duration: stepDuration > 0 ? stepDuration : 0.1, // Use allocated duration or small default
+              easing: effectiveEasingName
           });
-          this.logger.debug('Generated fly_away commands (placeholder):', commandsList);
+          this.logger.debug(`Generated focus_on commands:`, commandsList);
           commands.push(...commandsList);
-          // --- End Placeholder ---
 
-          // Update state
-          currentPosition = finalPosition.clone();
-          currentTarget = finalTarget.clone();
+          // Update state for the next step (Only target changes)
+          currentTarget = newTarget.clone();
+          // currentPosition remains the same
+          break;
+        }
+        case 'rotate': { // <<< Restore correct rotate logic
+          const {
+            axis: rawAxisName = 'yaw',
+            angle: rawAngle,
+            speed: rawSpeed = 'medium',
+            easing: rawEasingName = DEFAULT_EASING
+          } = step.parameters;
+
+          // Validate parameters
+          let axis: 'yaw' | 'pitch' | 'roll' = 'yaw'; // Default
+          const lowerAxisName = typeof rawAxisName === 'string' ? rawAxisName.toLowerCase() : null;
+          if (lowerAxisName === 'pitch') {
+              axis = 'pitch';
+          } else if (lowerAxisName === 'roll') {
+              axis = 'roll';
+          } else if (lowerAxisName && lowerAxisName !== 'yaw') { 
+              this.logger.warn(`Rotate: Invalid axis '${rawAxisName}', defaulting to 'yaw'.`);
+          }
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+
+          if (angle === null) {
+            this.logger.error(`Rotate: Invalid, missing, or zero angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          
+          if (axis === 'roll') {
+             this.logger.warn('Rotate: \'roll\' axis is not fully implemented for visual effect. Camera will not visually roll.');
+             if (stepDuration > 0) {
+                commands.push({
+                    position: currentPosition.clone(),
+                    target: currentTarget.clone(),
+                    duration: stepDuration, 
+                    easing: 'linear'
+                });
+             }
+             continue; 
+          }
+
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          let cameraUp = new Vector3(0, 1, 0); 
+          let cameraRight = new Vector3();
+          if (Math.abs(viewDirection.y) > 0.999) { 
+              cameraRight.set(1, 0, 0); 
+              cameraUp.crossVectors(viewDirection, cameraRight).normalize(); 
+          } else {
+              cameraRight.crossVectors(viewDirection, cameraUp).normalize(); 
+              cameraUp.crossVectors(cameraRight, viewDirection).normalize(); 
+          }
+
+          let rotationAxis: Vector3;
+          if (axis === 'yaw') { 
+              rotationAxis = cameraUp;
+          } else { 
+              rotationAxis = cameraRight;
+          }
+
+          const angleRad = THREE.MathUtils.degToRad(angle);
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+
+          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
+          targetVector.applyQuaternion(quaternion);
+          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
+          
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') effectiveEasingName = 'linear'; 
+          else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+              position: currentPosition.clone(),
+              target: currentTarget.clone(), 
+              duration: 0,
+              easing: effectiveEasingName
+          });
+          commandsList.push({
+              position: currentPosition.clone(), 
+              target: newTarget.clone(), 
+              duration: stepDuration > 0 ? stepDuration : 0.1,
+              easing: effectiveEasingName
+          });
+          this.logger.debug(`Generated rotate (${axis}) commands:`, commandsList);
+          commands.push(...commandsList);
+
+          currentTarget = newTarget.clone();
           break;
         }
         default: {

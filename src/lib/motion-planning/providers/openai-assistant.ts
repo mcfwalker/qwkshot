@@ -119,70 +119,49 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
 
             if (assistantMessage.content.length > 0 && assistantMessage.content[0].type === 'text') {
                 rawJsonString = assistantMessage.content[0].text.value;
-                let cleanedJsonString = rawJsonString;
-                
-                // --- ADDED: Remove comments and markdown fences before parsing ---
+                let jsonToParse: string | null = null;
+
+                // --- Robust JSON Extraction --- 
                 try {
-                    // 1. Remove markdown code fences (```json ... ``` or ``` ... ```)
-                    // Matches optional language specifier and captures content within
-                    const codeBlockMatch = cleanedJsonString.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
-                    if (codeBlockMatch && codeBlockMatch[1]) {
-                        cleanedJsonString = codeBlockMatch[1]; // Use the captured content
-                        console.log('Removed markdown fences. Content inside:', cleanedJsonString);
+                    const startIndex = rawJsonString.indexOf('{');
+                    const endIndex = rawJsonString.lastIndexOf('}');
+
+                    if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+                        jsonToParse = rawJsonString.substring(startIndex, endIndex + 1);
+                        console.debug('[Adapter DEBUG] Extracted potential JSON:', jsonToParse); // Use console
                     } else {
-                        // Attempt to remove just the fence markers if full block match fails
-                        cleanedJsonString = cleanedJsonString.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
+                        // Could not find valid braces, maybe it IS pure JSON?
+                        jsonToParse = rawJsonString.trim(); 
+                        if (!jsonToParse.startsWith('{') || !jsonToParse.endsWith('}')) {
+                           // If it doesn't look like JSON after trim, parsing will fail
+                           jsonToParse = null; 
+                        }
                     }
-                    
-                    // 2. Remove single-line comments (//...)
-                    cleanedJsonString = cleanedJsonString.replace(/\/\/.*$/gm, '');
-                    
-                    // --- ADDED: Fix invalid requested_duration value ---
-                    // Replace "requested_duration": number (with potential whitespace) with "requested_duration": null
-                    cleanedJsonString = cleanedJsonString.replace(/"requested_duration"\s*:\s*number/g, '"requested_duration": null');
-                    // --- END ADDED --- 
-                    
-                    // Trim whitespace just in case
-                    cleanedJsonString = cleanedJsonString.trim();
-                    
-                    console.log("Cleaned JSON string before parsing:", cleanedJsonString); // Log cleaned string
-                } catch (cleanError) {
-                    console.error("Error during JSON string cleaning:", cleanError);
-                    // Fallback to original string if cleaning fails?
-                    cleanedJsonString = rawJsonString; 
+                } catch (extractError) {
+                     console.error('[Adapter ERROR] Error during JSON string extraction:', extractError); // Use console
+                     jsonToParse = null; // Ensure parsing fails if extraction errors
                 }
-                // --- END ADDED ---
+                // --- End Robust JSON Extraction ---
                 
                 try {
-                    // --- MODIFIED: Parse the cleaned string --- 
-                    const parsedJson = JSON.parse(cleanedJsonString);
-                    // --- END MODIFIED --- 
-                    
-                    // 7. Validate JSON Structure
-                    if (parsedJson && Array.isArray(parsedJson.steps)) {
-                        motionPlan = parsedJson as MotionPlan;
+                    if (jsonToParse) {
+                        // Attempt to parse the extracted or trimmed string
+                        const parsedJson = JSON.parse(jsonToParse);
+                        // Validate structure
+                        if (parsedJson && Array.isArray(parsedJson.steps)) {
+                            motionPlan = parsedJson as MotionPlan;
+                        } else {
+                            jsonParseError = "Extracted JSON does not conform to MotionPlan structure (missing 'steps' array).";
+                        }
                     } else {
-                        jsonParseError = "Parsed JSON does not conform to MotionPlan structure (missing 'steps' array).";
+                         jsonParseError = "Could not find valid JSON block in Assistant response.";
                     }
                 } catch (e) {
-                    jsonParseError = `Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`;
-                    console.error("JSON Parsing Error within Adapter. Raw content received from OpenAI:");
+                    jsonParseError = `Failed to parse extracted JSON: ${e instanceof Error ? e.message : String(e)}`;
+                    console.error("[Adapter ERROR] JSON Parsing Error. Raw content:"); // Use console
                     console.error("---");
-                    console.error(rawJsonString); // Log the original raw string
+                    console.error(rawJsonString);
                     console.error("---");
-                    // --- NEW FALLBACK: try slicing everything after the last closing brace ---
-                    try {
-                        const lastBrace = cleanedJsonString.lastIndexOf('}');
-                        if (lastBrace !== -1) {
-                            const truncated = cleanedJsonString.slice(0, lastBrace + 1).trim();
-                            const reparsed = JSON.parse(truncated);
-                            motionPlan = reparsed as MotionPlan;
-                            jsonParseError = null;
-                            console.warn('Fallback JSON parse succeeded after truncating content beyond last }');
-                        }
-                    } catch (fallbackErr) {
-                        // Still failing; leave jsonParseError as‑is
-                    }
                 }
             } else {
                 jsonParseError = "Assistant message content is empty or not in the expected text format.";
