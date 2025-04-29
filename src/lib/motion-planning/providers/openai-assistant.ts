@@ -145,8 +145,13 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                 
                 try {
                     if (jsonToParse) {
-                        // Attempt to parse the extracted or trimmed string
-                        const parsedJson = JSON.parse(jsonToParse);
+                        // ADDED: Strip comments before parsing
+                        const cleanedJsonString = jsonToParse
+                            .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments /* ... */
+                            .replace(/\/\/.*/g, '');           // Remove single-line comments // ...
+
+                        // MODIFIED: Attempt to parse the *cleaned* string
+                        const parsedJson = JSON.parse(cleanedJsonString);
                         // Validate structure
                         if (parsedJson && Array.isArray(parsedJson.steps)) {
                             motionPlan = parsedJson as MotionPlan;
