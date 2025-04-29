@@ -180,9 +180,36 @@ export class SceneInterpreterImpl implements SceneInterpreter {
                 this.logger.debug('Resolved target to object_back_center');
                 // Apply user offset to Y component
                 return new Vector3(center.x, center.y + userVerticalAdjustment, min.z);
-            // Add corners if needed later, e.g., object_top_left_front
+            // --- ADDED Corner Cases --- 
+            case 'object_bottom_left': 
+            case 'object_bottom_left_center': // Alias
+            case 'object_bottom_left_corner': // Alias
+                this.logger.debug('Resolved target to object_bottom_left');
+                return new Vector3(min.x, min.y + userVerticalAdjustment, center.z);
+            case 'object_bottom_right': 
+            case 'object_bottom_right_center': // Alias
+            case 'object_bottom_right_corner': // Alias
+                this.logger.debug('Resolved target to object_bottom_right');
+                return new Vector3(max.x, min.y + userVerticalAdjustment, center.z);
+            case 'object_top_left': 
+            case 'object_top_left_center': // Alias
+            case 'object_top_left_corner': // Alias
+                this.logger.debug('Resolved target to object_top_left');
+                return new Vector3(min.x, max.y + userVerticalAdjustment, center.z);
+            case 'object_top_right': 
+            case 'object_top_right_center': // Alias
+            case 'object_top_right_corner': // Alias
+                this.logger.debug('Resolved target to object_top_right');
+                return new Vector3(max.x, max.y + userVerticalAdjustment, center.z);
+            // TODO: Add front/back corner combinations if needed later
         }
-    } else if (['object_center', 'object_top_center', 'object_bottom_center', 'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center'].includes(targetName)) {
+    } else if ([
+        'object_center', 'object_top_center', 'object_bottom_center', 
+        'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center',
+        'object_bottom_left', 'object_bottom_right', 'object_top_left', 'object_top_right',
+        'object_bottom_left_center', 'object_bottom_right_center', 'object_top_left_center', 'object_top_right_center', // Add center aliases here too
+        'object_bottom_left_corner', 'object_bottom_right_corner', 'object_top_left_corner', 'object_top_right_corner' // Add corner aliases here too
+        ].includes(targetName)) {
         this.logger.warn(`Cannot resolve target '${targetName}': SceneAnalysis missing required spatial bounds (center, min, max).`);
         return null; // Cannot calculate without bounds
     }
