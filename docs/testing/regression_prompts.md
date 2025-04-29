@@ -86,6 +86,22 @@ This document contains a set of standard prompts used for regression testing the
 *   `"Pan left to face the back center of the object."`
 *   `"Pedestal up towards the top edge."`
 
+### 6. New Primitives (Added 2025-04-28)
+
+*   **Rotate (Yaw/Pitch Only):**
+    *   `"Rotate yaw 45 degrees right."`
+    *   `"Rotate the camera pitch down by 15 degrees slowly."`
+    *   `"Turn the camera left 90 degrees using rotate yaw."`
+    *   *Note: 'Roll' axis is known to be unimplemented visually.* 
+*   **Move To:**
+    *   `"Move instantly to the object center."`
+    *   `"Go to the bottom right corner smoothly."` (Assuming a feature 'bottom_right_corner' might exist or Assistant maps this)
+    *   `"Cut to the front edge view."` (Testing 'cut' synonym and spatial target)
+*   **Focus On:**
+    *   `"Focus the camera on the object_top_center without moving."`
+    *   `"Aim at the back left edge."` (Testing Assistant mapping to standardized target)
+    *   `"Just look at the current target."` (Should result in a static command or minimal adjustment)
+
 ---
 
 *TODO: Add more complex scenarios, fly_by, fly_away, arc, reveal, set_view tests once those motion types are fully implemented and tested.* 

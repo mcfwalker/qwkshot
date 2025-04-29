@@ -723,6 +723,8 @@ private _mapDescriptorToValue(
       }
       // --- END Target Blending Logic ---
 
+      // Add debug log before switch
+      this.logger.debug(`Switching on type: '${step.type}' (Length: ${step.type?.length ?? 'undefined'})`);
       // Pass stepDuration down to generators (already done implicitly as it's in scope)
       switch (step.type) {
         case 'static': {          
@@ -2285,6 +2287,97 @@ private _mapDescriptorToValue(
           // Update state for the next step (Only target changes)
           currentTarget = newTarget.clone();
           // currentPosition remains the same
+          break;
+        }
+        case 'rotate': { // <<< Restore correct rotate logic
+          const {
+            axis: rawAxisName = 'yaw',
+            angle: rawAngle,
+            speed: rawSpeed = 'medium',
+            easing: rawEasingName = DEFAULT_EASING
+          } = step.parameters;
+
+          // Validate parameters
+          let axis: 'yaw' | 'pitch' | 'roll' = 'yaw'; // Default
+          const lowerAxisName = typeof rawAxisName === 'string' ? rawAxisName.toLowerCase() : null;
+          if (lowerAxisName === 'pitch') {
+              axis = 'pitch';
+          } else if (lowerAxisName === 'roll') {
+              axis = 'roll';
+          } else if (lowerAxisName && lowerAxisName !== 'yaw') { 
+              this.logger.warn(`Rotate: Invalid axis '${rawAxisName}', defaulting to 'yaw'.`);
+          }
+          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
+              ? rawEasingName as EasingFunctionName 
+              : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+
+          if (angle === null) {
+            this.logger.error(`Rotate: Invalid, missing, or zero angle: ${rawAngle}. Skipping step.`);
+            continue;
+          }
+          
+          if (axis === 'roll') {
+             this.logger.warn('Rotate: \'roll\' axis is not fully implemented for visual effect. Camera will not visually roll.');
+             if (stepDuration > 0) {
+                commands.push({
+                    position: currentPosition.clone(),
+                    target: currentTarget.clone(),
+                    duration: stepDuration, 
+                    easing: 'linear'
+                });
+             }
+             continue; 
+          }
+
+          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
+          let cameraUp = new Vector3(0, 1, 0); 
+          let cameraRight = new Vector3();
+          if (Math.abs(viewDirection.y) > 0.999) { 
+              cameraRight.set(1, 0, 0); 
+              cameraUp.crossVectors(viewDirection, cameraRight).normalize(); 
+          } else {
+              cameraRight.crossVectors(viewDirection, cameraUp).normalize(); 
+              cameraUp.crossVectors(cameraRight, viewDirection).normalize(); 
+          }
+
+          let rotationAxis: Vector3;
+          if (axis === 'yaw') { 
+              rotationAxis = cameraUp;
+          } else { 
+              rotationAxis = cameraRight;
+          }
+
+          const angleRad = THREE.MathUtils.degToRad(angle);
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+
+          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
+          targetVector.applyQuaternion(quaternion);
+          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
+          
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') effectiveEasingName = 'linear'; 
+          else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+              position: currentPosition.clone(),
+              target: currentTarget.clone(), 
+              duration: 0,
+              easing: effectiveEasingName
+          });
+          commandsList.push({
+              position: currentPosition.clone(), 
+              target: newTarget.clone(), 
+              duration: stepDuration > 0 ? stepDuration : 0.1,
+              easing: effectiveEasingName
+          });
+          this.logger.debug(`Generated rotate (${axis}) commands:`, commandsList);
+          commands.push(...commandsList);
+
+          currentTarget = newTarget.clone();
           break;
         }
         default: {
