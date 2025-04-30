@@ -396,6 +396,9 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // Process the response - expecting CameraCommand[]
       const receivedCommands: any[] = await pathResponse.json(); 
       
+      // >>> Log the raw received data structure <<<
+      console.log('[CameraAnimationSystem] Received API Response (raw):', JSON.stringify(receivedCommands));
+
       // Validate and parse commands
       if (!Array.isArray(receivedCommands)) {
         throw new Error('Invalid command data received from API');
@@ -450,13 +453,22 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           }
           // --- END ADDED ---
 
+          // >>> Log the raw cmd object being processed <<<
+          console.log(`[Command Parser] Processing cmd index ${index}:`, JSON.stringify(cmd));
+
           const command: CameraCommand = {
             position: positionVec,
             target: targetVec,
             orientation: orientationQuat,
             duration: cmd.duration,
-            easing: cmd.easing || 'linear'
+            easing: cmd.easing || 'linear',
+            // Ensure animationType is parsed from the received command object
+            animationType: cmd.animationType 
           };
+
+          // >>> Log the created command object BEFORE returning <<<
+          console.log(`[Command Parser] Created command index ${index}:`, JSON.stringify(command));
+
           return command;
         } catch (err) {
           console.error(`Error parsing command ${index}:`, cmd, err);
@@ -465,6 +477,9 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           throw new Error(`Error processing command ${index}: ${errorMsg}`); // Re-throw to stop processing
         }
       });
+
+      // >>> Log the parsed commands BEFORE setting state <<<
+      console.log('[CameraAnimationSystem] Parsed newCommands:', JSON.stringify(newCommands, null, 2));
 
       // Set the new commands state
       setCommands(newCommands);
@@ -695,22 +710,35 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
           console.log('handleLockToggle: Metadata to save:', metadataToSave);
 
-          // Call the server action
-          const result = await updateEnvironmentalMetadataAction({
-            modelId: currentModelId, 
+          // Call the server action - *NO AWAIT* to avoid blocking UI
+          console.time("MetadataSave");
+          updateEnvironmentalMetadataAction({
+            modelId: currentModelId,
             metadata: metadataToSave,
+          }).then(result => {
+              console.timeEnd("MetadataSave");
+              if (result.success) {
+                  // toast.success('Scene composition saved (async)'); // Optional: less intrusive success toast
+                  console.log("Metadata saved successfully (async).");
+              } else {
+                  throw new Error(result.error || 'Failed to save scene composition asynchronously.');
+              }
+          }).catch(error => {
+              console.timeEnd("MetadataSave"); // End timer even on error
+              console.error('Failed to store/update environmental metadata (async):', error);
+              toast.error('Background save failed', { description: error instanceof Error ? error.message : 'Could not save scene view.' });
+              // Note: Lock state is NOT reverted here automatically
           });
-
-          // 4. Handle result
-          if (result.success) {
-              toast.success('Scene composition locked and saved');
-          } else {
-              throw new Error(result.error || 'Failed to save scene composition via server action.');
-          }
           
+          // We proceed to toggle lock state immediately without waiting for save
+          toast.success('Scene composition locked'); // Give immediate feedback
+
         } catch (error) {
-          console.error('Failed to store/update environmental metadata:', error);
-          toast.error('Failed to save scene composition', { description: error instanceof Error ? error.message : undefined });
+          // This catch block now only catches errors *before* the async call starts
+          console.error('Error preparing metadata save:', error);
+          toast.error('Failed to initiate scene save', { description: error instanceof Error ? error.message : undefined });
+          // Do NOT toggle lock state if preparation failed
+          return; // Stop execution here
         }
       } else if (isLocked) {
         console.log('Unlocking scene...');

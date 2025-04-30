@@ -33,6 +33,7 @@ export interface CameraCommand {
   orientation?: THREE.Quaternion | null;
   duration: number;
   easing: EasingFunctionName;
+  animationType?: 'orbit' | 'orbit_start' | string;
 }
 
 /**

@@ -349,7 +349,9 @@ export async function POST(request: Request) {
         );
 
         logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
-        
+        // >>> Log commands BEFORE serialization <<<
+        logger.debug('[API Route] cameraCommands from interpreter:', JSON.stringify(cameraCommands, null, 2)); 
+
         // --- MODIFIED: Serialize Vector3 AND Quaternion before sending --- 
         const serializableCommands = cameraCommands.map(cmd => ({
             position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
@@ -359,9 +361,13 @@ export async function POST(request: Request) {
                 ? { x: cmd.orientation.x, y: cmd.orientation.y, z: cmd.orientation.z, w: cmd.orientation.w }
                 : null,
             duration: cmd.duration,
-            easing: cmd.easing
+            easing: cmd.easing,
+            animationType: cmd.animationType
         }));
         // --- END MODIFICATION ---
+
+        // >>> Log commands AFTER serialization <<<
+        logger.debug('[API Route] serializableCommands prepared:', JSON.stringify(serializableCommands, null, 2));
         
         return NextResponse.json(serializableCommands); // Return the serialized commands
 

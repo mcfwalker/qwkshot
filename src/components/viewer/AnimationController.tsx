@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, PerspectiveCamera, Quaternion } from 'three';
+import { Vector3, PerspectiveCamera, Quaternion, CatmullRomCurve3 } from 'three';
 // We might need a more specific type for OrbitControls ref if available
 // import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'; 
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
@@ -49,6 +49,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const startQuat = useRef(new Quaternion()).current;
   const endQuat = useRef(new Quaternion()).current;
   const currentQuat = useRef(new Quaternion()).current;
+  // --- Add cache for generated curves ---
+  const orbitCurveCacheRef = useRef<Record<number, CatmullRomCurve3>>({});
+  // -------------------------------------
 
   useFrame((state, delta) => {
     frameCounterRef.current++;
@@ -132,8 +135,79 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     const easingFunction = easingFunctions[effectiveEasingName]; 
     const easedT = easingFunction(t);
 
-    const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
-    
+    // --- MODIFIED: Interpolate Position (Curve or Linear) ---
+    let currentPosition: Vector3;
+    const isOrbitSegment = command.animationType === 'orbit';
+    // <<< Add log to inspect command type >>>
+    console.log(`Frame Check: cmd Index=${currentCommandIndex}, type=${command.animationType}, duration=${command.duration}, isOrbit=${isOrbitSegment}`);
+
+    if (isOrbitSegment) {
+      // Get or create the curve for this orbit segment
+      let curve = orbitCurveCacheRef.current[currentCommandIndex];
+      if (!curve) {
+        const orbitCenter = segmentEndTarget; // Orbit commands have the center as target
+        const startVec = new Vector3().subVectors(segmentStartPos, orbitCenter);
+        const endVec = new Vector3().subVectors(segmentEndPos, orbitCenter);
+
+        // Estimate radius and axis (crude estimate, assumes Y-axis orbit if vectors are parallel)
+        const radius = startVec.length();
+        let axis = new Vector3().crossVectors(startVec, endVec).normalize();
+        if (axis.lengthSq() < 1e-6) { 
+             axis.crossVectors(startVec, new Vector3(0, 1, 0)).normalize();
+            if(axis.lengthSq() < 1e-6) axis.set(0, 0, 1); 
+        }
+
+        // --- Detect if it's a closed loop (start ~= end) ---
+        const isClosedLoop = segmentStartPos.distanceTo(segmentEndPos) < 0.01; // Tolerance for floating point comparison
+        if (isClosedLoop) {
+          console.log('[AnimationController] Orbit detected as closed loop.');
+        }
+
+        // Create intermediate points
+        const numIntermediatePoints = 3; // Create 3 intermediate points (e.g., 90, 180, 270 deg for closed)
+        const points: Vector3[] = [segmentStartPos.clone()];
+        
+        if (isClosedLoop) {
+            // Generate intermediate points for a full circle
+            for (let i = 1; i <= numIntermediatePoints; i++) {
+                const angle = (i / (numIntermediatePoints + 1)) * Math.PI * 2; // Fractions of 360 deg
+                const q = new Quaternion().setFromAxisAngle(axis, angle);
+                const intermediateVec = startVec.clone().applyQuaternion(q);
+                points.push(new Vector3().addVectors(orbitCenter, intermediateVec));
+            }
+            // DO NOT add segmentEndPos when closed - curve handles it
+             console.log('[AnimationController] Generated points for closed loop:', points.map(p => p.toArray()));
+        } else {
+            // Generate intermediate points for a partial arc
+            const totalAngle = Math.acos(Math.max(-1, Math.min(1, startVec.dot(endVec) / (startVec.length() * endVec.length()))));
+            // Ensure totalAngle is a valid number
+            const validTotalAngle = isNaN(totalAngle) ? 0 : totalAngle;
+
+            for (let i = 1; i <= numIntermediatePoints; i++) {
+                const angle = (i / (numIntermediatePoints + 1)) * validTotalAngle; 
+                const q = new Quaternion().setFromAxisAngle(axis, angle);
+                const intermediateVec = startVec.clone().applyQuaternion(q);
+                points.push(new Vector3().addVectors(orbitCenter, intermediateVec));
+            }
+            points.push(segmentEndPos.clone()); // Add the actual end position for open arcs
+             console.log('[AnimationController] Generated points for open arc:', points.map(p => p.toArray()));
+        }
+
+        // --- Pass closed parameter to constructor ---
+        curve = new CatmullRomCurve3(points, isClosedLoop, 'catmullrom', 0.5); 
+        orbitCurveCacheRef.current[currentCommandIndex] = curve;
+      }
+
+      // Get point on the curve
+      currentPosition = curve.getPointAt(easedT);
+      // console.log('AnimationController: Applying position via Curve.getPointAt');
+    } else {
+      // Linear interpolation for non-orbit segments
+      currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
+      // console.log('AnimationController: Applying position via lerpVectors');
+    }
+    // --- END MODIFIED ---
+
     // --- Set Orientation (Conditional) --- 
     if (isExplicitOrientationSegment && segmentEndOrientationOrNull) {
         // Roll / Explicit Orientation: Use SLERP
@@ -147,9 +221,16 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
         // Ensure camera UP is world vertical before lookAt
         cameraRef.current.up.set(0, 1, 0);
-        // <<< UNCOMMENT lookAt >>>
-        cameraRef.current.lookAt(currentTarget);
-        // console.log('AnimationController: Applying orientation via lookAt'); 
+        
+        // <<< Temporarily disable lookAt for orbit segments >>>
+        // if (!isOrbitSegment) { // REVERT THIS BLOCK
+            // <<< UNCOMMENT lookAt >>>
+            cameraRef.current.lookAt(currentTarget);
+            // console.log('AnimationController: Applying orientation via lookAt'); 
+        // } else {
+        //     // console.log('AnimationController: Skipping lookAt during orbit segment');
+        // }
+        // <<< End temporary modification >>> // REVERT THIS BLOCK
     }
     // --- End Set Orientation --- 
 
@@ -193,6 +274,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         initialCameraPositionRef.current = null; 
         initialControlsTargetRef.current = null;
         initialCameraOrientationRef.current = null;
+        // --- Clear curve cache on completion ---
+        orbitCurveCacheRef.current = {};
+        // -------------------------------------
         onProgressUpdate(100); 
         onComplete(); 
     }
