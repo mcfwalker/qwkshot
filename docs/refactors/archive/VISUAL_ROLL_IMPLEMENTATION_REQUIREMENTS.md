@@ -1,3 +1,7 @@
+> **ARCHIVED: This document represents the initial plan for implementing visual roll based on `<OrbitControls>`. Subsequent testing revealed fundamental conflicts between manual orientation control and `<OrbitControls>`. The final implementation uses `<TrackballControls>` for user interaction and a modified `AnimationController` with conditional orientation handling (direct quaternion update for roll, `lookAt` for others). Refer to `ARCHITECTURE_v3.1_TrackballControls.md` and `TECHNICAL_DESIGN_v1.1_TrackballControls.md` for the current architecture.**
+
+---
+
 # Visual Roll Implementation Requirements
 
 ## 1. Introduction

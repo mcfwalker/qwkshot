@@ -1117,9 +1117,10 @@ private _mapDescriptorToValue(
 
           // --- MODIFIED: Generate Intermediate Keyframes --- 
           const commandsList: CameraCommand[] = [];
-          const anglePerStep = 2; 
+          // <<< REVERT anglePerStep >>>
+          const anglePerStep = 2; // Back to original value
           const numSteps = Math.max(2, Math.ceil(Math.abs(angle) / anglePerStep)); 
-          const angleStep = angle / (numSteps - 1); // Use absolute angle for step size calculation
+          const angleStep = angle / (numSteps - 1); 
           const durationStep = (stepDuration > 0 ? stepDuration : 0.1) / (numSteps - 1);
           
           // --- Calculate the STEP rotation using the correct angleSign ---

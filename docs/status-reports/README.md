@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-04-29-1844-TrackballRollFix - TrackballControls Integration & Visual Roll Success
 - M3DV-SR-2025-04-28-1805-Primitives - Scene Interpreter Primitive Completion & Instruction Tuning
 - M3DV-SR-2025-04-25-0937-BackendNorm - Backend Normalization Refactor Implementation
 - M3DV-SR-2025-04-22-1911-RefactorPlan - UI Panel Refactor & Backend Normalization Decision

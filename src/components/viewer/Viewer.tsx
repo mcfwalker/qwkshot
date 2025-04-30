@@ -529,14 +529,16 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             isRecording={isRecording}
           />
 
-          {/* --- Render CameraMover inside Canvas --- */}
-          <CameraMover 
-            movementDirection={movementDirection}
-            cameraRef={cameraRef}
-            controlsRef={controlsRef}
-            isLocked={isLocked}
-            isPlaying={isPlaying}
-          />
+          {/* --- Camera Mover --- */}
+          {!isPlaying && (
+            <CameraMover
+              movementDirection={movementDirection}
+              cameraRef={cameraRef}
+              controlsRef={controlsRef}
+              isLocked={isLocked}
+              isPlaying={isPlaying} // Pass isPlaying here, though condition ensures it's false
+            />
+          )}
 
         </Suspense>
       </Canvas>

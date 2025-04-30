@@ -117,14 +117,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
     const segmentEndPos = command.position;
     const segmentEndTarget = command.target;
-    let segmentEndOrientation = command.orientation; 
-    if (!segmentEndOrientation) {
-        const tempCam = cameraRef.current.clone();
-        tempCam.position.copy(segmentEndPos);
-        tempCam.lookAt(segmentEndTarget);
-        segmentEndOrientation = tempCam.quaternion;
-    }
-    segmentEndOrientation = segmentEndOrientation ?? new Quaternion(); 
+    const segmentEndOrientationOrNull = command.orientation;
+
+    const isExplicitOrientationSegment = !!(prevCommand?.orientation || currentCommandIndex === 0) && !!segmentEndOrientationOrNull;
 
     const timeElapsedInSegmentUnadjusted = targetTimeUnadjusted - accumulatedDurationUnadjusted;
     const t = command.duration > 0 
@@ -139,12 +134,26 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
     const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
     
-    startQuat.copy(segmentStartOrientation);
-    endQuat.copy(segmentEndOrientation); 
-    currentQuat.slerpQuaternions(startQuat, endQuat, easedT);
+    // --- Set Orientation (Conditional) --- 
+    if (isExplicitOrientationSegment && segmentEndOrientationOrNull) {
+        // Roll / Explicit Orientation: Use SLERP
+        startQuat.copy(segmentStartOrientation);
+        endQuat.copy(segmentEndOrientationOrNull); // Use the non-null version
+        currentQuat.slerpQuaternions(startQuat, endQuat, easedT);
+        cameraRef.current.quaternion.copy(currentQuat);
+        // console.log('AnimationController: Applying orientation via SLERP'); 
+    } else {
+        // Other movements: Use lookAt
+        const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
+        // Ensure camera UP is world vertical before lookAt
+        cameraRef.current.up.set(0, 1, 0);
+        // <<< UNCOMMENT lookAt >>>
+        cameraRef.current.lookAt(currentTarget);
+        // console.log('AnimationController: Applying orientation via lookAt'); 
+    }
+    // --- End Set Orientation --- 
 
     cameraRef.current.position.copy(currentPosition);
-    cameraRef.current.quaternion.copy(currentQuat);
 
     if (isRecording) {
       state.gl.render(state.scene, state.camera);
@@ -163,9 +172,21 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
             cameraRef.current.lookAt(finalCommand.target); 
         }
         
+        // Sync controls target 
         if (controlsRef.current) {
-          controlsRef.current.target.copy(finalCommand.target);
-          controlsRef.current.update();
+          // Determine final target to sync controls with
+          const finalTargetToSync = finalCommand.target; 
+          if (finalTargetToSync instanceof Vector3 && 
+              isFinite(finalTargetToSync.x) && 
+              isFinite(finalTargetToSync.y) && 
+              isFinite(finalTargetToSync.z)) {
+             // <<< COMMENT OUT target sync and update >>>
+             // controlsRef.current.target.copy(finalTargetToSync);
+             // controlsRef.current.update(); // Let controls know target changed
+             console.log("AnimationController: [Debug] Skipping controls target sync on complete.");
+          } else {
+             console.warn("AnimationController: Final command target is invalid, cannot sync controls target.");
+          }
         }
 
         startTimeRef.current = null;
