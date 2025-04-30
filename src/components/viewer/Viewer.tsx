@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
+import { TrackballControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
 // Commented out unused imports (keeping for reference)
@@ -67,7 +67,7 @@ interface MovementDirection {
 interface CameraMoverProps {
   movementDirection: MovementDirection;
   cameraRef: React.RefObject<ThreePerspectiveCamera>;
-  controlsRef: React.RefObject<any>; // Type for OrbitControls is complex
+  controlsRef: React.RefObject<any>; // Type for TrackballControls is complex
   isLocked: boolean;
   isPlaying: boolean;
 }
@@ -472,22 +472,24 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
             ref={cameraRef}
           />
 
-          {/* Controls */}
+          {/* MODIFIED: Controls */}
           {(() => { // Immediately invoked function expression for logging
             const controlsEnabled = !isPlaying && !isLocked;
-            console.log(`Viewer Render: Setting OrbitControls enabled=${controlsEnabled} (isPlaying=${isPlaying}, isLocked=${isLocked})`);
+            // console.log(`Viewer Render: Setting TrackballControls enabled=${controlsEnabled} (isPlaying=${isPlaying}, isLocked=${isLocked})`);
             return (
-              <OrbitControls
+              <TrackballControls
                 ref={controlsRef}
-                enableDamping
-                dampingFactor={0.05}
-                mouseButtons={{
-                  LEFT: MOUSE.ROTATE,
-                  MIDDLE: MOUSE.DOLLY,
-                  RIGHT: MOUSE.PAN
-                }}
-                enabled={controlsEnabled}
-                target={[0, 1, 0]} // Target the approximate center of the normalized (height=2) model
+                makeDefault // Ensure this control is used by default
+                enabled={controlsEnabled} // Keep dynamic enabling
+                rotateSpeed={3.0} // Adjust speeds as needed
+                zoomSpeed={1.2}
+                panSpeed={0.8}
+                noZoom={false}
+                noPan={false}
+                staticMoving={true} // Helps prevent drifting
+                dynamicDampingFactor={0.3}
+                // TrackballControls doesn't use mouseButtons/touches props like OrbitControls
+                // Default mapping is usually: Left=Rotate, Middle/Wheel=Zoom, Right=Pan
               />
             );
           })()}

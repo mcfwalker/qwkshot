@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { SceneGeometry } from '@/lib/scene-analysis';
 import { getActiveProvider } from '@/lib/llm/registry';
 import { ensureLLMSystemInitialized } from '@/lib/llm/init';
-import { Vector3, Box3 } from 'three';
+import { Vector3, Box3, PerspectiveCamera } from 'three';
 import { LLMProvider } from '@/lib/llm/types';
 import { CameraKeyframe } from '@/types/camera';
 import { CompiledPrompt, CameraConstraints, PromptMetadata } from '@/types/p2p/prompt-compiler';
@@ -324,23 +324,44 @@ export async function POST(request: Request) {
           throw new Error('Interpreter context (SceneAnalysis, EnvironmentalAnalysis, or CameraState) is missing.');
         }
 
+        // ADDED: Create a temporary camera instance for the interpreter
+        const tempCamera = new PerspectiveCamera(
+            currentCameraState.fov,
+            16 / 9, // Assume a default aspect ratio, interpreter might not use it
+            0.1,
+            1000
+        );
+        tempCamera.position.copy(currentCameraState.position);
+        tempCamera.lookAt(currentCameraState.target);
+        tempCamera.updateMatrixWorld(); // Ensure world matrix is up-to-date
+        // --- End temp camera --- 
+
         const cameraCommands: CameraCommand[] = interpreter.interpretPath(
           motionPlan,
           sceneAnalysis,
           environmentalAnalysis,
-          { position: currentCameraState.position, target: currentCameraState.target }
+          // MODIFIED: Pass the temporary camera object along with state
+          { 
+            camera: tempCamera, 
+            position: currentCameraState.position, 
+            target: currentCameraState.target 
+          }
         );
 
         logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
         
-        // --- ADDED: Serialize Vector3 before sending --- 
+        // --- MODIFIED: Serialize Vector3 AND Quaternion before sending --- 
         const serializableCommands = cameraCommands.map(cmd => ({
             position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
             target: { x: cmd.target.x, y: cmd.target.y, z: cmd.target.z },
+            // Serialize orientation if it exists
+            orientation: cmd.orientation 
+                ? { x: cmd.orientation.x, y: cmd.orientation.y, z: cmd.orientation.z, w: cmd.orientation.w }
+                : null,
             duration: cmd.duration,
             easing: cmd.easing
         }));
-        // --- END ADDED ---
+        // --- END MODIFICATION ---
         
         return NextResponse.json(serializableCommands); // Return the serialized commands
 

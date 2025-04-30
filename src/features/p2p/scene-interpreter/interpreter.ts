@@ -603,7 +603,7 @@ private _mapDescriptorToValue(
     sceneAnalysis: SceneAnalysis,
     envAnalysis: EnvironmentalAnalysis, 
     // Add initial state, crucial for the first step
-    initialCameraState: { position: Vector3; target: Vector3 }
+    initialCameraState: { camera: Camera, position: Vector3; target: Vector3 }
   ): CameraCommand[] {
     this.logger.info('Interpreting motion plan...', { plan });
     if (!this.config) {
@@ -618,6 +618,10 @@ private _mapDescriptorToValue(
     const commands: CameraCommand[] = [];
     let currentPosition = initialCameraState.position.clone();
     let currentTarget = initialCameraState.target.clone();
+    // ADDED: Make camera object available and get initial orientation
+    const currentCamera = initialCameraState.camera;
+    let currentOrientation = new THREE.Quaternion();
+    currentCamera.getWorldQuaternion(currentOrientation);
 
     // Determine total duration
     const totalDuration = plan.metadata?.requested_duration;
@@ -2345,66 +2349,104 @@ private _mapDescriptorToValue(
             continue;
           }
           
-          if (axis === 'roll') {
-             this.logger.warn('Rotate: \'roll\' axis is not fully implemented for visual effect. Camera will not visually roll.');
-             if (stepDuration > 0) {
-                commands.push({
-                    position: currentPosition.clone(),
-                    target: currentTarget.clone(),
-                    duration: stepDuration, 
-                    easing: 'linear'
-                });
-             }
-             continue; 
-          }
-
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          let cameraUp = new Vector3(0, 1, 0); 
-          let cameraRight = new Vector3();
-          if (Math.abs(viewDirection.y) > 0.999) { 
-              cameraRight.set(1, 0, 0); 
-              cameraUp.crossVectors(viewDirection, cameraRight).normalize(); 
-          } else {
-              cameraRight.crossVectors(viewDirection, cameraUp).normalize(); 
-              cameraUp.crossVectors(cameraRight, viewDirection).normalize(); 
-          }
-
-          let rotationAxis: Vector3;
-          if (axis === 'yaw') { 
-              rotationAxis = cameraUp;
-          } else { 
-              rotationAxis = cameraRight;
-          }
-
-          const angleRad = THREE.MathUtils.degToRad(angle);
-          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
-
-          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
-          targetVector.applyQuaternion(quaternion);
-          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
-          
+          // --- Determine effective easing (Common to all rotation axes) ---
           let effectiveEasingName = easingName;
-          if (speed === 'very_fast') effectiveEasingName = 'linear'; 
+          if (speed === 'very_fast') effectiveEasingName = 'linear';
           else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
           else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+          // --- End Easing Logic ---
 
+          // --- Initialize end states ---
+          let endPosition: Vector3 = currentPosition.clone(); // Position doesn't change for rotate
+          let endTarget: Vector3 | null = null;              // Target changes for yaw/pitch, not roll
+          let startOrientation: THREE.Quaternion = currentOrientation.clone(); // Use current state
+          let endOrientation: THREE.Quaternion | null = null;    // Will be calculated for roll
+
+          if (axis === 'roll') {
+              this.logger.debug(`Rotate: Calculating roll angle ${angle} degrees.`);
+              // 1. Calculate Rotation Axis (Camera's forward vector)
+              const forward = new THREE.Vector3();
+              currentCamera.getWorldDirection(forward);
+              const rollAxis = forward; 
+
+              // 2. Calculate Rotation Quaternion
+              const angleRad = THREE.MathUtils.degToRad(angle);
+              const rollQuaternion = new THREE.Quaternion().setFromAxisAngle(rollAxis, angleRad);
+
+              // 3. Calculate End Orientation
+              endOrientation = currentOrientation.clone().multiply(rollQuaternion).normalize();
+              endTarget = currentTarget.clone(); // Target doesn't change for pure roll
+
+          } else { // Yaw or Pitch
+              this.logger.debug(`Rotate: Calculating ${axis} angle ${angle} degrees.`);
+              const viewDirection = new THREE.Vector3().subVectors(currentTarget, currentPosition).normalize();
+              // Recalculate camera up/right based on current view direction
+              let cameraUp = new THREE.Vector3(0, 1, 0);
+              let cameraRight = new THREE.Vector3();
+              if (Math.abs(viewDirection.dot(cameraUp)) > 0.999) { // Looking straight up or down
+                  currentCamera.getWorldQuaternion(startOrientation); // Ensure we have latest orientation
+                  cameraRight.set(1, 0, 0).applyQuaternion(startOrientation).normalize();
+                  if(Math.abs(cameraRight.dot(viewDirection)) > 0.999) {
+                     cameraRight.set(0, 0, 1).applyQuaternion(startOrientation).normalize();
+                  }
+                  cameraUp.crossVectors(viewDirection, cameraRight).normalize();
+              } else {
+                  cameraRight.crossVectors(viewDirection, cameraUp).normalize();
+                  cameraUp.crossVectors(cameraRight, viewDirection).normalize(); 
+              }
+
+              let rotationAxis: Vector3;
+              if (axis === 'yaw') {
+                  rotationAxis = cameraUp; 
+              } else { 
+                  rotationAxis = cameraRight; 
+              }
+
+              const angleRad = THREE.MathUtils.degToRad(angle);
+              const rotationQuaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
+
+              const targetVector = new THREE.Vector3().subVectors(currentTarget, currentPosition);
+              targetVector.applyQuaternion(rotationQuaternion);
+              endTarget = new THREE.Vector3().addVectors(currentPosition, targetVector);
+              // End orientation for yaw/pitch is derived from lookAt, remains null
+          }
+
+          if (!endTarget) {
+            this.logger.error(`Rotate: Failed to calculate end target for ${axis}. Skipping step.`);
+            continue;
+          }
+
+          // Create Commands
           const commandsList: CameraCommand[] = [];
           commandsList.push({
-              position: currentPosition.clone(),
-              target: currentTarget.clone(), 
-              duration: 0,
-              easing: effectiveEasingName
+            position: currentPosition.clone(),
+            target: currentTarget.clone(),
+            orientation: startOrientation.clone(), // <<< ADDED start orientation
+            duration: 0,
+            easing: effectiveEasingName
           });
           commandsList.push({
-              position: currentPosition.clone(), 
-              target: newTarget.clone(), 
-              duration: stepDuration > 0 ? stepDuration : 0.1,
-              easing: effectiveEasingName
+            position: endPosition.clone(),      // Position doesn't change
+            target: endTarget.clone(),          // Target only changes for yaw/pitch
+            orientation: endOrientation ? endOrientation.clone() : null, // <<< ADDED end orientation (only for roll)
+            duration: stepDuration > 0 ? stepDuration : 0.1, 
+            easing: effectiveEasingName
           });
           this.logger.debug(`Generated rotate (${axis}) commands:`, commandsList);
           commands.push(...commandsList);
 
-          currentTarget = newTarget.clone();
+          // Update State
+          currentTarget = endTarget.clone();
+          // currentPosition remains the same
+          if (endOrientation) { // Update orientation state only if calculated (i.e., for roll)
+              currentOrientation = endOrientation.clone();
+          } else {
+            // For yaw/pitch, recalculate orientation based on new target
+            currentCamera.position.copy(currentPosition); // Ensure camera instance matches state
+            currentCamera.lookAt(currentTarget);
+            currentCamera.getWorldQuaternion(currentOrientation);
+          }
+
           break;
         }
         default: {

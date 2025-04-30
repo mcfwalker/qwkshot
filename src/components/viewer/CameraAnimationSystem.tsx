@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Play, Pause, Clock, Wand2, Loader2, Video, Square, RefreshCcw, Camera, FileCode2, X } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Vector3, Object3D, PerspectiveCamera, Mesh, Material, BufferGeometry } from 'three';
+import { Vector3, Object3D, PerspectiveCamera, Mesh, Material, BufferGeometry, Quaternion } from 'three';
 import { toast } from 'sonner';
 import { analyzeScene as analyzeSceneGeometry, SceneGeometry } from '@/lib/scene-analysis';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -411,7 +411,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         return; // Stop further processing
       }
       
-      // Parse commands and convert to Vector3 instances
+      // Parse commands and convert to Vector3/Quaternion instances
       const newCommands: CameraCommand[] = receivedCommands.map((cmd, index) => {
         try {
           // --- MODIFIED VALIDATION ---
@@ -434,11 +434,28 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           const targetVec = new Vector3(cmd.target.x, cmd.target.y, cmd.target.z);
           // --- END ADDED ---
 
+          // --- ADDED: Reconstruct Quaternion for orientation --- 
+          let orientationQuat: Quaternion | null = null;
+          if (cmd.orientation && 
+              typeof cmd.orientation.x === 'number' &&
+              typeof cmd.orientation.y === 'number' &&
+              typeof cmd.orientation.z === 'number' &&
+              typeof cmd.orientation.w === 'number' ) {
+             orientationQuat = new Quaternion(
+                cmd.orientation.x, 
+                cmd.orientation.y, 
+                cmd.orientation.z, 
+                cmd.orientation.w
+             );
+          }
+          // --- END ADDED ---
+
           const command: CameraCommand = {
-            position: positionVec, // Use reconstructed Vector3
-            target: targetVec,     // Use reconstructed Vector3
+            position: positionVec,
+            target: targetVec,
+            orientation: orientationQuat,
             duration: cmd.duration,
-            easing: cmd.easing || 'linear' // Use easing from command or default to linear
+            easing: cmd.easing || 'linear'
           };
           return command;
         } catch (err) {

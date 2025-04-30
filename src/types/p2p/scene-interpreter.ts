@@ -12,6 +12,7 @@ import { EasingFunctionName } from '@/lib/easing';
 import { SceneAnalysis } from './scene-analyzer';
 import { EnvironmentalAnalysis } from './environmental-analyzer';
 import { MotionPlan } from '@/lib/motion-planning/types';
+import * as THREE from 'three';
 
 /**
  * Configuration for the Scene Interpreter
@@ -29,8 +30,9 @@ export interface SceneInterpreterConfig extends P2PConfig {
 export interface CameraCommand {
   position: Vector3;
   target: Vector3;
+  orientation?: THREE.Quaternion | null;
   duration: number;
-  easing?: EasingFunctionName;
+  easing: EasingFunctionName;
 }
 
 /**

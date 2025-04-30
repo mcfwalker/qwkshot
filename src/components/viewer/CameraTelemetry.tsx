@@ -35,10 +35,21 @@ export default function CameraTelemetry({ cameraRef, controlsRef }: CameraTeleme
         const camera = cameraRef.current;
         const controls = controlsRef.current;
 
+        // Ensure controls.target exists and is a Vector3 before calculating distance
+        const targetPosition = controls.target;
+        let distance = 0;
+        if (targetPosition instanceof Vector3) {
+          distance = camera.position.distanceTo(targetPosition);
+        } else {
+          // Handle cases where target might not be set initially or is not a Vector3
+          // Depending on TrackballControls behavior, might need adjustment
+          console.warn("CameraTelemetry: controls.target is not a Vector3 or is undefined.");
+        }
+
         setTelemetry({
           position: camera.position.clone(),
           rotation: camera.rotation.clone(),
-          distance: controls.getDistance(),
+          distance: distance,
           fov: camera.fov
         });
       }
