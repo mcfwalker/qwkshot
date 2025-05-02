@@ -21,7 +21,6 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
-  const setModelVerticalOffset = useViewerStore((s) => s.setModelVerticalOffset)
 
   // Get signed URL when component mounts
   useEffect(() => {
@@ -125,11 +124,11 @@ export function ModelViewerClient({ model }: ModelViewerClientProps) {
         container.position.set(0, offsetY, 0);
 
         // 4.  Persist unscaled vertical offset for metadata
-        const unscaledOffsetY = offsetY / scale
-        useViewerStore.getState().setModelVerticalOffset(unscaledOffsetY)
+        // const unscaledOffsetY = offsetY / scale // Calculation might still be useful for logging/debugging
+        // useViewerStore.getState().setModelVerticalOffset(unscaledOffsetY) // <<< REMOVE THIS LINE
     
         // 5. Frame camera based on the final positioned object
-        const box3  = new THREE.Box3().setFromObject(container)      // final box
+        const box3  = new THREE.Box3().setFromObject(container)
         const center = box3.getCenter(new THREE.Vector3());
         const size = box3.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);

@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { createServerClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
-import { ModelViewerClient } from '@/components/viewer/ModelViewerClient'
+import { ViewerContainer } from '@/components/viewer/ViewerContainer'
 import { ViewerSkeleton } from '@/components/viewer/ViewerSkeleton'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Button } from '@/components/ui/button'
@@ -56,31 +56,26 @@ async function getModelData(modelId: string) {
 
 // Server Component
 export default async function ViewerPage({ params }: { params: { modelId: string } }) {
-  try {
-    const resolvedParams = await params
-    const model = await getModelData(resolvedParams.modelId)
-
-    if (!model) {
-      notFound()
-    }
-
-    return (
-      <div className="h-[calc(100vh-4rem)] relative">
-        <div className="absolute top-4 left-4 z-10">
-          <BackToLibrary />
-        </div>
-        <ErrorBoundary fallback={<ViewerError modelId={resolvedParams.modelId} />}>
-          <Suspense fallback={<ViewerSkeleton />}>
-            <ModelViewerClient model={model} />
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    )
-  } catch (error) {
-    console.error('Error in ViewerPage:', error)
-    const resolvedParams = await params
-    return <ViewerError modelId={resolvedParams.modelId} />
+  const model = await getModelData(params.modelId)
+  if (!model) {
+    notFound()
   }
+
+  return (
+    <div className="h-[calc(100vh-4rem)] relative">
+      {/* Remove BackToLibrary Button */}
+      {/* 
+      <div className="absolute top-4 left-4 z-10">
+        <BackToLibrary />
+      </div>
+      */}
+      <ErrorBoundary fallback={<ViewerError modelId={params.modelId} />}>
+        <Suspense fallback={<ViewerSkeleton />}>
+          <ViewerContainer modelId={params.modelId} />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  )
 }
 
 // Error fallback component

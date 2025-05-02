@@ -120,20 +120,21 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
       {models.map((model) => (
         <Card key={model.id} className="library-card overflow-hidden">
           <CardContent className="p-0">
-            <div className="aspect-square bg-[#1a1a1a] relative rounded-lg">
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <span className="text-[#666666] text-sm font-mono truncate">
-                  {model.name}
-                </span>
+            <Link href={`/viewer/${model.id}`} className="block relative group">
+              <div className="aspect-square bg-[#1a1a1a] relative rounded-lg">
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <span className="text-[#666666] text-sm font-mono truncate">
+                    {model.name}
+                  </span>
+                </div>
               </div>
-            </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none">
+                <span className="text-white font-semibold">Use Model</span>
+              </div>
+            </Link>
           </CardContent>
           <CardFooter className="p-4 flex justify-between">
-            <Link href={`/viewer/${model.id}`}>
-              <Button className="library-button" variant="secondary" size="sm">
-                View
-              </Button>
-            </Link>
+            <div className="flex-grow"></div>
             <div className="flex gap-2">
               <Button
                 variant="ghost"
