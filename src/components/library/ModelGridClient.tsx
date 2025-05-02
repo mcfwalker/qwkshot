@@ -122,20 +122,25 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
           <CardContent className="p-0">
             <Link href={`/viewer/${model.id}`} className="block relative group">
               <div className="aspect-square bg-[#1a1a1a] relative rounded-lg">
+                {/* Remove centered name */}
+                {/* 
                 <div className="absolute inset-0 flex items-center justify-center p-4">
                   <span className="text-[#666666] text-sm font-mono truncate">
                     {model.name}
                   </span>
                 </div>
+                */}
               </div>
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none">
                 <span className="text-white font-semibold">Use Model</span>
               </div>
             </Link>
           </CardContent>
-          <CardFooter className="p-4 flex justify-between">
-            <div className="flex-grow"></div>
-            <div className="flex gap-2">
+          <CardFooter className="p-4 flex justify-between items-center">
+            <span className="text-sm font-medium text-foreground truncate mr-2">
+              {model.name}
+            </span>
+            <div className="flex gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
