@@ -11,7 +11,7 @@ import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -66,12 +66,6 @@ export function SceneControls({
                   className="viewer-slider h-2 disabled:cursor-not-allowed"
                   disabled={isLocked}
                 />
-              </div>
-
-              <div className="space-y-5"> 
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium text-muted-foreground">FOV</Label>
-                </div>
               </div>
 
               <div className="flex items-center justify-between">
