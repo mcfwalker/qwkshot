@@ -47,9 +47,9 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         />
       </div>
     </div>
-    <div className="flex w-full p-4 justify-between items-center self-stretch rounded-lg bg-[#121212] border border-[#353535]">
+    <div className="flex w-full px-4 h-14 justify-between items-center self-stretch rounded-lg bg-[#121212] border border-[#353535]">
       <Label className="text-sm font-medium text-foreground">
-        New Lock Label
+        {props.isLocked ? 'Camera is Locked' : 'Lock Start Position'}
       </Label>
       <div className="w-16">
         <Switch
