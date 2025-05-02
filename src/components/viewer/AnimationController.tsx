@@ -54,6 +54,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   // -------------------------------------
 
   useFrame((state, delta) => {
+    // >>> Add log at the VERY START of useFrame <<<
+    // console.log(`useFrame running: isPlaying=${isPlaying}, commands.length=${commands.length}, cameraRef=${!!cameraRef.current}`);
+
     frameCounterRef.current++;
     
     if (!isPlaying || commands.length === 0 || !cameraRef.current || !controlsRef.current) {

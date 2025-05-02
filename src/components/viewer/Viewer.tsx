@@ -451,6 +451,11 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     toast.info("Floor texture removed."); 
   }, []);
 
+  // >>> Log isPlaying state in Viewer <<<
+  useEffect(() => {
+    console.log(`[Viewer.tsx] isPlaying state changed: ${isPlaying}`);
+  }, [isPlaying]);
+
   return (
     <div className={cn('relative w-full h-full', className)}>
       {/* Reticle Overlay - Placed after Canvas but inside relative container */}
@@ -516,19 +521,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           {/* Environment for realistic lighting */}
           <Environment preset="city" />
 
-          {/* --- Animation Controller (Inside Canvas) --- */}
-          <AnimationController 
-            commands={commands}
-            isPlaying={isPlaying}
-            playbackSpeed={playbackSpeed}
-            cameraRef={cameraRef}
-            controlsRef={controlsRef}
-            onProgressUpdate={setProgress} // Pass setProgress directly
-            onComplete={() => { setIsPlaying(false); setProgress(0); }}
-            currentProgress={progress} // Pass current progress for pause/resume
-            isRecording={isRecording}
-          />
-
           {/* --- Camera Mover --- */}
           {!isPlaying && (
             <CameraMover
@@ -541,6 +533,20 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           )}
 
         </Suspense>
+
+        {/* --- Animation Controller (Moved Outside Suspense) --- */}
+        <AnimationController 
+          commands={commands}
+          isPlaying={isPlaying}
+          playbackSpeed={playbackSpeed}
+          cameraRef={cameraRef}
+          controlsRef={controlsRef}
+          onProgressUpdate={setProgress} // Pass setProgress directly
+          onComplete={() => { setIsPlaying(false); setProgress(0); }}
+          currentProgress={progress} // Pass current progress for pause/resume
+          isRecording={isRecording}
+        />
+
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
