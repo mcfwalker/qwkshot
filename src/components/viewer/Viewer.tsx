@@ -26,6 +26,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { CameraControlsPanel } from './CameraControlsPanel';
 import { useFrame } from '@react-three/fiber';
 import { CenterReticle } from './CenterReticle';
+import { BottomToolbar } from './BottomToolbar';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -394,7 +395,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   };
 
   // Handler for the new reset button
-  const handleClearStageReset = () => {
+  const handleClearStageReset = useCallback(() => {
     if (!isConfirmingReset) {
       setIsConfirmingReset(true);
       toast.warning("Click again to confirm stage reset.");
@@ -440,10 +441,9 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     // 5. Feedback & Confirmation Reset
     toast.success("Stage Reset Successfully");
     setIsConfirmingReset(false); 
-
-    // 6. Navigate back to base viewer route
+    setActiveLeftPanelTab('model'); // <<< Switch back to model tab
     router.push('/viewer');
-  };
+  }, [isConfirmingReset, onModelSelect, setModelId, setLock, setCommands, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]); // Add setActiveLeftPanelTab dependency
 
   // Handler to REMOVE the texture
   const handleRemoveTexture = useCallback(() => {
@@ -658,13 +658,15 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         />
       </div>
 
-      {/* Camera telemetry display - Center Position */}
+      {/* Camera telemetry display - Comment Out Wrapper Div Too */}
+      {/* 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}
         />
       </div>
+      */}
 
       {/* Texture Modal - onSelect prop matches now */}
       <TextureLibraryModal 
@@ -673,31 +675,11 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         onSelect={handleTextureSelect}
       />
 
-      {/* Clear Stage Button - Conditionally Rendered */}
-      {modelUrl && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
-          <Button
-            variant="ghost" // Keep ghost for base structure, override visuals
-            // Remove size="sm"
-            className={cn(
-              // Flex layout (already default for button)
-              // Size & Padding
-              "h-10 px-6 py-0",
-              // Appearance
-              "rounded-full border border-[#444] bg-[#121212]",
-              // Hover state
-              "hover:bg-[#1f1f1f]", 
-              // Text style
-              "text-foreground/80 hover:text-foreground",
-              // Remove backdrop blur if present
-              // Keep default focus/disabled states from variant if needed
-            )}
-            onClick={handleClearStageReset}
-          >
-            {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
-          </Button>
-        </div>
-      )}
+      {/* >>> Render Basic BottomToolbar <<< */}
+      <BottomToolbar 
+        onClearStageReset={handleClearStageReset} 
+        isConfirmingReset={isConfirmingReset}     
+      />
     </div>
   );
 } 

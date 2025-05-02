@@ -30,7 +30,7 @@ export default function RootLayout({
             <main className="min-h-screen">
               {children}
             </main>
-            <DevInfo />
+            {/* <DevInfo /> */}
           </Providers>
         </ErrorBoundary>
       </body>
