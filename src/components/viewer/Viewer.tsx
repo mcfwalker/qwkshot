@@ -27,6 +27,7 @@ import { CameraControlsPanel } from './CameraControlsPanel';
 import { useFrame } from '@react-three/fiber';
 import { CenterReticle } from './CenterReticle';
 import { BottomToolbar } from './BottomToolbar';
+import React from 'react';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -126,7 +127,7 @@ interface ViewerProps {
   onModelSelect: (modelId: string | null) => void;
 }
 
-export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
+function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
   const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>('model');
@@ -194,6 +195,12 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [isLoaded, setIsLoaded] = useState(false);
   const [showTextureModal, setShowTextureModal] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+
+  // --- State for Toolbar Toggles ---
+  // const [showBoundingBox, setShowBoundingBox] = useState(true); 
+  // const [isBoundingBoxLoading, setIsBoundingBoxLoading] = useState(false);
+  const [showReticle, setShowReticle] = useState(true);       
+  const [isReticleLoading, setIsReticleLoading] = useState(false);
 
   // --- Lifted Animation State ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -422,10 +429,23 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     // }
   }, [onModelSelect, setActiveLeftPanelTab]); // Dependencies
 
+  // --- Toggle Handlers with Loading State ---
+  // Removed handleToggleBoundingBox
+
+  const handleToggleReticle = useCallback(() => {
+      if (isReticleLoading) return; 
+      console.log(`[Viewer.tsx] handleToggleReticle called. Current showReticle: ${showReticle}`); 
+      setIsReticleLoading(true);
+      setShowReticle(prev => !prev);
+      setTimeout(() => setIsReticleLoading(false), 1000); // Reduce timeout to 1000ms
+  }, [showReticle, isReticleLoading]); 
+
   return (
     <div className={cn('relative w-full h-full', className)}>
-      {/* Reticle Overlay - Placed after Canvas but inside relative container */}
-      <CenterReticle />
+      {/* Reticle Overlay - Conditionally HIDE via className */}
+      <div className={cn(!showReticle && "hidden")}> 
+          <CenterReticle />
+      </div>
 
       <Canvas
         className="w-full h-full"
@@ -634,7 +654,13 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       <BottomToolbar 
         onClearStageReset={handleClearStageReset} 
         isConfirmingReset={isConfirmingReset}     
+        // >>> Add Reticle Props <<<
+        onToggleReticle={handleToggleReticle} 
+        isReticleVisible={showReticle} 
+        isReticleLoading={isReticleLoading} 
       />
     </div>
   );
-} 
+}
+
+export default React.memo(ViewerComponent); 
