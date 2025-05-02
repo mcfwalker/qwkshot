@@ -260,51 +260,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   }, [pathname, modelUrl, setModelId, setResetCounter]); // ADD pathname to dependencies
 
-  // --- Effect to Add/Remove Bounding Box Helper --- START
-  useEffect(() => {
-    const currentScene = sceneRef.current;
-    let helper: Box3Helper | null = boundingBoxHelper; // Use state variable
-
-    if (modelRef.current && currentScene) {
-      console.log("Viewer: Model ref updated OR adjustment changed, adding/updating bounding box helper.");
-      const box = new Box3().setFromObject(modelRef.current);
-      
-      // Calculate the world position of the wrapper group
-      const wrapperWorldPosition = new Vector3(0, userVerticalAdjustment, 0);
-
-      if (helper) {
-        helper.box = box; // Update box geometry
-        helper.position.copy(wrapperWorldPosition); // Update helper position
-        helper.updateMatrixWorld(true);
-        console.log("Viewer: Updated existing bounding box helper position:", helper.position);
-      } else {
-        helper = new Box3Helper(box, 0xffff00);
-        helper.position.copy(wrapperWorldPosition); // Set initial position
-        setBoundingBoxHelper(helper); // Update state ONLY if creating new
-        currentScene.add(helper);
-        console.log("Viewer: Created new bounding box helper at position:", helper.position);
-      }
-    } else {
-      // Cleanup if model is unloaded
-      if (helper && currentScene) {
-        console.log("Viewer: Model null or ref changed, cleaning up bounding box helper (effect).");
-        currentScene.remove(helper);
-        setBoundingBoxHelper(null);
-        helper = null;
-      }
-    }
-
-    // Cleanup function
-    return () => {
-      if (helper && currentScene) {
-        console.log("Viewer: Cleaning up bounding box helper (in cleanup).");
-        currentScene.remove(helper);
-        setBoundingBoxHelper(null); // Ensure state is cleared on unmount/dependency change
-      }
-    };
-  }, [modelRef.current, userVerticalAdjustment]); // Corrected dependencies
-  // --- Effect to Add/Remove Bounding Box Helper --- END
-
   // --- Camera Movement Handlers (Updated Dependencies) ---
   const handleCameraMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
     if (isLocked || isPlaying) return;
