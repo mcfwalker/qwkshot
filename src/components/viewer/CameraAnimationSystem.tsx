@@ -25,6 +25,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
 import { SerializedVector3 } from '@/types/p2p/shared';
 import { supabase } from '@/lib/supabase';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Import the extracted components
 import { ShotCallerPanel } from './ShotCallerPanel'; 
@@ -213,6 +214,9 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const chunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number | null>(null);
   const progressRef = useRef(0);
+
+  // >>> Add Ref for audio element <<<
+  const chimeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Debug logging for button state
   useEffect(() => {
@@ -463,6 +467,15 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       toast.success('Camera path generated successfully');
       // Switch to playback tab on success
       setActiveTab('playback'); 
+
+      // >>> Play chime sound <<<
+      if (chimeAudioRef.current) {
+        chimeAudioRef.current.play().catch(error => {
+          // Autoplay might be blocked by the browser, log error but don't block UI
+          console.warn("Chime playback failed:", error);
+        });
+      }
+
       // Reset button state *after* switching tab
       setGeneratePathState('initial'); 
 
@@ -874,6 +887,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         </Card>
 
       </TabsPrimitive.Root>
+      {/* >>> Add hidden audio element <<< */}
+      <audio ref={chimeAudioRef} src="/sounds/download_success_chime.mp3" preload="auto" />
     </ErrorBoundary>
   );
 }; 
