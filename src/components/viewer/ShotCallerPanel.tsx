@@ -38,15 +38,6 @@ export interface ShotCallerPanelProps {
 
 export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
   <div className="flex flex-col gap-6 p-0 bg-[#1D1D1D] rounded-xl w-[256px]">
-    <div className="mb-0">
-      <div>
-        <LockButton 
-          isLocked={props.isLocked} 
-          onToggle={props.onLockToggle} 
-          isModelLoaded={props.isModelLoaded}
-        />
-      </div>
-    </div>
     <div className="flex w-full px-4 h-14 justify-between items-center self-stretch rounded-lg bg-[#121212] border border-[#353535]">
       <Label className="text-sm font-medium text-foreground">
         {props.isLocked ? 'Camera is Locked' : 'Lock Start Position'}
