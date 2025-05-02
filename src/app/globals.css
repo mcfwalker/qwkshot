@@ -84,6 +84,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Explicitly set the font family using ONLY the CSS variable */
+    font-family: var(--font-inter-tight);
   }
 }
 

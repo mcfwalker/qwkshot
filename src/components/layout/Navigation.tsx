@@ -49,12 +49,6 @@ export function Navigation() {
           />
         </Link>
         <div className="flex items-center space-x-4">
-          <Link href="/admin" className={cn(
-              "text-sm font-normal transition-colors",
-              pathname.startsWith('/admin') ? "text-white" : "text-[#CFD0D0] hover:text-white"
-          )}>
-            Admin
-          </Link>
           <Link href="/library" className={cn(
               "text-sm font-normal transition-colors",
               pathname.startsWith('/library') ? "text-white" : "text-[#CFD0D0] hover:text-white"
