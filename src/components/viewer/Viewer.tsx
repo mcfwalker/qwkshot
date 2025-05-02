@@ -451,6 +451,22 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     toast.info("Floor texture removed."); 
   }, []);
 
+  // >>> NEW Handler for model selection <<<
+  const handleModelSelected = useCallback((modelId: string | null) => {
+    // Call the original prop function passed from the parent
+    onModelSelect(modelId); 
+
+    // If a valid model was selected, switch to the camera tab
+    if (modelId) {
+      console.log('[Viewer.tsx] Model selected, switching to camera tab.');
+      setActiveLeftPanelTab('camera');
+    }
+    // Optionally, switch back to model tab if model is cleared?
+    // else {
+    //   setActiveLeftPanelTab('model'); 
+    // }
+  }, [onModelSelect, setActiveLeftPanelTab]); // Dependencies
+
   return (
     <div className={cn('relative w-full h-full', className)}>
       {/* Reticle Overlay - Placed after Canvas but inside relative container */}
@@ -575,7 +591,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           {/* Model Tab Content */}
           <TabsPrimitive.Content value="model">
             <ErrorBoundary name="ModelSelectorTabs">
-              <ModelSelectorTabs onModelSelect={onModelSelect} />
+              <ModelSelectorTabs onModelSelect={handleModelSelected} />
             </ErrorBoundary>
           </TabsPrimitive.Content>
 
