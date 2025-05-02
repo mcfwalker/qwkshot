@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Wand2, Loader2, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Switch } from "@/components/ui/switch";
 
 // Copied from CameraAnimationSystem - move to a shared types file?
 type GeneratePathState = 'initial' | 'generating' | 'ready';
@@ -36,12 +37,9 @@ export interface ShotCallerPanelProps {
 }
 
 export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
-  <div>
-    <div className="mb-6">
+  <div className="flex flex-col gap-6 p-0 bg-[#1D1D1D] rounded-xl w-[256px]">
+    <div className="mb-0">
       <div>
-        <div className="mb-4 flex w-8 h-8 px-2 py-0 flex-col justify-center items-center gap-2.5 aspect-square rounded-[20px] border border-[#444444] bg-[#1D1D1D] text-[#CFD0D0] text-xs font-normal">
-          1
-        </div>
         <LockButton 
           isLocked={props.isLocked} 
           onToggle={props.onLockToggle} 
@@ -49,11 +47,37 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => (
         />
       </div>
     </div>
+    <div className="flex w-full p-4 justify-between items-center self-stretch rounded-lg bg-[#121212] border border-[#353535]">
+      <Label className="text-sm font-medium text-foreground">
+        New Lock Label
+      </Label>
+      <div className="w-16">
+        <Switch
+          checked={props.isLocked}
+          onCheckedChange={props.onLockToggle}
+          disabled={!props.isModelLoaded || props.isGenerating}
+          className={cn(
+            // Base & Size/Shape
+            "peer inline-flex h-6 w-[54px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors", 
+            // Focus/Disabled
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
+            // Track Colors (Locked/Checked = Red, Unlocked/Unchecked = Light Grey)
+            "data-[state=checked]:bg-[#F76451]",    
+            "data-[state=unchecked]:bg-[#CFD0D0]", 
+            // Thumb Base Styles
+            "[&>span]:pointer-events-none [&>span]:block [&>span]:h-5 [&>span]:w-5 [&>span]:rounded-full [&>span]:shadow-lg [&>span]:ring-0 [&>span]:transition-transform",
+            // Thumb Position
+            "[&>span]:data-[state=checked]:translate-x-[28px]", // Adjust translation for new width (54px - 20px thumb = 34px total move space? try 28px)
+            "[&>span]:data-[state=unchecked]:translate-x-0",
+            // Thumb Colors (Locked/Checked = Dark Grey/Panel, Unlocked/Unchecked = Medium Grey)
+            "data-[state=checked]:[&>span]:bg-[#1D1D1D]",     
+            "data-[state=unchecked]:[&>span]:bg-[#353535]" 
+          )}
+        />
+      </div>
+    </div>
     <div className="space-y-4 mb-6">
       <div className="space-y-1">
-        <div className="mb-4 flex w-8 h-8 px-2 py-0 flex-col justify-center items-center gap-2.5 aspect-square rounded-[20px] border border-[#444444] bg-[#1D1D1D] text-[#CFD0D0] text-xs font-normal">
-          2
-        </div>
         <div className="space-y-4">
           <Textarea
             placeholder="Describe what kind of shot you want to see..." 
