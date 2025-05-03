@@ -29,6 +29,8 @@ import { CenterReticle } from './CenterReticle';
 import { BottomToolbar } from './BottomToolbar';
 import React from 'react';
 import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
+import { supabase } from '@/lib/supabase';
+import { updateThumbnailUrlAction } from '@/app/actions/thumbnail';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -465,6 +467,167 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       setTimeout(() => setIsReticleLoading(false), 1000); // Reduce timeout to 1000ms
   }, [showReticle, isReticleLoading]); 
 
+  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
+
+  // Handler for capturing thumbnail
+  const handleCaptureThumbnail = useCallback(async () => {
+    if (!modelRef.current || !currentModelId || !canvasRef.current) {
+      toast.error('Cannot capture thumbnail: Model or canvas not available');
+      return;
+    }
+    
+    if (isLocked || isPlaying) {
+      toast.error('Cannot capture thumbnail while scene is locked or playing animation');
+      return;
+    }
+
+    setIsCapturingThumbnail(true);
+    toast.info('Capturing thumbnail...', { duration: 2000 });
+    
+    try {
+      // 1. Get the canvas element from the ref
+      const canvas = canvasRef.current;
+      
+      // Don't try to access WebGL context or renderer directly
+      // Just use toDataURL on the existing canvas
+      console.log('Capturing canvas content...');
+      
+      // 2. Create a data URL from the canvas directly
+      const dataURL = canvas.toDataURL('image/png');
+      
+      // 3. Create a temporary image to load the data URL
+      const img = new Image();
+      img.src = dataURL;
+      
+      // Wait for the image to load
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Failed to load canvas image'));
+        // Set a timeout in case the image never loads
+        setTimeout(() => reject(new Error('Image load timeout')), 5000);
+      });
+      
+      console.log('Image loaded from canvas, dimensions:', img.width, 'x', img.height);
+      
+      // 4. Create a square crop
+      const size = Math.min(img.width, img.height);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = size;
+      tempCanvas.height = size;
+      const ctx = tempCanvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Could not get 2D context for temporary canvas');
+      }
+      
+      // Draw a background (just in case transparency is causing issues)
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, size, size);
+      
+      // Calculate the position to crop from (center of original canvas)
+      const sourceX = (img.width - size) / 2;
+      const sourceY = (img.height - size) / 2;
+      
+      // 5. Draw the cropped region to the temp canvas
+      ctx.drawImage(
+        img,
+        sourceX, sourceY, size, size, // Source rectangle
+        0, 0, size, size // Destination rectangle
+      );
+      
+      // Log the generated image for debugging
+      console.log('Cropped image created, checking for content...');
+      // Check if the image actually has non-black pixels
+      const imageData = ctx.getImageData(0, 0, size, size).data;
+      let hasContent = false;
+      for (let i = 0; i < imageData.length; i += 4) {
+        // If any RGB value is non-zero, we have content
+        if (imageData[i] > 10 || imageData[i+1] > 10 || imageData[i+2] > 10) {
+          hasContent = true;
+          break;
+        }
+      }
+      
+      if (!hasContent) {
+        console.warn('Generated image appears to be all black or empty');
+      } else {
+        console.log('Image has non-black content, proceeding with upload');
+      }
+      
+      // 6. Convert the temp canvas to a PNG blob
+      const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
+        tempCanvas.toBlob(resolve, 'image/png', 0.9);
+      });
+      
+      if (!thumbnailBlob) {
+        throw new Error('Failed to create thumbnail image blob');
+      }
+      
+      // 7. Create a file from the blob
+      const thumbnailFile = new File(
+        [thumbnailBlob], 
+        `${currentModelId}_thumbnail.png`, 
+        { type: 'image/png' }
+      );
+      
+      // 8. Get the user session to get the userId
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('User not authenticated');
+      }
+      const userId = sessionData.session.user.id;
+      
+      // 9. Upload the file to Supabase Storage
+      // Use a simple path structure with just the modelId
+      const thumbnailPath = `${currentModelId}.png`;
+      
+      console.log('Uploading thumbnail to thumbnails bucket:', thumbnailPath);
+      
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('thumbnails') // Use the thumbnails bucket
+        .upload(thumbnailPath, thumbnailFile, {
+          upsert: true,
+          contentType: 'image/png'
+        });
+      
+      if (uploadError) {
+        throw new Error(`Failed to upload thumbnail: ${uploadError.message}`);
+      }
+      
+      console.log('Upload successful:', uploadData);
+      
+      // 10. Get the public URL for the uploaded thumbnail
+      const { data: publicUrlData } = supabase
+        .storage
+        .from('thumbnails')
+        .getPublicUrl(thumbnailPath);
+      
+      const thumbnailUrl = publicUrlData.publicUrl;
+      
+      console.log('Thumbnail URL:', thumbnailUrl);
+      
+      // 11. Update the model record with the thumbnail URL
+      const updateResult = await updateThumbnailUrlAction({
+        modelId: currentModelId,
+        thumbnailUrl
+      });
+      
+      if (!updateResult.success) {
+        throw new Error(`Failed to update thumbnail URL: ${updateResult.error}`);
+      }
+      
+      toast.success('Thumbnail captured and saved successfully');
+    } catch (error) {
+      console.error('Error capturing thumbnail:', error);
+      toast.error('Failed to capture thumbnail', { 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    } finally {
+      setIsCapturingThumbnail(false);
+    }
+  }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
+
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
       {/* Reticle Overlay - Conditionally HIDE via className */}
@@ -681,7 +844,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         // >>> Add Reticle Props <<<
         onToggleReticle={handleToggleReticle} 
         isReticleVisible={showReticle} 
-        isReticleLoading={isReticleLoading} 
+        isReticleLoading={isReticleLoading}
+        // >>> Add Thumbnail Props <<< 
+        onCaptureThumbnail={handleCaptureThumbnail}
+        isModelLoaded={!!modelUrl}
+        isCapturingThumbnail={isCapturingThumbnail}
       />
       
       {/* Clear Scene Confirmation Dialog */}
