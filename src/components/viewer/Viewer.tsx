@@ -572,6 +572,68 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     }
   }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
   
+  const [modelName, setModelName] = useState<string>('model');
+  
+  // Effect to fetch model name when currentModelId changes
+  useEffect(() => {
+    if (currentModelId) {
+      const fetchModelName = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('models')
+            .select('name')
+            .eq('id', currentModelId)
+            .single();
+            
+          if (data && !error) {
+            setModelName(data.name || 'model');
+          }
+        } catch (err) {
+          console.error('Error fetching model name:', err);
+        }
+      };
+      
+      fetchModelName();
+    }
+  }, [currentModelId]);
+  
+  // Function to resize an image to specific dimensions
+  const resizeImage = (base64Image: string, maxWidth: number, maxHeight: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create a canvas to resize the image
+        const canvas = document.createElement('canvas');
+        canvas.width = maxWidth;
+        canvas.height = maxHeight;
+        
+        // Draw the image on the canvas at the reduced size
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        // Draw with black background
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(0, 0, maxWidth, maxHeight);
+        
+        // Draw the image centered
+        ctx.drawImage(img, 0, 0, maxWidth, maxHeight);
+        
+        // Get the reduced image as base64
+        const resizedImage = canvas.toDataURL('image/png');
+        resolve(resizedImage);
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Error loading image for resizing'));
+      };
+      
+      img.src = base64Image;
+    });
+  };
+  
   // Handler for saving thumbnail to server
   const handleSaveThumbnail = useCallback(async () => {
     if (!capturedThumbnail || !currentModelId) {
@@ -582,9 +644,12 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     setIsSavingThumbnail(true);
     
     try {
-      // Use the server action to upload the image
-      console.log('Uploading thumbnail via server action');
-      const result = await uploadThumbnailAction(currentModelId, capturedThumbnail);
+      // Resize the image to a more reasonable size for storage (512x512)
+      const resizedImage = await resizeImage(capturedThumbnail, 512, 512);
+      
+      // Use the server action to upload the resized image
+      console.log('Uploading optimized thumbnail via server action');
+      const result = await uploadThumbnailAction(currentModelId, resizedImage);
       
       if (!result.success) {
         throw new Error(`Failed to upload thumbnail: ${result.error}`);
@@ -614,10 +679,21 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       return;
     }
     
+    // Create a formatted date string for the filename
+    const now = new Date();
+    const formattedDate = now.getFullYear() +
+      ('0' + (now.getMonth() + 1)).slice(-2) +
+      ('0' + now.getDate()).slice(-2) +
+      ('0' + now.getHours()).slice(-2) +
+      ('0' + now.getMinutes()).slice(-2);
+    
+    // Create a sanitized version of the model name (remove characters that aren't good for filenames)
+    const safeModelName = modelName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    
     // Create a temporary link element
     const downloadLink = document.createElement('a');
     downloadLink.href = capturedThumbnail;
-    downloadLink.download = `${currentModelId || 'model'}-thumbnail.png`;
+    downloadLink.download = `${safeModelName}-${formattedDate}.png`;
     
     // Append to the document, click it, and remove it
     document.body.appendChild(downloadLink);
@@ -625,7 +701,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     document.body.removeChild(downloadLink);
     
     toast.success('Thumbnail downloaded');
-  }, [capturedThumbnail, currentModelId]);
+  }, [capturedThumbnail, modelName]);
 
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
