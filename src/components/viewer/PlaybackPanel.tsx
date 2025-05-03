@@ -70,7 +70,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       >
         {/* Left Section (Take Count) */}
         <div className="flex items-center px-4 border-r border-[#353535] flex-shrink-0">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-sm font-medium text-[#CFD0D0]">
             TAKE {hasCommands ? takeCount : 0}
           </span>
         </div>
@@ -79,7 +79,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           <span className={cn(
             "text-sm font-medium block",
             "overflow-hidden whitespace-nowrap text-ellipsis",
-            hasCommands ? "text-foreground" : "text-foreground/60"
+            hasCommands ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
           )}>
             {hasCommands ? (modelName || 'Untitled Shot') : 'No animation loaded'}
           </span>
@@ -127,8 +127,8 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       {/* Apply space-y-5 like SceneControls */}
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-foreground/80">Playback Speed</Label>
-          <span className="text-sm font-medium text-foreground/80">
+          <Label className="text-sm font-medium text-[#CFD0D0]">Playback Speed</Label>
+          <span className="text-sm font-medium text-[#CFD0D0]">
             {displayDuration.toFixed(1)}s 
           </span>
         </div>
@@ -156,7 +156,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             ))}
           </div>
           {/* Min/Max Labels Below Ticks */}
-          <div className="flex justify-between text-xs text-foreground/60">
+          <div className="flex justify-between text-xs text-[#CFD0D0]/60">
             <span>0.25x</span>
             <span>2.0x</span>
           </div>
@@ -173,7 +173,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             "rounded-[10px] border border-[#353535] bg-[#121212]", // Appearance with exact 10px border radius
             "hover:bg-[#353535]", // Hover state
             "disabled:opacity-70 disabled:pointer-events-none disabled:cursor-not-allowed", // Disabled state
-            "text-sm text-foreground/80" // Text style
+            "text-sm text-[#CFD0D0]" // Text style
           )}
           size="default"
           onClick={onCreateNewShot}
