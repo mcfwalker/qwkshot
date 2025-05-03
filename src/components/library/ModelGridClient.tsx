@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Box } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ModelEditDialog } from './ModelEditDialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import Image from 'next/image'
 
 interface ModelGridClientProps {
   initialModels: Model[]
@@ -21,6 +22,7 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   const router = useRouter()
   const [modelToDelete, setModelToDelete] = useState<Model | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
 
   // Refresh models when component mounts or when router is refreshed
   useEffect(() => {
@@ -74,6 +76,10 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
     setModelToDelete(model);
     setIsDeleteDialogOpen(true);
   }
+
+  const handleImageError = (modelId: string) => {
+    setImageErrors(prev => ({ ...prev, [modelId]: true }));
+  };
 
   async function handleDelete() {
     if (!modelToDelete) return;
@@ -151,8 +157,19 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
           <Card key={model.id} className="library-card overflow-hidden bg-[#1D1D1D] border-0">
             <CardContent className="p-0">
               <Link href={`/viewer/${model.id}`} className="block relative group">
-                <div className="aspect-square bg-[#121212] relative rounded-lg">
-                  {/* Placeholder for model thumbnail */}
+                <div className="aspect-square bg-[#121212] relative rounded-lg overflow-hidden">
+                  {model.thumbnail_url && !imageErrors[model.id] ? (
+                    <img
+                      src={model.thumbnail_url}
+                      alt={model.name}
+                      className="w-full h-full object-cover"
+                      onError={() => handleImageError(model.id)}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Box className="h-20 w-20 text-[#353535]" />
+                    </div>
+                  )}
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none">
                   <span className="text-white font-semibold">Use Model</span>

@@ -31,6 +31,7 @@ import React from 'react';
 import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
 import { supabase } from '@/lib/supabase';
 import { updateThumbnailUrlAction } from '@/app/actions/thumbnail';
+import { uploadThumbnailAction } from '@/app/actions/thumbnail';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -485,32 +486,38 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     toast.info('Capturing thumbnail...', { duration: 2000 });
     
     try {
-      // 1. Get the canvas element from the ref
+      // Create a copy of canvas DOM element with rendering
+      const captureCanvas = document.createElement('canvas');
+      const captureContext = captureCanvas.getContext('2d');
+      
+      if (!captureContext) {
+        throw new Error('Could not create capture context');
+      }
+      
+      // Match dimensions of original canvas
       const canvas = canvasRef.current;
+      captureCanvas.width = canvas.width;
+      captureCanvas.height = canvas.height;
       
-      // Don't try to access WebGL context or renderer directly
-      // Just use toDataURL on the existing canvas
-      console.log('Capturing canvas content...');
+      // For debugging purposes
+      console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
       
-      // 2. Create a data URL from the canvas directly
-      const dataURL = canvas.toDataURL('image/png');
-      
-      // 3. Create a temporary image to load the data URL
-      const img = new Image();
-      img.src = dataURL;
-      
-      // Wait for the image to load
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Failed to load canvas image'));
-        // Set a timeout in case the image never loads
-        setTimeout(() => reject(new Error('Image load timeout')), 5000);
+      // Force a render by requesting an animation frame and waiting
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          try {
+            // Draw the existing canvas to our capture canvas
+            captureContext.drawImage(canvas, 0, 0);
+            resolve(true);
+          } catch (e) {
+            console.error('Error during capture:', e);
+            resolve(false);
+          }
+        });
       });
       
-      console.log('Image loaded from canvas, dimensions:', img.width, 'x', img.height);
-      
-      // 4. Create a square crop
-      const size = Math.min(img.width, img.height);
+      // Create a square crop
+      const size = Math.min(captureCanvas.width, captureCanvas.height);
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = size;
       tempCanvas.height = size;
@@ -520,103 +527,42 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         throw new Error('Could not get 2D context for temporary canvas');
       }
       
-      // Draw a background (just in case transparency is causing issues)
-      ctx.fillStyle = '#000000';
+      // Draw a visible background to verify our canvas operations are working
+      ctx.fillStyle = '#444444'; // Grey background, should be visible in final image
       ctx.fillRect(0, 0, size, size);
       
       // Calculate the position to crop from (center of original canvas)
-      const sourceX = (img.width - size) / 2;
-      const sourceY = (img.height - size) / 2;
+      const sourceX = (captureCanvas.width - size) / 2;
+      const sourceY = (captureCanvas.height - size) / 2;
       
-      // 5. Draw the cropped region to the temp canvas
+      // Draw the cropped region to the temp canvas
       ctx.drawImage(
-        img,
+        captureCanvas,
         sourceX, sourceY, size, size, // Source rectangle
         0, 0, size, size // Destination rectangle
       );
       
-      // Log the generated image for debugging
-      console.log('Cropped image created, checking for content...');
-      // Check if the image actually has non-black pixels
-      const imageData = ctx.getImageData(0, 0, size, size).data;
-      let hasContent = false;
-      for (let i = 0; i < imageData.length; i += 4) {
-        // If any RGB value is non-zero, we have content
-        if (imageData[i] > 10 || imageData[i+1] > 10 || imageData[i+2] > 10) {
-          hasContent = true;
-          break;
-        }
+      // For debugging: Draw a colored border and text to verify our canvas is working
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(0, 0, size, size);
+      
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 30px Arial';
+      ctx.fillText('Thumbnail', size/2 - 80, size/2);
+      
+      // Convert the canvas to a base64 data URL
+      const base64Image = tempCanvas.toDataURL('image/png');
+      
+      // Use the server action to upload the image
+      console.log('Uploading thumbnail via server action');
+      const result = await uploadThumbnailAction(currentModelId, base64Image);
+      
+      if (!result.success) {
+        throw new Error(`Failed to upload thumbnail: ${result.error}`);
       }
       
-      if (!hasContent) {
-        console.warn('Generated image appears to be all black or empty');
-      } else {
-        console.log('Image has non-black content, proceeding with upload');
-      }
-      
-      // 6. Convert the temp canvas to a PNG blob
-      const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
-        tempCanvas.toBlob(resolve, 'image/png', 0.9);
-      });
-      
-      if (!thumbnailBlob) {
-        throw new Error('Failed to create thumbnail image blob');
-      }
-      
-      // 7. Create a file from the blob
-      const thumbnailFile = new File(
-        [thumbnailBlob], 
-        `${currentModelId}_thumbnail.png`, 
-        { type: 'image/png' }
-      );
-      
-      // 8. Get the user session to get the userId
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        throw new Error('User not authenticated');
-      }
-      const userId = sessionData.session.user.id;
-      
-      // 9. Upload the file to Supabase Storage
-      // Use a simple path structure with just the modelId
-      const thumbnailPath = `${currentModelId}.png`;
-      
-      console.log('Uploading thumbnail to thumbnails bucket:', thumbnailPath);
-      
-      const { data: uploadData, error: uploadError } = await supabase
-        .storage
-        .from('thumbnails') // Use the thumbnails bucket
-        .upload(thumbnailPath, thumbnailFile, {
-          upsert: true,
-          contentType: 'image/png'
-        });
-      
-      if (uploadError) {
-        throw new Error(`Failed to upload thumbnail: ${uploadError.message}`);
-      }
-      
-      console.log('Upload successful:', uploadData);
-      
-      // 10. Get the public URL for the uploaded thumbnail
-      const { data: publicUrlData } = supabase
-        .storage
-        .from('thumbnails')
-        .getPublicUrl(thumbnailPath);
-      
-      const thumbnailUrl = publicUrlData.publicUrl;
-      
-      console.log('Thumbnail URL:', thumbnailUrl);
-      
-      // 11. Update the model record with the thumbnail URL
-      const updateResult = await updateThumbnailUrlAction({
-        modelId: currentModelId,
-        thumbnailUrl
-      });
-      
-      if (!updateResult.success) {
-        throw new Error(`Failed to update thumbnail URL: ${updateResult.error}`);
-      }
-      
+      console.log('Thumbnail uploaded successfully, URL:', result.url);
       toast.success('Thumbnail captured and saved successfully');
     } catch (error) {
       console.error('Error capturing thumbnail:', error);
