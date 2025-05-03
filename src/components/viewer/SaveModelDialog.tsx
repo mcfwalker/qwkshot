@@ -8,7 +8,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { Loader2 } from 'lucide-react'
@@ -86,6 +87,9 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
       >
         <DialogHeader>
           <DialogTitle>Add Model</DialogTitle>
+          <DialogDescription>
+            Give your model a name to add it to your library.
+          </DialogDescription>
         </DialogHeader>
         
         {isSaving && loadingMessage ? (

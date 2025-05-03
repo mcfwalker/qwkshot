@@ -8,7 +8,8 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogDescription
 } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
 
@@ -50,6 +51,9 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
       <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
         <DialogHeader>
           <DialogTitle>Select Model</DialogTitle>
+          <DialogDescription>
+            Choose a model from your library to load into the viewer.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="py-4">
