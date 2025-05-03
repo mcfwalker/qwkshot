@@ -335,7 +335,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
         <div
           {...getRootProps()}
           className={cn(
-            "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-md border border-dashed border-[#444444] text-center cursor-pointer",
+            "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[10px] border border-dashed border-[#444444] text-center cursor-pointer",
             "transition-colors",
             "hover:border-[#C2F751]",
             isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
@@ -393,7 +393,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
         variant="secondary"
         className={cn(
           "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch",
-          "rounded-md border border-[#353535] bg-[#121212]",
+          "rounded-[10px] border border-[#353535] bg-[#121212]",
           "hover:bg-[#353535]",
           "disabled:opacity-70 disabled:pointer-events-none",
           "text-sm text-foreground/80"

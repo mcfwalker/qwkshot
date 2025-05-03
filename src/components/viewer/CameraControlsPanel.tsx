@@ -96,11 +96,17 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
       {/* Reset Button Section (Remains at bottom) */}
       <Button 
         variant="secondary" 
-        className="w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#353535] border-0 text-foreground/80 shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040] disabled:opacity-70 disabled:pointer-events-none"
+        className={cn(
+          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
+          "rounded-[10px] border border-[#353535] bg-[#121212]",
+          "hover:bg-[#353535]",
+          "disabled:opacity-70 disabled:pointer-events-none",
+          "text-sm text-foreground/80"
+        )}
         disabled={isLocked}
         onClick={handleReset}
       >
-        <Move size={16} /> 
+        Reset Camera
       </Button>
 
       {/* Placeholder for Coordinate Display */}

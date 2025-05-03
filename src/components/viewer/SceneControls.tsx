@@ -80,7 +80,7 @@ export function SceneControlsComponent({
              variant="secondary"
              className={cn(
                 "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
-                "rounded-md border border-[#353535] bg-[#121212]",
+                "rounded-[10px] border border-[#353535] bg-[#121212]",
                 "hover:bg-[#353535]",
                 "disabled:opacity-70 disabled:pointer-events-none",
                 "text-sm text-foreground/80"
