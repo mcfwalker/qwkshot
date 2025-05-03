@@ -45,11 +45,12 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
               className={cn(
                 "flex h-[40px] px-6 justify-center items-center gap-[10px]",
                 "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535]",
+                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
                 "disabled:opacity-70 disabled:pointer-events-none",
                 isReticleVisible 
                   ? "text-[#C2F751]" 
-                  : "text-foreground/80"
+                  : "text-foreground/80",
+                "transition-colors duration-200"
               )}
               onClick={onToggleReticle}
               disabled={isReticleLoading}
@@ -78,12 +79,14 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
               className={cn(
                 "flex h-[40px] px-6 justify-center items-center gap-[10px]",
                 "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535]",
+                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
                 "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80"
+                "text-foreground/80 transition-colors duration-200"
               )}
               onClick={onCaptureThumbnail}
               disabled={!isModelLoaded || isCapturingThumbnail}
+              aria-label="Capture thumbnail"
+              title="Capture thumbnail"
             >
               {isCapturingThumbnail 
                 ? <Loader2 className="h-4 w-4 animate-spin" /> 
@@ -113,9 +116,9 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
               className={cn(
                 "flex h-[40px] px-6 justify-center items-center gap-[10px]",
                 "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535]",
+                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
                 "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80"
+                "text-foreground/80 transition-colors duration-200"
               )}
               onClick={onClearStageReset}
             >

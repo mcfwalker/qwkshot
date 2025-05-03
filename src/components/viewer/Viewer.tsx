@@ -32,6 +32,7 @@ import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
 import { supabase } from '@/lib/supabase';
 import { updateThumbnailUrlAction } from '@/app/actions/thumbnail';
 import { uploadThumbnailAction } from '@/app/actions/thumbnail';
+import { playSound, Sounds } from '@/lib/soundUtils';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -486,6 +487,9 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     toast.info('Capturing thumbnail...', { duration: 2000 });
     
     try {
+      // Play camera shutter sound
+      await playSound(Sounds.CAMERA_SHUTTER, 0.8);
+      
       // Create a copy of canvas DOM element with rendering
       const captureCanvas = document.createElement('canvas');
       const captureContext = captureCanvas.getContext('2d');
@@ -527,8 +531,8 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         throw new Error('Could not get 2D context for temporary canvas');
       }
       
-      // Draw a visible background to verify our canvas operations are working
-      ctx.fillStyle = '#444444'; // Grey background, should be visible in final image
+      // Draw a clean dark background
+      ctx.fillStyle = '#222222'; // Slightly darker than black for better contrast
       ctx.fillRect(0, 0, size, size);
       
       // Calculate the position to crop from (center of original canvas)
@@ -541,15 +545,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         sourceX, sourceY, size, size, // Source rectangle
         0, 0, size, size // Destination rectangle
       );
-      
-      // For debugging: Draw a colored border and text to verify our canvas is working
-      ctx.strokeStyle = '#FF0000';
-      ctx.lineWidth = 10;
-      ctx.strokeRect(0, 0, size, size);
-      
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 30px Arial';
-      ctx.fillText('Thumbnail', size/2 - 80, size/2);
       
       // Convert the canvas to a base64 data URL
       const base64Image = tempCanvas.toDataURL('image/png');
@@ -564,6 +559,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       
       console.log('Thumbnail uploaded successfully, URL:', result.url);
       toast.success('Thumbnail captured and saved successfully');
+      
+      // Navigate to library page after successful capture
+      setTimeout(() => {
+        router.push('/library');
+      }, 1500); // Short delay to show the success message
     } catch (error) {
       console.error('Error capturing thumbnail:', error);
       toast.error('Failed to capture thumbnail', { 

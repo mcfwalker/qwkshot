@@ -2,6 +2,7 @@
 
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 interface UpdateThumbnailArgs {
   modelId: string;
@@ -113,7 +114,7 @@ export async function uploadThumbnailAction(
       return { success: false, error: 'Valid image data is required' };
     }
     
-    // Create Supabase client with server-side auth
+    // Create regular Supabase client for user session checks
     const supabase = createServerActionClient({ cookies });
     
     // Verify the user is authenticated
@@ -125,7 +126,7 @@ export async function uploadThumbnailAction(
     // Verify the user has access to this model
     const { data: model, error: modelError } = await supabase
       .from('models')
-      .select('user_id')
+      .select('user_id, thumbnail_url')
       .eq('id', modelId)
       .single();
       
@@ -137,13 +138,48 @@ export async function uploadThumbnailAction(
       return { success: false, error: 'Not authorized to update this model' };
     }
     
+    // Create a Supabase client with service role for storage operations
+    // This bypasses RLS policies
+    const serviceRoleClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+      {
+        auth: { persistSession: false }
+      }
+    );
+
+    // Clean up old thumbnail if it exists
+    if (model.thumbnail_url) {
+      try {
+        // Extract path from old thumbnail URL
+        const url = new URL(model.thumbnail_url);
+        const pathMatch = url.pathname.match(/\/thumbnails\/([^?]+)/);
+        
+        if (pathMatch && pathMatch[1]) {
+          const oldPath = decodeURIComponent(pathMatch[1]);
+          console.log('Deleting old thumbnail:', oldPath);
+          
+          await serviceRoleClient.storage
+            .from('thumbnails')
+            .remove([oldPath]);
+        }
+      } catch (cleanupError) {
+        // Log but don't fail if cleanup has issues
+        console.warn('Error cleaning up old thumbnail:', cleanupError);
+      }
+    }
+    
     // Convert base64 to binary data using server-side method
     const imageData = base64ToUint8Array(base64Image);
     
-    // Upload the thumbnail to the storage bucket
-    const filePath = `${modelId}.png`;
+    // Upload the thumbnail to the storage bucket using service role
+    // Store in a user-specific folder for organization (userId/modelId.png)
+    const userId = session.user.id;
+    const filePath = `${userId}/${modelId}.png`;
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    console.log('Uploading thumbnail with service role to:', filePath);
+    
+    const { data: uploadData, error: uploadError } = await serviceRoleClient.storage
       .from('thumbnails')
       .upload(filePath, imageData, {
         contentType: 'image/png',
@@ -156,13 +192,13 @@ export async function uploadThumbnailAction(
     }
     
     // Get the public URL of the uploaded thumbnail
-    const { data: publicUrlData } = supabase.storage
+    const { data: publicUrlData } = serviceRoleClient.storage
       .from('thumbnails')
       .getPublicUrl(filePath);
     
     const thumbnailUrl = publicUrlData.publicUrl;
     
-    // Update the model record with the thumbnail URL
+    // Update the model record with the thumbnail URL using the regular client
     const { error: updateError } = await supabase
       .from('models')
       .update({ thumbnail_url: thumbnailUrl })
