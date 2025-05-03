@@ -51,9 +51,9 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       <div className="h-6 w-px bg-[#444] mx-1"></div>
 
       {/* Clear Stage / Reset Button (Uses real props) */}
-      <Button
+       <Button
         variant="secondary"
-        className={cn(
+            className={cn(
           "flex h-[40px] px-6 justify-center items-center gap-[10px]",
           "rounded-[10px] border border-[#353535] bg-[#121212]",
           "hover:bg-[#353535]",
@@ -61,11 +61,11 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
           isConfirmingReset 
             ? "text-red-500 hover:bg-red-500/10" 
             : "text-foreground/80"
-        )}
+            )}
         onClick={onClearStageReset}
       >
         <Icon iconNode={broom} className="h-4 w-4" />
-      </Button>
+       </Button>
     </div>
   );
 };

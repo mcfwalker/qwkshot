@@ -33,7 +33,7 @@ export default function LibraryPage() {
         const fetchedModels = await getModels();
         console.log('Debug: Library Page - Received models from action');
         setModels(fetchedModels);
-      } catch (error) {
+  } catch (error) {
         console.error('Error fetching models in component:', error);
         toast.error('Failed to load models.', { 
           description: error instanceof Error ? error.message : 'Please try again later.'

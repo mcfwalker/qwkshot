@@ -599,7 +599,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 
                 // Listen for any click to try playing sound again
                 document.addEventListener('click', userGesture, { once: true });
-              });
+        });
           }
         } catch (error) {
           console.error("Error playing chime:", error);
