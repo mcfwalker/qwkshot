@@ -33,6 +33,7 @@ import { supabase } from '@/lib/supabase';
 import { updateThumbnailUrlAction } from '@/app/actions/thumbnail';
 import { uploadThumbnailAction } from '@/app/actions/thumbnail';
 import { playSound, Sounds } from '@/lib/soundUtils';
+import { ThumbnailPreviewModal } from './ThumbnailPreviewModal';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -470,6 +471,10 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   }, [showReticle, isReticleLoading]); 
 
   const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
+  const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
+  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
+  const [isSavingThumbnail, setIsSavingThumbnail] = useState(false);
+  const [isThumbnailSaved, setIsThumbnailSaved] = useState(false);
 
   // Handler for capturing thumbnail
   const handleCaptureThumbnail = useCallback(async () => {
@@ -483,8 +488,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       return;
     }
 
+    // Show the modal immediately with loading state
     setIsCapturingThumbnail(true);
-    toast.info('Capturing thumbnail...', { duration: 2000 });
+    setCapturedThumbnail(null);
+    setShowThumbnailPreview(true);
+    setIsThumbnailSaved(false);
     
     try {
       // Play camera shutter sound
@@ -549,30 +557,75 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       // Convert the canvas to a base64 data URL
       const base64Image = tempCanvas.toDataURL('image/png');
       
+      // Store the thumbnail to show in modal
+      setCapturedThumbnail(base64Image);
+      
+    } catch (error) {
+      console.error('Error capturing thumbnail:', error);
+      toast.error('Failed to capture thumbnail', { 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      // Close modal on error
+      setShowThumbnailPreview(false);
+    } finally {
+      setIsCapturingThumbnail(false);
+    }
+  }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
+  
+  // Handler for saving thumbnail to server
+  const handleSaveThumbnail = useCallback(async () => {
+    if (!capturedThumbnail || !currentModelId) {
+      toast.error('Thumbnail data is missing');
+      return;
+    }
+    
+    setIsSavingThumbnail(true);
+    
+    try {
       // Use the server action to upload the image
       console.log('Uploading thumbnail via server action');
-      const result = await uploadThumbnailAction(currentModelId, base64Image);
+      const result = await uploadThumbnailAction(currentModelId, capturedThumbnail);
       
       if (!result.success) {
         throw new Error(`Failed to upload thumbnail: ${result.error}`);
       }
       
       console.log('Thumbnail uploaded successfully, URL:', result.url);
-      toast.success('Thumbnail captured and saved successfully');
+      toast.success('Thumbnail saved successfully');
       
-      // Navigate to library page after successful capture
-      setTimeout(() => {
-        router.push('/library');
-      }, 1500); // Short delay to show the success message
+      // Keep the modal open, user may want to download the image too
+      // Mark as saved to update the UI
+      setIsThumbnailSaved(true);
+      
     } catch (error) {
-      console.error('Error capturing thumbnail:', error);
-      toast.error('Failed to capture thumbnail', { 
+      console.error('Error saving thumbnail:', error);
+      toast.error('Failed to save thumbnail', { 
         description: error instanceof Error ? error.message : 'Unknown error' 
       });
     } finally {
-      setIsCapturingThumbnail(false);
+      setIsSavingThumbnail(false);
     }
-  }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
+  }, [capturedThumbnail, currentModelId]);
+  
+  // Handler for downloading the thumbnail
+  const handleDownloadThumbnail = useCallback(() => {
+    if (!capturedThumbnail) {
+      toast.error('No thumbnail to download');
+      return;
+    }
+    
+    // Create a temporary link element
+    const downloadLink = document.createElement('a');
+    downloadLink.href = capturedThumbnail;
+    downloadLink.download = `${currentModelId || 'model'}-thumbnail.png`;
+    
+    // Append to the document, click it, and remove it
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    toast.success('Thumbnail downloaded');
+  }, [capturedThumbnail, currentModelId]);
 
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
@@ -805,6 +858,18 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           onCancel={() => setShowClearConfirm(false)}
         />
       )}
+
+      {/* Thumbnail Preview Modal */}
+      <ThumbnailPreviewModal
+        isOpen={showThumbnailPreview}
+        onClose={() => setShowThumbnailPreview(false)}
+        thumbnailImage={capturedThumbnail}
+        onSetAsThumbnail={handleSaveThumbnail}
+        onDownload={handleDownloadThumbnail}
+        isProcessing={isSavingThumbnail}
+        isSaved={isThumbnailSaved}
+        isCapturing={isCapturingThumbnail}
+      />
     </div>
   );
 }
