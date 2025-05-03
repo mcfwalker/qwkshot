@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useDropzone } from 'react-dropzone'
 import { toast } from 'sonner'
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog'
 
 interface TextureLibraryModalProps {
   isOpen: boolean
@@ -79,150 +86,132 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[51] w-full max-w-md">
-        <div className="bg-black/90 border border-[#444444] rounded-lg shadow-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[#444444]">
-            <h2 className="text-lg font-light text-white">Select Texture</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-4">
-            {/* Upload Button */}
-            {!showUploadForm && (
-              <Button
-                onClick={() => setShowUploadForm(true)}
-                variant="secondary"
-                className="w-full mb-4"
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
+        <DialogHeader>
+          <DialogTitle>Select Texture</DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4">
+          {/* Upload Form */}
+          {showUploadForm && (
+            <div className="space-y-4 mb-4 p-4 border border-[#353535] rounded-lg bg-[#121212]">
+              <div
+                {...getRootProps()}
+                className={`
+                  border-2 border-dashed rounded-md p-4 text-center cursor-pointer
+                  ${isDragActive ? 'border-[#C2F751] bg-[#C2F751]/5' : 'border-[#444444]'}
+                  ${selectedFile ? 'border-[#C2F751]/50' : ''}
+                `}
               >
-                <Upload className="h-4 w-4 mr-2" />
-                Add New Texture
-              </Button>
-            )}
-
-            {/* Upload Form */}
-            {showUploadForm && (
-              <div className="space-y-4 mb-4 p-4 border border-[#444444] rounded-lg">
-                <div
-                  {...getRootProps()}
-                  className={`
-                    border-2 border-dashed rounded-md p-4 text-center cursor-pointer
-                    ${isDragActive ? 'border-primary bg-primary/5' : 'border-[#444444]'}
-                    ${selectedFile ? 'border-green-500/50' : ''}
-                  `}
-                >
-                  <input {...getInputProps()} />
-                  {selectedFile ? (
-                    <p className="text-sm text-green-500">
-                      {selectedFile.name} selected
-                    </p>
-                  ) : (
-                    <p className="text-sm text-gray-400">
-                      {isDragActive ? 'Drop texture here' : 'Drop texture here or click to browse'}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">
-                    Max size: 512KB, Formats: JPG, PNG, WebP
+                <input {...getInputProps()} />
+                {selectedFile ? (
+                  <p className="text-sm text-[#C2F751]">
+                    {selectedFile.name} selected
                   </p>
-                </div>
+                ) : (
+                  <p className="text-sm text-[#CFD0D0]">
+                    {isDragActive ? 'Drop texture here' : 'Drop texture here or click to browse'}
+                  </p>
+                )}
+                <p className="text-xs text-[#666666] mt-2">
+                  Max size: 512KB, Formats: JPG, PNG, WebP
+                </p>
+              </div>
 
-                <Input
-                  type="text"
-                  placeholder="Texture name"
-                  value={textureName}
-                  onChange={(e) => setTextureName(e.target.value)}
-                  className="bg-transparent border-[#444444]"
-                />
+              <Input
+                type="text"
+                placeholder="Texture name"
+                value={textureName}
+                onChange={(e) => setTextureName(e.target.value)}
+                className="bg-[#121212] border-[#353535]"
+              />
 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleUpload}
-                    disabled={!selectedFile || !textureName.trim() || uploading}
-                    className="flex-1"
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      'Upload'
-                    )}
-                  </Button>
-                  <Button
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || !textureName.trim() || uploading}
+                  className="flex-1 bg-[#CFD0D0] text-[#121212] hover:bg-[#CFD0D0]/90"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    'Upload'
+                  )}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowUploadForm(false)
+                    setSelectedFile(null)
+                    setTextureName('')
+                  }}
+                  variant="secondary"
+                  className="flex-1 bg-[#353535] text-[#CFD0D0] hover:bg-[#444444] border-0"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Texture List */}
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="text-center text-[#CFD0D0] py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                Loading textures...
+              </div>
+            ) : textures.length === 0 ? (
+              <div className="text-center text-[#CFD0D0] py-8">
+                No textures in library
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 p-1">
+                {textures.map((texture) => (
+                  <button
+                    key={texture.id}
                     onClick={() => {
-                      setShowUploadForm(false)
-                      setSelectedFile(null)
-                      setTextureName('')
+                      onSelect(texture)
+                      onClose()
                     }}
-                    variant="secondary"
-                    className="flex-1"
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-[#353535] hover:border-[#C2F751] transition-colors"
                   >
-                    Cancel
-                  </Button>
-                </div>
+                    {/* Thumbnail */}
+                    <img
+                      src={texture.thumbnail_url}
+                      alt={texture.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Overlay with name */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                      <span className="text-xs text-white text-center line-clamp-2">
+                        {texture.name}
+                      </span>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
-
-            {/* Texture List */}
-            <div className="max-h-[60vh] overflow-y-auto">
-              {loading ? (
-                <div className="text-center text-gray-400 py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                  Loading textures...
-                </div>
-              ) : textures.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">
-                  No textures in library
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {textures.map((texture) => (
-                    <button
-                      key={texture.id}
-                      onClick={() => {
-                        onSelect(texture)
-                        onClose()
-                      }}
-                      className="group relative aspect-square overflow-hidden rounded-lg border border-[#444444] hover:border-[#bef264] transition-colors"
-                    >
-                      {/* Thumbnail */}
-                      <img
-                        src={texture.thumbnail_url}
-                        alt={texture.name}
-                        className="w-full h-full object-cover"
-                      />
-                      {/* Overlay with name */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
-                        <span className="text-sm text-white text-center line-clamp-2">
-                          {texture.name}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
+          
+          {/* Add New Texture button at the bottom with 32px gap */}
+          {!showUploadForm && (
+            <div className="mt-8">
+              <Button
+                onClick={() => setShowUploadForm(true)}
+                className="flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full rounded-[10px] border border-[#353535] bg-[#121212] hover:bg-[#353535] disabled:opacity-70 disabled:pointer-events-none text-sm text-foreground/80"
+              >
+                <Upload className="h-4 w-4" />
+                Add New Texture
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   )
 } 

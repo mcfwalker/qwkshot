@@ -32,6 +32,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  // Keep track of analysis state to know when to show loading in the dialog vs overlay
+  const [isAnalyzed, setIsAnalyzed] = useState(false);
   
   // Create refs for the pipeline
   const pipelineRef = useRef<P2PPipeline | null>(null);
@@ -142,11 +144,9 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       throw new Error('Please upload a .glb or .gltf file');
     }
 
+    // Set loading message before any processing
     setLoadingMessage('Analyzing scene...');
-    // Create object URL for analysis but DON'T load it visually yet
-    // const url = URL.createObjectURL(file); 
-    // onModelLoad(url); // <-- REMOVED: Do not load visually until normalization is done
-
+    
     // Run client-side analysis to get metadata for saving
     const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
       file,
@@ -154,8 +154,9 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     });
     
     setCurrentAnalysisMetadata(metadata);
+    setIsAnalyzed(true);
     
-    return true;
+    return metadata; // Return metadata so caller can access it
   };
 
   const handleFile = async (file: File) => {
@@ -164,75 +165,57 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       return;
     }
     
+    // Just set the file and show save dialog first - don't analyze yet
     setCurrentFile(file);
-    setLoading(true);
-    setLoadingMessage('Processing model...');
     setError(null);
-    setCurrentAnalysisMetadata(null);
-
-    try {
-      await withRetry(
-        () => processFile(file),
-        {
-          maxAttempts: 3,
-          onRetry: (error, attempt) => {
-            toast.error('Failed to process model', {
-              description: `Retrying... (Attempt ${attempt}/3)`,
-            });
-          }
-        }
-      );
-      setShowSaveDialog(true);
-    } catch (err) {
-      console.error('Model loading error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load model');
-    }
-  };
-
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-    await handleFile(file);
-  }, [isInitializing]);
-
-  const handleRetry = async () => {
-    if (!currentFile) return;
-    await handleFile(currentFile);
+    setShowSaveDialog(true);
   };
 
   const handleSaveModel = async (name: string) => {
-    if (!currentFile || !currentAnalysisMetadata) {
-        toast.error('File or analysis data missing.');
-        setLoading(false);
-        return;
+    if (!currentFile) {
+      toast.error('No file selected.');
+      return;
     }
 
+    // Now start the processing with the provided name
     setLoading(true);
-    setLoadingMessage('Saving model metadata...');
-    setShowSaveDialog(false);
-
+    setLoadingMessage('Analyzing scene...');
+    
     try {
+      // Process the file first and get metadata
+      const metadata = await processFile(currentFile);
+      
+      if (!metadata) {
+        throw new Error('Failed to analyze model.');
+      }
+      
+      // Set metadata explicitly from the result
+      setCurrentAnalysisMetadata(metadata);
+      setIsAnalyzed(true);
+      
+      // Continue with save process
+      setLoadingMessage('Saving model metadata...');
+
       // --- Get User ID --- 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-          toast.error('Authentication error', { description: userError?.message || 'User not found.' });
-          throw new Error(userError?.message || 'User not found');
+        toast.error('Authentication error', { description: userError?.message || 'User not found.' });
+        throw new Error(userError?.message || 'User not found');
       }
       const userId = user.id;
-      // -------------------
 
       // Call the server action to prepare upload and save metadata
       const prepareResult = await prepareModelUpload({
-          fileName: currentFile.name,
-          fileSize: currentFile.size,
-          fileType: currentFile.type,
-          userId: userId, 
-          modelName: name,
-          initialMetadata: currentAnalysisMetadata 
+        fileName: currentFile.name,
+        fileSize: currentFile.size,
+        fileType: currentFile.type,
+        userId: userId, 
+        modelName: name,
+        initialMetadata: metadata  // Use metadata directly from processFile
       });
 
       if (prepareResult.error || !prepareResult.signedUploadUrl) {
-          throw new Error(prepareResult.error || 'Failed to prepare upload (missing URL).');
+        throw new Error(prepareResult.error || 'Failed to prepare upload (missing URL).');
       }
       
       const { modelId, signedUploadUrl } = prepareResult;
@@ -241,22 +224,22 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       setLoadingMessage('Uploading file...');
       
       const uploadResponse = await fetch(signedUploadUrl, {
-          method: 'PUT',
-          body: currentFile,
-          headers: {
-              // Supabase signed URL uploads might need content-type depending on policy/setup
-              // 'Content-Type': currentFile.type 
-          },
+        method: 'PUT',
+        body: currentFile,
+        headers: {
+          // Supabase signed URL uploads might need content-type depending on policy/setup
+          // 'Content-Type': currentFile.type 
+        },
       });
 
       if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          loggerRef.current.error('Direct storage upload failed using fetch:', { 
-              status: uploadResponse.status, 
-              statusText: uploadResponse.statusText,
-              body: errorText
-           });
-          throw new Error(`Storage upload failed: ${uploadResponse.statusText}`);
+        const errorText = await uploadResponse.text();
+        loggerRef.current.error('Direct storage upload failed using fetch:', { 
+          status: uploadResponse.status, 
+          statusText: uploadResponse.statusText,
+          body: errorText
+        });
+        throw new Error(`Storage upload failed: ${uploadResponse.statusText}`);
       }
 
       loggerRef.current.info('File uploaded successfully to storage via fetch.');
@@ -267,40 +250,36 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       const normalizeResult = await normalizeModelAction(modelId);
       
       if (!normalizeResult.success) {
-          loggerRef.current.warn('Backend normalization failed:', normalizeResult.error);
-          toast.warning('Model saved, but normalization failed.', { description: normalizeResult.error });
+        loggerRef.current.warn('Backend normalization failed:', normalizeResult.error);
+        toast.warning('Model saved, but normalization failed.', { description: normalizeResult.error });
       } else {
-          loggerRef.current.info('Backend normalization completed successfully.');
+        loggerRef.current.info('Backend normalization completed successfully.');
       }
-      // -------------------------------------
 
       // --- Load the final (normalized) model URL for display --- 
       setLoadingMessage('Loading final model...');
       try {
-        // Regardless of normalization success/failure for now, try loading the model from storage
-        // If normalization failed, this loads the original. If succeeded, loads normalized.
-        // Future improvement: Only load if normalization succeeded?
         const finalUrl = await loadModel(modelId); 
         onModelLoad(finalUrl); // Update the viewer with the URL from storage
         loggerRef.current.info('Viewer updated with final model URL from storage.');
       } catch (loadError) {
         loggerRef.current.error('Failed to load final model URL after save/normalization:', loadError);
         toast.error('Failed to display final model', { description: loadError instanceof Error ? loadError.message : undefined });
-        // Fallback? Maybe leave the old URL displayed? For now, just log and error.
       }
-      // -----------------------------------------------------------
 
       const newPath = `/viewer/${modelId}`;
       window.history.pushState({}, '', newPath);
-      toast.success('Model saved successfully!'); // Keep original success message for now
+      toast.success('Model saved successfully!');
 
-    } catch (error) {
-      console.error('Error saving model:', error);
-      toast.error('Failed to save model', { description: error instanceof Error ? error.message : undefined });
+    } catch (err) {
+      console.error('Model processing/saving error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process/save model');
     } finally {
-       setLoading(false);
-       setCurrentFile(null);
-       setCurrentAnalysisMetadata(null);
+      // Now that everything is done, close the dialog
+      setShowSaveDialog(false);
+      setLoading(false);
+      setCurrentFile(null);
+      setCurrentAnalysisMetadata(null);
     }
   };
 
@@ -319,6 +298,17 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     }
   };
 
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+    await handleFile(file);
+  }, [isInitializing]);
+
+  const handleRetry = async () => {
+    if (!currentFile) return;
+    await handleFile(currentFile);
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -328,6 +318,24 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     multiple: false,
     disabled: isInitializing
   });
+
+  // Add an effect to track analysis status with a timeout
+  useEffect(() => {
+    // If we're loading but not yet analyzed, set a timeout
+    if (loading && !isAnalyzed && currentFile) {
+      // Set a shorter timeout to ensure the UI doesn't get stuck
+      const timer = setTimeout(() => {
+        // Force showing the input field after timeout
+        console.log('Analysis timeout reached, showing input field');
+        setIsAnalyzed(true);
+        
+        // Also update loading message to inform user
+        setLoadingMessage('Ready for naming');
+      }, 5000); // Reduced to 5 seconds for better UX
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading, isAnalyzed, currentFile]);
 
   return (
     <>
@@ -386,7 +394,8 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           )}
         </div>
 
-        {loading && <LoadingOverlay message={loadingMessage} />}
+        {/* Completely hide loading overlay when save dialog is shown */}
+        {loading && !showSaveDialog && <LoadingOverlay message={loadingMessage} />}
       </div>
 
       <Button
@@ -409,7 +418,14 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
         <SaveModelPortal
           isOpen={showSaveDialog}
           onSave={handleSaveModel}
-          onClose={() => setShowSaveDialog(false)}
+          onClose={() => {
+            setShowSaveDialog(false);
+            // Clear loading state when user cancels
+            setLoading(false);
+            setCurrentFile(null);
+            setCurrentAnalysisMetadata(null);
+          }}
+          loadingMessage={loading ? loadingMessage : undefined}
         />
       )}
 
