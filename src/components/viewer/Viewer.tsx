@@ -28,6 +28,7 @@ import { useFrame } from '@react-three/fiber';
 import { CenterReticle } from './CenterReticle';
 import { BottomToolbar } from './BottomToolbar';
 import React from 'react';
+import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -195,6 +196,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showTextureModal, setShowTextureModal] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // --- State for Toolbar Toggles ---
   // const [showBoundingBox, setShowBoundingBox] = useState(true); 
@@ -372,12 +374,20 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
   // Handler for the new reset button
   const handleClearStageReset = useCallback(() => {
-    if (!isConfirmingReset) {
-      setIsConfirmingReset(true);
-      toast.warning("Click again to confirm stage reset.");
-      return;
+    // Check if user has opted out of confirmation dialog
+    const dontShowConfirm = localStorage.getItem('dontShowClearConfirm') === 'true';
+    
+    if (dontShowConfirm) {
+      // Skip dialog and perform reset directly
+      performStageReset();
+    } else {
+      // Show confirmation dialog
+      setShowClearConfirm(true);
     }
-
+  }, []);
+  
+  // Function to perform the actual reset
+  const performStageReset = useCallback(() => {
     console.log("PERFORMING STAGE RESET");
 
     // Use a functional update to ensure we have the latest helper state
@@ -414,12 +424,13 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     // 4. Trigger Child Reset
     setResetCounter(prev => prev + 1); 
 
-    // 5. Feedback & Confirmation Reset
+    // 5. Feedback & Reset Confirmation State
     toast.success("Stage Reset Successfully");
-    setIsConfirmingReset(false); 
-    setActiveLeftPanelTab('model'); // <<< Switch back to model tab
+    setIsConfirmingReset(false);
+    setShowClearConfirm(false);
+    setActiveLeftPanelTab('model'); // Switch back to model tab
     router.push('/viewer');
-  }, [isConfirmingReset, onModelSelect, setModelId, setLock, setCommands, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]); // Add setActiveLeftPanelTab dependency
+  }, [onModelSelect, setModelId, setLock, setCommands, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]);
 
   // Handler to REMOVE the texture
   const handleRemoveTexture = useCallback(() => {
@@ -667,12 +678,20 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       {/* >>> Render Basic BottomToolbar <<< */}
       <BottomToolbar 
         onClearStageReset={handleClearStageReset} 
-        isConfirmingReset={isConfirmingReset}     
         // >>> Add Reticle Props <<<
         onToggleReticle={handleToggleReticle} 
         isReticleVisible={showReticle} 
         isReticleLoading={isReticleLoading} 
       />
+      
+      {/* Clear Scene Confirmation Dialog */}
+      {showClearConfirm && (
+        <ClearSceneConfirmPortal
+          isOpen={showClearConfirm}
+          onConfirm={performStageReset}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
     </div>
   );
 }

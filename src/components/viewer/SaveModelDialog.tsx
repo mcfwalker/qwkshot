@@ -23,7 +23,7 @@ interface SaveModelDialogProps {
 export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: SaveModelDialogProps) {
   const [name, setName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [savingStage, setSavingStage] = useState('Save Model')
+  const [savingStage, setSavingStage] = useState('Add Model')
 
   // Update saving stage based on loading message
   useEffect(() => {
@@ -42,7 +42,7 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
         setSavingStage('Saving...');
       }
     } else if (!isSaving) {
-      setSavingStage('Save Model');
+      setSavingStage('Add Model');
     }
   }, [isSaving, loadingMessage]);
 
@@ -55,7 +55,7 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
     } catch (error) {
       console.error('Failed to save model:', error)
       setIsSaving(false)
-      setSavingStage('Save Model');
+      setSavingStage('Add Model');
     }
   }
 
@@ -85,7 +85,7 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
         }}
       >
         <DialogHeader>
-          <DialogTitle>Save Model</DialogTitle>
+          <DialogTitle>Add Model</DialogTitle>
         </DialogHeader>
         
         {isSaving && loadingMessage ? (
@@ -107,7 +107,7 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
             <div className="py-4">
               <Input
                 type="text"
-                placeholder="Name your model..."
+                placeholder="Give your model a name..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={handleKeyDown}

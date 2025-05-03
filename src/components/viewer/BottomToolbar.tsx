@@ -13,7 +13,6 @@ interface BottomToolbarProps {
   isReticleVisible?: boolean;
   isReticleLoading?: boolean;
   onClearStageReset: () => void;
-  isConfirmingReset: boolean;
 }
 
 const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
@@ -21,7 +20,6 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
   isReticleVisible = true,
   isReticleLoading = false,
   onClearStageReset,
-  isConfirmingReset,
 }) => {
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 p-2 rounded-xl bg-[#1D1D1D]">
@@ -50,18 +48,16 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       {/* Separator (Restore if desired) */}
       <div className="h-6 w-px bg-[#444] mx-1"></div>
 
-      {/* Clear Stage / Reset Button (Uses real props) */}
+      {/* Clear Stage / Reset Button */}
        <Button
         variant="secondary"
-            className={cn(
+        className={cn(
           "flex h-[40px] px-6 justify-center items-center gap-[10px]",
           "rounded-[10px] border border-[#353535] bg-[#121212]",
           "hover:bg-[#353535]",
           "disabled:opacity-70 disabled:pointer-events-none",
-          isConfirmingReset 
-            ? "text-red-500 hover:bg-red-500/10" 
-            : "text-foreground/80"
-            )}
+          "text-foreground/80"
+        )}
         onClick={onClearStageReset}
       >
         <Icon iconNode={broom} className="h-4 w-4" />
