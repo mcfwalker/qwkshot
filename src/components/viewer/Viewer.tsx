@@ -26,6 +26,9 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { CameraControlsPanel } from './CameraControlsPanel';
 import { useFrame } from '@react-three/fiber';
 import { CenterReticle } from './CenterReticle';
+import { BottomToolbar } from './BottomToolbar';
+import React from 'react';
+import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -125,10 +128,10 @@ interface ViewerProps {
   onModelSelect: (modelId: string | null) => void;
 }
 
-export default function Viewer({ className, modelUrl, onModelSelect }: ViewerProps) {
+function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
-  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>('model');
+  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>(modelUrl ? 'camera' : 'model');
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -193,6 +196,13 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   const [isLoaded, setIsLoaded] = useState(false);
   const [showTextureModal, setShowTextureModal] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // --- State for Toolbar Toggles ---
+  // const [showBoundingBox, setShowBoundingBox] = useState(true); 
+  // const [isBoundingBoxLoading, setIsBoundingBoxLoading] = useState(false);
+  const [showReticle, setShowReticle] = useState(true);       
+  const [isReticleLoading, setIsReticleLoading] = useState(false);
 
   // --- Lifted Animation State ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -219,6 +229,20 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
 
   // State for tracking active camera movement directions
   const [movementDirection, setMovementDirection] = useState<MovementDirection>({ up: false, down: false, left: false, right: false });
+
+  // Use useRef to track previous model URL value
+  const prevModelUrlRef = useRef<string | null>(null);
+
+  // Effect to set the active tab to camera when a model is loaded
+  useEffect(() => {
+    // If we go from no model to having a model, switch to camera tab
+    if (!prevModelUrlRef.current && modelUrl) {
+      setActiveLeftPanelTab('camera');
+    }
+    
+    // Update previous value ref
+    prevModelUrlRef.current = modelUrl;
+  }, [modelUrl]);
 
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
@@ -258,51 +282,6 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     }); 
 
   }, [pathname, modelUrl, setModelId, setResetCounter]); // ADD pathname to dependencies
-
-  // --- Effect to Add/Remove Bounding Box Helper --- START
-  useEffect(() => {
-    const currentScene = sceneRef.current;
-    let helper: Box3Helper | null = boundingBoxHelper; // Use state variable
-
-    if (modelRef.current && currentScene) {
-      console.log("Viewer: Model ref updated OR adjustment changed, adding/updating bounding box helper.");
-      const box = new Box3().setFromObject(modelRef.current);
-      
-      // Calculate the world position of the wrapper group
-      const wrapperWorldPosition = new Vector3(0, userVerticalAdjustment, 0);
-
-      if (helper) {
-        helper.box = box; // Update box geometry
-        helper.position.copy(wrapperWorldPosition); // Update helper position
-        helper.updateMatrixWorld(true);
-        console.log("Viewer: Updated existing bounding box helper position:", helper.position);
-      } else {
-        helper = new Box3Helper(box, 0xffff00);
-        helper.position.copy(wrapperWorldPosition); // Set initial position
-        setBoundingBoxHelper(helper); // Update state ONLY if creating new
-        currentScene.add(helper);
-        console.log("Viewer: Created new bounding box helper at position:", helper.position);
-      }
-    } else {
-      // Cleanup if model is unloaded
-      if (helper && currentScene) {
-        console.log("Viewer: Model null or ref changed, cleaning up bounding box helper (effect).");
-        currentScene.remove(helper);
-        setBoundingBoxHelper(null);
-        helper = null;
-      }
-    }
-
-    // Cleanup function
-    return () => {
-      if (helper && currentScene) {
-        console.log("Viewer: Cleaning up bounding box helper (in cleanup).");
-        currentScene.remove(helper);
-        setBoundingBoxHelper(null); // Ensure state is cleared on unmount/dependency change
-      }
-    };
-  }, [modelRef.current, userVerticalAdjustment]); // Corrected dependencies
-  // --- Effect to Add/Remove Bounding Box Helper --- END
 
   // --- Camera Movement Handlers (Updated Dependencies) ---
   const handleCameraMove = useCallback((direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
@@ -394,13 +373,21 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
   };
 
   // Handler for the new reset button
-  const handleClearStageReset = () => {
-    if (!isConfirmingReset) {
-      setIsConfirmingReset(true);
-      toast.warning("Click again to confirm stage reset.");
-      return;
+  const handleClearStageReset = useCallback(() => {
+    // Check if user has opted out of confirmation dialog
+    const dontShowConfirm = localStorage.getItem('dontShowClearConfirm') === 'true';
+    
+    if (dontShowConfirm) {
+      // Skip dialog and perform reset directly
+      performStageReset();
+    } else {
+      // Show confirmation dialog
+      setShowClearConfirm(true);
     }
-
+  }, []);
+  
+  // Function to perform the actual reset
+  const performStageReset = useCallback(() => {
     console.log("PERFORMING STAGE RESET");
 
     // Use a functional update to ensure we have the latest helper state
@@ -437,13 +424,13 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     // 4. Trigger Child Reset
     setResetCounter(prev => prev + 1); 
 
-    // 5. Feedback & Confirmation Reset
+    // 5. Feedback & Reset Confirmation State
     toast.success("Stage Reset Successfully");
-    setIsConfirmingReset(false); 
-
-    // 6. Navigate back to base viewer route
+    setIsConfirmingReset(false);
+    setShowClearConfirm(false);
+    setActiveLeftPanelTab('model'); // Switch back to model tab
     router.push('/viewer');
-  };
+  }, [onModelSelect, setModelId, setLock, setCommands, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]);
 
   // Handler to REMOVE the texture
   const handleRemoveTexture = useCallback(() => {
@@ -451,13 +438,42 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
     toast.info("Floor texture removed."); 
   }, []);
 
+  // >>> NEW Handler for model selection <<<
+  const handleModelSelected = useCallback((modelId: string | null) => {
+    // Call the original prop function passed from the parent
+    onModelSelect(modelId); 
+
+    // If a valid model was selected, switch to the camera tab
+    if (modelId) {
+      console.log('[Viewer.tsx] Model selected, switching to camera tab.');
+      setActiveLeftPanelTab('camera');
+    }
+    // Optionally, switch back to model tab if model is cleared?
+    // else {
+    //   setActiveLeftPanelTab('model'); 
+    // }
+  }, [onModelSelect, setActiveLeftPanelTab]); // Dependencies
+
+  // --- Toggle Handlers with Loading State ---
+  // Removed handleToggleBoundingBox
+
+  const handleToggleReticle = useCallback(() => {
+      if (isReticleLoading) return; 
+      console.log(`[Viewer.tsx] handleToggleReticle called. Current showReticle: ${showReticle}`); 
+      setIsReticleLoading(true);
+      setShowReticle(prev => !prev);
+      setTimeout(() => setIsReticleLoading(false), 1000); // Reduce timeout to 1000ms
+  }, [showReticle, isReticleLoading]); 
+
   return (
-    <div className={cn('relative w-full h-full', className)}>
-      {/* Reticle Overlay - Placed after Canvas but inside relative container */}
-      <CenterReticle />
+    <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
+      {/* Reticle Overlay - Conditionally HIDE via className */}
+      <div className={cn(!showReticle && "hidden")}> 
+          <CenterReticle />
+      </div>
 
       <Canvas
-        className="w-full h-full"
+        className="w-full h-full min-h-screen"
         ref={canvasRef}
         shadows
         camera={{ position: [5, 5, 5], fov }}
@@ -540,21 +556,21 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
-      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Reverted to original narrower width */} 
+      <div className="absolute top-[96px] left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Changed from top-16 to top-[96px] */} 
         {/* --- NEW Tabbed Panel for Model/Camera --- */}
         <TabsPrimitive.Root 
             value={activeLeftPanelTab}
             onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
             className="flex flex-col gap-4" // Use flex-col within the tab root
         >
-          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
             <TabsPrimitive.Trigger 
               value="model" 
               className={cn(
                   "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
               )}
             >
               MODEL
@@ -565,7 +581,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
                   "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
               )}
             >
               CAMERA
@@ -575,7 +591,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
           {/* Model Tab Content */}
           <TabsPrimitive.Content value="model">
             <ErrorBoundary name="ModelSelectorTabs">
-              <ModelSelectorTabs onModelSelect={onModelSelect} />
+              <ModelSelectorTabs onModelSelect={handleModelSelected} />
             </ErrorBoundary>
           </TabsPrimitive.Content>
 
@@ -605,7 +621,7 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
       </div>
 
       {/* Camera Animation System */}
-      <div className="absolute top-16 right-4 z-10">
+      <div className="absolute top-[96px] right-4 z-10"> {/* Changed from top-16 to top-[96px] */}
         <CameraAnimationSystem
           // PASS modelId as prop
           modelId={currentModelId}
@@ -642,13 +658,15 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         />
       </div>
 
-      {/* Camera telemetry display - Center Position */}
+      {/* Camera telemetry display - Comment Out Wrapper Div Too */}
+      {/* 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
         <CameraTelemetry
           cameraRef={cameraRef}
           controlsRef={controlsRef}
         />
       </div>
+      */}
 
       {/* Texture Modal - onSelect prop matches now */}
       <TextureLibraryModal 
@@ -657,31 +675,25 @@ export default function Viewer({ className, modelUrl, onModelSelect }: ViewerPro
         onSelect={handleTextureSelect}
       />
 
-      {/* Clear Stage Button - Conditionally Rendered */}
-      {modelUrl && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
-          <Button
-            variant="ghost" // Keep ghost for base structure, override visuals
-            // Remove size="sm"
-            className={cn(
-              // Flex layout (already default for button)
-              // Size & Padding
-              "h-10 px-6 py-0",
-              // Appearance
-              "rounded-full border border-[#444] bg-[#121212]",
-              // Hover state
-              "hover:bg-[#1f1f1f]", 
-              // Text style
-              "text-foreground/80 hover:text-foreground",
-              // Remove backdrop blur if present
-              // Keep default focus/disabled states from variant if needed
-            )}
-            onClick={handleClearStageReset}
-          >
-            {isConfirmingReset ? "Confirm Reset?" : "Clear Stage & Reset"}
-          </Button>
-        </div>
+      {/* >>> Render Basic BottomToolbar <<< */}
+      <BottomToolbar 
+        onClearStageReset={handleClearStageReset} 
+        // >>> Add Reticle Props <<<
+        onToggleReticle={handleToggleReticle} 
+        isReticleVisible={showReticle} 
+        isReticleLoading={isReticleLoading} 
+      />
+      
+      {/* Clear Scene Confirmation Dialog */}
+      {showClearConfirm && (
+        <ClearSceneConfirmPortal
+          isOpen={showClearConfirm}
+          onConfirm={performStageReset}
+          onCancel={() => setShowClearConfirm(false)}
+        />
       )}
     </div>
   );
-} 
+}
+
+export default React.memo(ViewerComponent); 

@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Mouse } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
@@ -18,12 +18,12 @@ export interface CameraControlsPanelProps {
   onCameraReset?: () => void;
 }
 
-export function CameraControlsPanel({
+export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = ({
   fov,
   onFovChange,
   onCameraMove = () => console.warn('onCameraMove not implemented'), // Default dummy handlers
   onCameraReset = () => console.warn('onCameraReset not implemented'),
-}: CameraControlsPanelProps) {
+}: CameraControlsPanelProps) => {
   const { isLocked } = useViewerStore(); // Needed to disable controls when locked
 
   const handleFovChange = (values: number[]) => {
@@ -52,8 +52,31 @@ export function CameraControlsPanel({
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col w-full p-4 gap-6">
-      {/* FOV Slider Section */}
+    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
+      
+      {/* Instructions Section (Moved Up) */}
+      <div className="flex w-[168px] p-4 flex-col justify-center items-center gap-4 rounded-lg bg-[#121212]">
+        {/* Mouse Instructions */}
+        <div className="flex items-center gap-3 self-stretch">
+          <Mouse className="h-5 w-5 text-foreground/80" />
+          <div className="flex flex-col">
+            <span className="text-sm text-foreground">Orbit & zoom</span>
+            <span className="text-sm text-muted-foreground">with mouse</span>
+          </div>
+        </div>
+        {/* Divider */}
+        <div className="h-px w-full bg-[#353535]"></div>
+        {/* Keyboard Instructions */}
+        <div className="flex items-center gap-3 self-stretch">
+          <Move className="h-5 w-5 text-foreground/80" /> 
+          <div className="flex flex-col">
+            <span className="text-sm text-foreground">Move with</span>
+            <span className="text-sm text-muted-foreground">arrow keys</span>
+          </div>
+        </div>
+      </div>
+
+      {/* FOV Slider Section (Moved Down) */}
       <div className="space-y-5"> 
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-muted-foreground">Field Of View</Label>
@@ -70,70 +93,20 @@ export function CameraControlsPanel({
         />
       </div>
 
-      {/* D-Pad Section */}
-      <div 
-        className="flex flex-col items-center justify-center gap-[18px] self-stretch p-4 rounded-lg bg-[#121212]"
-      >
-        {/* D-Pad Buttons - Using Grid for layout */}
-        <div className="grid grid-cols-3 gap-1 w-[124px]"> {/* Adjust width/gap as needed */} 
-          <div /> {/* Spacer */}
-          <Button 
-            variant="secondary" 
-            size="icon" 
-            className="dpad-button" 
-            disabled={isLocked}
-            onPointerDown={() => handleMove('up', true)}
-            onPointerUp={() => handleMove('up', false)}
-            onPointerLeave={() => handleMove('up', false)}
-          >
-            <ChevronUp size={16} />
-          </Button>
-          <div /> {/* Spacer */}
-          <Button 
-            variant="secondary" 
-            size="icon" 
-            className="dpad-button" 
-            disabled={isLocked}
-            onPointerDown={() => handleMove('left', true)}
-            onPointerUp={() => handleMove('left', false)}
-            onPointerLeave={() => handleMove('left', false)}
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <Button 
-            variant="secondary" 
-            size="icon" 
-            className="dpad-button" 
-            disabled={isLocked}
-            onPointerDown={() => handleMove('down', true)}
-            onPointerUp={() => handleMove('down', false)}
-            onPointerLeave={() => handleMove('down', false)}
-          >
-            <ChevronDown size={16} />
-          </Button>
-          <Button 
-            variant="secondary" 
-            size="icon" 
-            className="dpad-button" 
-            disabled={isLocked}
-            onPointerDown={() => handleMove('right', true)}
-            onPointerUp={() => handleMove('right', false)}
-            onPointerLeave={() => handleMove('right', false)}
-          >
-            <ChevronRight size={16} />
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">Tip: Arrow keys work too!</p>
-      </div>
-
-      {/* Reset Button Section */}
+      {/* Reset Button Section (Remains at bottom) */}
       <Button 
         variant="secondary" 
-        className="w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#353535] border-0 text-foreground/80 shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)] hover:bg-[#404040] disabled:opacity-70 disabled:pointer-events-none"
+        className={cn(
+          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
+          "rounded-[10px] border border-[#353535] bg-[#121212]",
+          "hover:bg-[#353535]",
+          "disabled:opacity-70 disabled:pointer-events-none",
+          "text-sm text-foreground/80"
+        )}
         disabled={isLocked}
         onClick={handleReset}
       >
-        <Move size={16} /> {/* Reset Camera Icon */}
+        Reset Camera
       </Button>
 
       {/* Placeholder for Coordinate Display */}
@@ -142,6 +115,8 @@ export function CameraControlsPanel({
     </Card>
   );
 }
+
+export const CameraControlsPanel = React.memo(CameraControlsPanelComponent);
 
 // Add this to your globals.css or a relevant CSS file if needed:
 /* 

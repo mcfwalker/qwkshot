@@ -10,10 +10,7 @@ interface ModelSelectorTabsProps {
 
 export function ModelSelectorTabs({ onModelSelect }: ModelSelectorTabsProps) {
   return (
-    <Card className="bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col w-[200px] p-4 gap-6">
-      <CardHeader className="p-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground uppercase">MODEL</CardTitle>
-      </CardHeader>
+    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-[200px] p-4 gap-6">
       <ErrorBoundary name="ModelLoader">
         <ModelLoader onModelLoad={onModelSelect} />
       </ErrorBoundary>

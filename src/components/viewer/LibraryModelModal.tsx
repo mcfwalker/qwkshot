@@ -1,10 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
 import { Model } from '@/lib/supabase'
 import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog'
+import { Loader2 } from 'lucide-react'
 
 interface LibraryModelModalProps {
   isOpen: boolean
@@ -39,36 +46,27 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[51] w-full max-w-md">
-        <div className="bg-black/90 border border-[#444444] rounded-lg shadow-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[#444444]">
-            <h2 className="text-lg font-light text-white">Select Model</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-4 max-h-[60vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
+        <DialogHeader>
+          <DialogTitle>Select Model</DialogTitle>
+          <DialogDescription>
+            Choose a model from your library to load into the viewer.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="py-4">
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
             {loading ? (
-              <div className="text-center text-gray-400 py-8">Loading...</div>
+              <div className="text-center text-[#CFD0D0] py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                Loading models...
+              </div>
             ) : models.length === 0 ? (
-              <div className="text-center text-gray-400 py-8">No models in library</div>
+              <div className="text-center text-[#CFD0D0] py-8">
+                No models in library
+              </div>
             ) : (
               <div className="space-y-2">
                 {models.map((model) => (
@@ -78,17 +76,17 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
                       onSelect(model)
                       onClose()
                     }}
-                    className="w-full text-left p-3 rounded-md hover:bg-white/5 transition-colors group"
+                    className="w-full text-left p-3 rounded-md bg-[#121212] border border-[#353535] hover:border-[#C2F751] transition-colors group"
                   >
-                    <div className="font-medium text-white group-hover:text-[#bef264] transition-colors">
+                    <div className="font-medium text-[#CFD0D0] group-hover:text-[#C2F751] transition-colors">
                       {model.name}
                     </div>
                     {model.description && (
-                      <div className="text-sm text-gray-400 mt-1">
+                      <div className="text-sm text-[#666666] mt-1">
                         {model.description}
                       </div>
                     )}
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-[#666666] mt-1">
                       Added {new Date(model.created_at).toLocaleDateString()}
                     </div>
                   </button>
@@ -97,7 +95,7 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
             )}
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   )
 } 

@@ -39,21 +39,16 @@ export function Navigation() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 w-full h-14 bg-[#121212]">
+    <nav className="sticky top-0 z-[999] w-full h-14 bg-transparent">
       <div className="flex h-full items-center justify-between px-4">
         <Link href="/viewer" className="flex items-center gap-2 group">
-          <div className="h-6 w-6 rounded-md bg-[#C2F751] group-hover:opacity-90 transition-opacity"></div>
-          <span className="font-semibold text-sm text-[#CFD0D0] group-hover:text-white transition-colors">
-            Qwk Shot
-          </span>
+          <img 
+            src="/images/logo.svg" 
+            alt="Qwk Shot Logo" 
+            className="h-5 w-auto group-hover:opacity-90 transition-opacity"
+          />
         </Link>
         <div className="flex items-center space-x-4">
-          <Link href="/admin" className={cn(
-              "text-sm font-normal transition-colors",
-              pathname.startsWith('/admin') ? "text-white" : "text-[#CFD0D0] hover:text-white"
-          )}>
-            Admin
-          </Link>
           <Link href="/library" className={cn(
               "text-sm font-normal transition-colors",
               pathname.startsWith('/library') ? "text-white" : "text-[#CFD0D0] hover:text-white"

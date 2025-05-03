@@ -25,6 +25,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
 import { SerializedVector3 } from '@/types/p2p/shared';
 import { supabase } from '@/lib/supabase';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Import the extracted components
 import { ShotCallerPanel } from './ShotCallerPanel'; 
@@ -214,6 +215,100 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const startTimeRef = useRef<number | null>(null);
   const progressRef = useRef(0);
 
+  // >>> Add Ref for audio element <<<
+  const chimeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lockAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Add a new ref for Web Audio context
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+
+  // Initialize audio elements with improved handling
+  useEffect(() => {
+    // Create and preload the chime audio element
+    if (!chimeAudioRef.current) {
+      const chimeAudio = new Audio();
+      chimeAudio.addEventListener('error', (e) => {
+        console.error('Error loading chime audio:', e);
+      });
+      chimeAudio.src = '/sounds/download_success_chime.mp3';
+      chimeAudio.preload = 'auto';
+      chimeAudio.volume = 1.0;
+      chimeAudioRef.current = chimeAudio;
+      chimeAudio.load();
+    }
+    
+    // Create and preload the lock audio element
+    if (!lockAudioRef.current) {
+      const lockAudio = new Audio();
+      lockAudio.addEventListener('error', (e) => {
+        console.error('Error loading lock audio:', e);
+      });
+      lockAudio.src = '/sounds/lock_screen.mp3';
+      lockAudio.preload = 'auto';
+      lockAudio.volume = 1.0;
+      lockAudioRef.current = lockAudio;
+      lockAudio.load();
+    }
+    
+    return () => {
+      if (chimeAudioRef.current) {
+        chimeAudioRef.current.pause();
+        chimeAudioRef.current = null;
+      }
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Initialize Web Audio API as an additional fallback
+  useEffect(() => {
+    // Only initialize if Web Audio API is supported
+    if (window.AudioContext || (window as any).webkitAudioContext) {
+      try {
+        // Create audio context
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass();
+        
+        // Load chime sound file as ArrayBuffer
+        fetch('/sounds/download_success_chime.mp3')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.arrayBuffer();
+          })
+          .then(arrayBuffer => {
+            if (audioContextRef.current) {
+              return audioContextRef.current.decodeAudioData(arrayBuffer);
+            }
+            throw new Error('Audio context not available');
+          })
+          .then(audioBuffer => {
+            audioBufferRef.current = audioBuffer;
+          })
+          .catch(error => {
+            console.error('Error setting up Web Audio API:', error);
+          });
+      } catch (error) {
+        console.error('Failed to initialize Web Audio API:', error);
+      }
+    }
+    
+    // Cleanup
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(err => {
+          console.error('Error closing audio context:', err);
+        });
+        audioContextRef.current = null;
+      }
+      audioBufferRef.current = null;
+    };
+  }, []);
+
   // Debug logging for button state
   useEffect(() => {
     const buttonState = {
@@ -286,7 +381,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     }
 
     if (!controlsRef?.current) {
-      console.error('Controls reference is not available');
+      console.error('Camera controls not initialized properly');
       toast.error('Camera controls not initialized properly');
       return;
     }
@@ -304,8 +399,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         throw new Error('No model ID found in URL');
       }
 
-      console.log('Fetching model details for ID:', modelId);
-
       // Fetch model name from Supabase
       const { data: modelData, error: modelError } = await supabase
         .from('models')
@@ -322,7 +415,6 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         throw new Error('Invalid model data received');
       }
 
-      console.log('Model data received:', modelData);
       setModelName(modelData.name);
       setTakeCount(prev => prev + 1);
 
@@ -461,8 +553,64 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       
       onGeneratePath(newCommands, totalDuration);
       toast.success('Camera path generated successfully');
+      
+      console.log('🔍 Camera path generation successful, commands:', newCommands.length);
+      
       // Switch to playback tab on success
       setActiveTab('playback'); 
+
+      // >>> Play chime sound with improved error handling <<<
+      if (chimeAudioRef.current) {
+        try {
+          // Reset the audio to the beginning in case it was played before
+          chimeAudioRef.current.currentTime = 0;
+          
+          // Play the audio with better error handling
+          const playPromise = chimeAudioRef.current.play();
+          
+          // Modern browsers return a promise from play()
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                // Sound played successfully
+              })
+              .catch(error => {
+                console.warn("Could not play chime sound:", error);
+                
+                // Use Web Audio API as fallback
+                if (audioContextRef.current && audioBufferRef.current) {
+                  try {
+                    const source = audioContextRef.current.createBufferSource();
+                    source.buffer = audioBufferRef.current;
+                    source.connect(audioContextRef.current.destination);
+                    source.start(0);
+                  } catch (e) {
+                    console.error("Web Audio fallback failed:", e);
+                  }
+                }
+                
+                // Setup click listener as last resort
+                const userGesture = () => {
+                  if (chimeAudioRef.current) {
+                    chimeAudioRef.current.play()
+                      .then(() => {
+                        document.removeEventListener('click', userGesture);
+                      })
+                      .catch(() => {
+                        // Final fallback failed
+                      });
+                  }
+                };
+                
+                // Listen for any click to try playing sound again
+                document.addEventListener('click', userGesture, { once: true });
+        });
+          }
+        } catch (error) {
+          console.error("Error playing chime:", error);
+        }
+      }
+
       // Reset button state *after* switching tab
       setGeneratePathState('initial'); 
 
@@ -473,6 +621,83 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       setCommands([]); // Clear commands on error
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Add a new function for playing notification sound with simplified approach
+  const playNotificationSound = () => {
+    console.log('🔔 Attempting to play notification sound (simplified approach)');
+    
+    try {
+      // Use the AudioContext API directly - this approach is often more reliable
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      
+      if (!AudioContextClass) {
+        console.warn('🔔 AudioContext not supported in this browser');
+        return;
+      }
+      
+      // Create a short beep using the Web Audio API
+      // This is more likely to work than loading an external file
+      const audioContext = new AudioContextClass();
+      
+      // Resume context (needed for autoplay policy)
+      audioContext.resume().then(() => {
+        // Create an oscillator (sound generator)
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine'; // Sine wave = smooth sound
+        oscillator.frequency.setValueAtTime(1318.51, audioContext.currentTime); // E6 note
+        
+        // Create gain node to control volume
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Start at 10% volume
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5); // Fade out
+        
+        // Connect nodes: oscillator -> gain -> output
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Play sound
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5); // Play for 0.5 seconds
+        
+        console.log('🔔 Notification beep playing');
+        
+        // Clean up
+        setTimeout(() => {
+          audioContext.close();
+        }, 1000);
+      }).catch(err => {
+        console.warn('🔔 Failed to resume audio context:', err);
+      });
+    } catch (e) {
+      console.error('🔔 Error playing notification beep:', e);
+    }
+  };
+  
+  // Also try to load the mp3 file as an alternative
+  const playChimeSound = () => {
+    console.log('🔔 Attempting to play chime sound (mp3 file)');
+    
+    try {
+      // Try to create and play a new audio element
+      const audio = new Audio('/sounds/download_success_chime.mp3');
+      audio.volume = 1.0;
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => console.log('🔔 Chime sound played successfully'))
+          .catch(e => {
+            console.warn('🔔 Could not play chime sound:', e);
+            // Fall back to the beep if mp3 fails
+            playNotificationSound();
+          });
+      }
+    } catch (e) {
+      console.error('🔔 Error attempting to play chime:', e);
+      // Fall back to the beep if mp3 fails
+      playNotificationSound();
     }
   };
 
@@ -654,9 +879,28 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // toggleLock(); 
       const willBeLocked = !isLocked; // Check the *intended* state based on current value
 
+      // Play lock/unlock sound
+      if (lockAudioRef.current) {
+        try {
+          // Reset the audio to the beginning in case it was played before
+          lockAudioRef.current.currentTime = 0;
+          
+          // Play the audio
+          const playPromise = lockAudioRef.current.play();
+          
+          // Modern browsers return a promise from play()
+          if (playPromise !== undefined) {
+            playPromise.catch(error => {
+              console.warn("Could not play lock sound:", error);
+            });
+          }
+        } catch (error) {
+          console.error("Error playing lock sound:", error);
+        }
+      }
+
       if (willBeLocked) {
         console.log('>>> Locking scene. Saving Environmental Metadata...');
-        toast.info("Saving current scene view...");
 
         try {
           // Re-check required refs just before using them
@@ -697,7 +941,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }
       } else if (isLocked) {
         console.log('Unlocking scene...');
-        toast.info('Scene unlocked'); // Use info for unlock
+        toast.success('Scene unlocked'); // Change from info to success for consistency
       }
       
       // Toggle lock state AFTER potential async operations succeed
@@ -798,14 +1042,14 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           onValueChange={(value) => setActiveTab(value as TabValue)}
           className="flex flex-col w-[288px] gap-4"
       >
-        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
           <TabsPrimitive.Trigger 
             value="shotCaller" 
             className={cn(
                 "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
             )}
           >
             SHOT CALLER
@@ -816,14 +1060,14 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'playback' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                activeTab === 'playback' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
             )}
           >
             PLAYBACK
           </TabsPrimitive.Trigger>
         </TabsPrimitive.List>
 
-        <Card className="viewer-card bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col flex-1">
+        <Card className="viewer-card bg-[#1D1D1D] rounded-xl border-0 flex flex-col flex-1">
           <CardContent className="p-0 flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
@@ -874,6 +1118,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         </Card>
 
       </TabsPrimitive.Root>
+      {/* Audio element is now created programmatically */}
     </ErrorBoundary>
   );
 }; 

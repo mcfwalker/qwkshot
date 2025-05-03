@@ -1,14 +1,15 @@
-// import { JetBrains_Mono } from 'next/font/google';
+import { Inter_Tight } from 'next/font/google';
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { DevInfo } from "@/components/dev/DevInfo/index";
 import { initializeLLMSystem, ensureLLMSystemInitialized } from '@/lib/llm/init';
 
-// const jetbrainsMono = JetBrains_Mono({
-//   subsets: ['latin'],
-//   variable: '--font-jetbrains',
-// });
+// Configure Inter Tight
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  variable: '--font-inter-tight',
+});
 
 // Initialize the LLM system
 // We use ensureLLMSystemInitialized instead of initializeLLMSystem to make sure we only initialize once
@@ -23,14 +24,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${interTight.variable} font-sans`}>
       <body suppressHydrationWarning>
         <ErrorBoundary>
           <Providers>
             <main className="min-h-screen">
               {children}
             </main>
-            <DevInfo />
+            {/* <DevInfo /> */}
           </Providers>
         </ErrorBoundary>
       </body>

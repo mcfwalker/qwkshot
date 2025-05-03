@@ -7,9 +7,10 @@ interface SaveModelPortalProps {
   isOpen: boolean
   onClose: () => void
   onSave: (name: string) => Promise<void>
+  loadingMessage?: string | null
 }
 
-export function SaveModelPortal({ isOpen, onClose, onSave }: SaveModelPortalProps) {
+export function SaveModelPortal({ isOpen, onClose, onSave, loadingMessage }: SaveModelPortalProps) {
   if (typeof window === 'undefined') return null // Guard against SSR
 
   return createPortal(
@@ -17,6 +18,7 @@ export function SaveModelPortal({ isOpen, onClose, onSave }: SaveModelPortalProp
       isOpen={isOpen}
       onClose={onClose}
       onSave={onSave}
+      loadingMessage={loadingMessage || undefined}
     />,
     document.body
   )

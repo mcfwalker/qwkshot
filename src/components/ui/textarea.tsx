@@ -15,10 +15,10 @@ function Textarea({ className, active, ...props }: TextareaProps) {
         "text-sm leading-relaxed",
         "min-h-[140px] resize-none",
         "placeholder:text-gray-500",
-        "hover:border-white focus:border-white focus:outline-none focus:ring-0",
+        "hover:border-[#CFD0D0] focus:border-[#CFD0D0] focus:outline-none focus:ring-0",
         "focus:placeholder:text-transparent",
         "transition-colors",
-        active && "border-white",
+        active && "border-[#CFD0D0]",
         className
       )}
       {...props}

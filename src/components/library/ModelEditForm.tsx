@@ -31,21 +31,12 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     try {
       // Get and verify auth session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      console.log('Auth session:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        modelUserId: model.user_id
-      })
 
       if (!session?.user?.id) {
         throw new Error('Not authenticated')
       }
 
       if (session.user.id !== model.user_id) {
-        console.error('User ID mismatch:', {
-          sessionUserId: session.user.id,
-          modelUserId: model.user_id
-        })
         throw new Error('Not authorized to update this model')
       }
 
@@ -57,31 +48,25 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         .eq('user_id', session.user.id) // Explicitly add user_id check
         .select()
 
-      console.log('Update response:', {
-        success: !updateError,
-        error: updateError,
-        data: data,
-        modelId: model.id,
-        userId: session.user.id
-      })
-
       if (updateError) {
         throw new Error(updateError.message)
       }
 
-      // Invalidate the library page cache
-      await fetch('/api/revalidate?path=/library', { method: 'POST' })
-      
-      // Force router to refresh data
-      router.refresh()
-      
-      // Wait for revalidation and refresh to complete
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Revalidate and navigate in a single operation to avoid race conditions
+      try {
+        // Invalidate the library page cache
+        await fetch('/api/revalidate?path=/library', { method: 'POST' })
+      } catch (revalidateError) {
+        // Continue even if revalidation fails
+      }
       
       toast.success('Model updated successfully')
-      router.push('/library')
+      
+      // Navigate after the toast appears
+      setTimeout(() => {
+        router.push('/library')
+      }, 100)
     } catch (error) {
-      console.error('Error updating model:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to update model')
     } finally {
       setIsLoading(false)
@@ -94,21 +79,12 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
     try {
       // Get and verify auth session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      console.log('Auth session for delete:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        modelUserId: model.user_id
-      })
 
       if (!session?.user?.id) {
         throw new Error('Not authenticated')
       }
 
       if (session.user.id !== model.user_id) {
-        console.error('User ID mismatch on delete:', {
-          sessionUserId: session.user.id,
-          modelUserId: model.user_id
-        })
         throw new Error('Not authorized to delete this model')
       }
 
@@ -117,11 +93,6 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         .from('models')
         .remove([model.file_url])
       
-      console.log('Storage delete response:', {
-        success: !storageError,
-        error: storageError
-      })
-
       if (storageError) throw storageError
 
       // Delete the record
@@ -132,29 +103,23 @@ export function ModelEditForm({ model }: ModelEditFormProps) {
         .eq('user_id', session.user.id) // Explicitly add user_id check
         .select()
 
-      console.log('Delete response:', {
-        success: !error,
-        error: error,
-        data: data,
-        modelId: model.id,
-        userId: session.user.id
-      })
-
       if (error) throw error
 
-      // Invalidate the library page cache
-      await fetch('/api/revalidate?path=/library', { method: 'POST' })
-      
-      // Force router to refresh data
-      router.refresh()
-      
-      // Wait for revalidation and refresh to complete
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Revalidate and navigate in a single operation to avoid race conditions
+      try {
+        // Invalidate the library page cache
+        await fetch('/api/revalidate?path=/library', { method: 'POST' })
+      } catch (revalidateError) {
+        // Continue even if revalidation fails
+      }
       
       toast.success('Model deleted successfully')
-      router.push('/library')
+      
+      // Navigate after the toast appears
+      setTimeout(() => {
+        router.push('/library')
+      }, 100)
     } catch (error) {
-      console.error('Error deleting model:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to delete model')
     } finally {
       setIsLoading(false)

@@ -4,7 +4,7 @@ import React from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Play, Pause, Video, Loader2 } from 'lucide-react';
+import { Play, Pause, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
@@ -65,12 +65,12 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       {/* Take Label Section - Updated Structure */}
       <div 
         className={cn(
-          "flex items-stretch w-full h-[64px] rounded-2xl bg-[#121212] overflow-hidden", // Changed rounded-lg to rounded-2xl
+          "flex items-stretch w-full h-[64px] rounded-[10px] bg-[#1D1D1D] border border-[#353535] overflow-hidden", // Updated with exact 10px border radius
         )}
       >
         {/* Left Section (Take Count) */}
-        <div className="flex items-center px-4 border-r border-[#1d1d1d] flex-shrink-0">
-          <span className="text-sm font-medium text-foreground">
+        <div className="flex items-center px-4 border-r border-[#353535] flex-shrink-0">
+          <span className="text-sm font-medium text-[#CFD0D0]">
             TAKE {hasCommands ? takeCount : 0}
           </span>
         </div>
@@ -79,7 +79,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           <span className={cn(
             "text-sm font-medium block",
             "overflow-hidden whitespace-nowrap text-ellipsis",
-            hasCommands ? "text-foreground" : "text-foreground/60"
+            hasCommands ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
           )}>
             {hasCommands ? (modelName || 'Untitled Shot') : 'No animation loaded'}
           </span>
@@ -93,7 +93,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           variant="primary"
           size="lg"
           className={cn(
-            "flex-1 h-14 rounded-2xl disabled:cursor-not-allowed",
+            "flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed", // Updated to exact 10px border radius
             "relative overflow-hidden" // Add relative positioning and overflow hidden
           )}
           disabled={!hasCommands || isGenerating || isRecording}
@@ -112,13 +112,13 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           onClick={onDownload}
           variant="primary" // Use primary variant
           size="lg" // Use larger size
-          className="flex-1 h-14 rounded-2xl disabled:cursor-not-allowed" // Added disabled cursor
+          className="flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed" // Updated to exact 10px border radius
           disabled={!hasCommands || isPlaying || isRecording || isGenerating}
         >
           {isRecording ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <Video className="h-5 w-5" />
+            <Download className="h-5 w-5" />
           )}
         </Button>
       </div>
@@ -127,13 +127,13 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       {/* Apply space-y-5 like SceneControls */}
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-foreground/80">Playback Speed</Label>
-          <span className="text-sm font-medium text-foreground/80">
+          <Label className="text-sm font-medium text-[#CFD0D0]">Playback Speed</Label>
+          <span className="text-sm font-medium text-[#CFD0D0]">
             {displayDuration.toFixed(1)}s 
           </span>
         </div>
         {/* Wrapper for slider and ticks/labels */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Slider
             value={[playbackSpeed]}
             onValueChange={onSpeedChange}
@@ -149,14 +149,14 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
               <div
                 key={index}
                 className={cn(
-                  "w-px h-2", // Tick dimensions
+                  "w-px h-4", // Increased tick height
                   index === 3 ? "bg-[#bef264]" : "bg-[#444444]" // Highlight middle tick (1.0x)
                 )}
               />
             ))}
           </div>
           {/* Min/Max Labels Below Ticks */}
-          <div className="flex justify-between text-xs text-foreground/60">
+          <div className="flex justify-between text-xs text-[#CFD0D0]/60">
             <span>0.25x</span>
             <span>2.0x</span>
           </div>
@@ -167,15 +167,15 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       {/* Use flex-grow to push this button towards the bottom */}
       <div className="flex-grow flex items-end"> 
         <Button
-          variant="secondary" // Use secondary variant
-          // Apply styles consistent with Library/Add Texture buttons
+          variant="secondary"
           className={cn(
-            "w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5", // Size, padding, flex
-            "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]", // Appearance
-            "hover:bg-[#404040]", // Hover state
-            "disabled:opacity-70 disabled:pointer-events-none disabled:cursor-not-allowed", // Added disabled cursor
-            "text-sm text-foreground/80" // Text style
+            "flex h-[40px] px-6 justify-center items-center gap-[10px] w-full", // Size, padding, flex
+            "rounded-[10px] border border-[#353535] bg-[#121212]", // Appearance with exact 10px border radius
+            "hover:bg-[#353535]", // Hover state
+            "disabled:opacity-70 disabled:pointer-events-none disabled:cursor-not-allowed", // Disabled state
+            "text-sm text-[#CFD0D0]" // Text style
           )}
+          size="default"
           onClick={onCreateNewShot}
           disabled={isGenerating || isRecording} // Keep existing disable logic
         >

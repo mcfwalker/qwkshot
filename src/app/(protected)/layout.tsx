@@ -1,4 +1,6 @@
 import { Navigation } from "@/components/layout/Navigation";
+// import { Sidebar } from "@/components/layout/Sidebar";
+// import { Navbar } from "@/components/layout/Navbar";
 
 export default function ProtectedLayout({
   children,
@@ -11,6 +13,7 @@ export default function ProtectedLayout({
       <main className="flex-1">
         {children}
       </main>
+      {/* <DevInfo /> */}
     </div>
   );
 } 

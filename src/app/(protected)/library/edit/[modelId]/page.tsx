@@ -17,7 +17,6 @@ async function getModel(modelId: string) {
     .single()
 
   if (error || !model) {
-    console.error('Error fetching model:', error)
     return null
   }
 
