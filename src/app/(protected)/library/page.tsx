@@ -29,12 +29,9 @@ export default function LibraryPage() {
     const fetchModels = async () => {
       setIsLoading(true);
       try {
-        console.log('Debug: Library Page - Calling getModels action');
         const fetchedModels = await getModels();
-        console.log('Debug: Library Page - Received models from action');
         setModels(fetchedModels);
-  } catch (error) {
-        console.error('Error fetching models in component:', error);
+      } catch (error) {
         toast.error('Failed to load models.', { 
           description: error instanceof Error ? error.message : 'Please try again later.'
         });
@@ -47,23 +44,23 @@ export default function LibraryPage() {
     fetchModels();
   }, []); // Empty dependency array means run once on mount
 
-  console.log('Debug: Library - Page component rendering');
   return (
     <div className="container px-4 pt-10 pb-8">
       {/* Flex container for header and tabs */}
       <div className="flex items-center gap-6 mb-10">
         {/* SVG Header */}
         <div style={{ width: '237px', height: '38px', position: 'relative' }}>
-          <Image
-            src="/images/header_library.svg"
+          <Image 
+            src="/images/header_library.svg" 
             alt="Library Header"
-            layout="fill"
-            objectFit="contain"
+            fill
+            style={{ objectFit: 'contain' }}
+            priority
           />
         </div>
 
         {/* Tabs */}
-        <TabsPrimitive.Root
+        <TabsPrimitive.Root 
           value={activeTab}
           onValueChange={setActiveTab}
         >
@@ -113,9 +110,9 @@ export default function LibraryPage() {
               Texture management coming soon!
             </div>
           </TabsPrimitive.Content>
-      </TabsPrimitive.Root>
+        </TabsPrimitive.Root>
     </div>
-  )
+  );
 }
 
 // REMOVE old ModelsContent component

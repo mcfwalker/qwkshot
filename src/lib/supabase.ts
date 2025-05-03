@@ -3,10 +3,18 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 import { SupabaseClientOptions } from '@supabase/supabase-js'
 
-// Log environment variables to debug
-console.log('Client - ENV check - NEXT_PUBLIC_SUPABASE_URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-console.log('Client - ENV check - NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-console.log('Client - ENV check - Key length:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length || 0)
+// Debug logs only in development environment
+if (process.env.NODE_ENV === 'development') {
+  // These logs will only show during development, not in production
+  const isDev = process.env.NODE_ENV === 'development';
+  const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const hasKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const keyLength = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length || 0;
+  
+  if (!hasUrl || !hasKey) {
+    console.warn('Development warning: Missing Supabase environment variables');
+  }
+}
 
 // Get environment variables without quotes
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/"/g, '') || ''
@@ -47,7 +55,10 @@ export function getSupabaseServiceRoleClient(): SupabaseClient {
     throw new Error('Supabase URL or Service Role Key is missing from environment variables.');
   }
   if (!serviceRoleClientInstance) {
-    console.warn('!!! Creating Supabase client with SERVICE ROLE KEY !!!'); 
+    // Only log warning in development environment
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('!!! Creating Supabase client with SERVICE ROLE KEY !!!'); 
+    }
     // Use the imported core createClient
     serviceRoleClientInstance = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {

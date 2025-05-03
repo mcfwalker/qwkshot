@@ -12,36 +12,32 @@ const Viewer = dynamic(() => import("./Viewer"), { ssr: false });
 
 // Define props for ViewerContainer
 interface ViewerContainerProps {
-  // Remove initialModelUrl, add modelId
-  // initialModelUrl: string | null;
-  modelId: string; 
+  // Make modelId optional with ?
+  modelId?: string; 
 }
 
 export const ViewerContainer = ({ modelId }: ViewerContainerProps) => {
   // Initialize modelUrl state to null initially
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Add loading state
-  const [error, setError] = useState<string | null>(null); // Add error state
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch signed URL when modelId prop changes
   useEffect(() => {
-    // Reset state when modelId changes
+    // Don't reset modelUrl or set loading state if no modelId
+    if (!modelId) {
+      return;
+    }
+    
+    // Only now set loading state since we have a modelId to fetch
     setModelUrl(null);
     setIsLoading(true);
     setError(null);
 
-    if (!modelId) { // Handle null/undefined modelId if necessary
-       console.warn("ViewerContainer received null/undefined modelId");
-       setIsLoading(false);
-       setError("No model ID provided.");
-       return;
-    }
-
     async function getSignedUrl() {
-      console.log(`[ViewerContainer] Fetching signed URL for modelId: ${modelId}`);
       try {
-        const url = await loadModel(modelId); // Call client-side function here
-        console.log(`[ViewerContainer] Received signed URL: ${url}`);
+        // Use type assertion since we already checked modelId is not undefined above
+        const url = await loadModel(modelId as string);
         setModelUrl(url); 
         setError(null);
       } catch (err) {
@@ -57,11 +53,6 @@ export const ViewerContainer = ({ modelId }: ViewerContainerProps) => {
     getSignedUrl();
 
   }, [modelId]); // Dependency is modelId
-
-  // Optional: Add loading/error display here if needed, 
-  // although Viewer might handle null modelUrl gracefully.
-  // if (isLoading) return <div>Loading Model...</div>;
-  // if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="w-full h-[calc(100vh-3.5rem)] relative bg-background">

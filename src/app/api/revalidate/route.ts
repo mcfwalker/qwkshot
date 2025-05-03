@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
-import { createRouteSupabaseClient } from '@/lib/supabase-route'
+import { getSupabaseClient } from '@/lib/supabase-route'
 import { headers } from 'next/headers'
 
 // Handle CORS preflight requests
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     // Verify authentication
-    const supabase = await createRouteSupabaseClient()
+    const supabase = await getSupabaseClient()
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session) {
@@ -76,9 +76,11 @@ export async function POST(request: Request) {
       }
     )
   } catch (error) {
-    console.error('Revalidation error:', error)
     return NextResponse.json(
-      { message: 'Error revalidating' },
+      { 
+        message: 'Error revalidating',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
       { 
         status: 500,
         headers: {
