@@ -579,17 +579,36 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     if (currentModelId) {
       const fetchModelName = async () => {
         try {
-          const { data, error } = await supabase
-            .from('models')
-            .select('name')
-            .eq('id', currentModelId)
-            .single();
-            
-          if (data && !error) {
-            setModelName(data.name || 'model');
+          // Use a direct fetch request instead of the Supabase client
+          // This bypasses potential client configuration issues
+          const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/models?id=eq.${currentModelId}&select=name`;
+          
+          // Use fetch API directly with proper headers
+          const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          if (data && data.length > 0 && data[0].name) {
+            setModelName(data[0].name || 'model');
+          } else {
+            console.log('Model name not found in response:', data);
+            setModelName('model');
           }
         } catch (err) {
           console.error('Error fetching model name:', err);
+          // Use a default name instead of failing
+          setModelName('model');
         }
       };
       
@@ -647,25 +666,33 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       // Resize the image to a more reasonable size for storage (512x512)
       const resizedImage = await resizeImage(capturedThumbnail, 512, 512);
       
+      console.log('Viewer: Uploading optimized thumbnail via server action for model ID:', currentModelId);
+      
       // Use the server action to upload the resized image
-      console.log('Uploading optimized thumbnail via server action');
       const result = await uploadThumbnailAction(currentModelId, resizedImage);
       
       if (!result.success) {
+        console.error('Viewer: Thumbnail upload failed with error:', result.error);
         throw new Error(`Failed to upload thumbnail: ${result.error}`);
       }
       
-      console.log('Thumbnail uploaded successfully, URL:', result.url);
+      console.log('Viewer: Thumbnail uploaded successfully, URL:', result.url);
       toast.success('Thumbnail saved successfully');
       
       // Keep the modal open, user may want to download the image too
       // Mark as saved to update the UI
       setIsThumbnailSaved(true);
       
+      // Force a refresh after a brief delay to ensure the UI updates
+      setTimeout(() => {
+        supabase.auth.refreshSession();
+      }, 500);
+      
     } catch (error) {
-      console.error('Error saving thumbnail:', error);
+      console.error('Viewer: Error saving thumbnail:', error);
       toast.error('Failed to save thumbnail', { 
-        description: error instanceof Error ? error.message : 'Unknown error' 
+        description: error instanceof Error ? error.message : 'Unknown error',
+        duration: 5000 // Show error longer
       });
     } finally {
       setIsSavingThumbnail(false);

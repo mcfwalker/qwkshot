@@ -65,6 +65,13 @@ export function getSupabaseServiceRoleClient(): SupabaseClient {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
+      },
+      global: {
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'x-client-info': 'modern-3d-viewer-service-role' 
+        }
       }
     });
   }
@@ -73,7 +80,17 @@ export function getSupabaseServiceRoleClient(): SupabaseClient {
 
 // Export the component client as default?
 // Re-enable direct export if needed by components
-export const supabase = getSupabaseClient();
+export const supabase = createClientComponentClient<Database>({
+  options: {
+    global: {
+      headers: { 
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'x-client-info': 'modern-3d-viewer' 
+      }
+    }
+  }
+});
 
 // Direct client for specific use cases (like SSR)
 export const supabaseAdmin = createClientComponentClient<Database>({
@@ -81,7 +98,11 @@ export const supabaseAdmin = createClientComponentClient<Database>({
   supabaseKey,
   options: {
     global: {
-      headers: { 'x-client-info': 'modern-3d-viewer-admin' }
+      headers: { 
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'x-client-info': 'modern-3d-viewer-admin' 
+      }
     }
   }
 })

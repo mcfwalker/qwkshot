@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Model } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -153,48 +153,59 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   return (
     <>
       <div className="library-grid">
-        {models.map((model) => (
-          <Card key={model.id} className="library-card overflow-hidden bg-[#1D1D1D] border-0">
-            <CardContent className="p-0">
-              <Link href={`/viewer/${model.id}`} className="block relative group">
-                <div className="aspect-square bg-[#121212] relative rounded-lg overflow-hidden">
-                  {model.thumbnail_url && !imageErrors[model.id] ? (
-                    <img
-                      src={model.thumbnail_url}
-                      alt={model.name}
-                      className="w-full h-full object-cover"
-                      onError={() => handleImageError(model.id)}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Box className="h-20 w-20 text-[#353535]" />
-                    </div>
-                  )}
+        {models.map((model) => {
+          // Create a cache-busting URL for the thumbnail
+          const thumbnailUrl = useMemo(() => {
+            if (!model.thumbnail_url) return null;
+            // Add a timestamp if not already present
+            if (model.thumbnail_url.includes('?t=')) return model.thumbnail_url;
+            return `${model.thumbnail_url}?t=${Date.now()}`;
+          }, [model.thumbnail_url]);
+          
+          return (
+            <Card key={model.id} className="library-card overflow-hidden bg-[#1D1D1D] border-0">
+              <CardContent className="p-0">
+                <Link href={`/viewer/${model.id}`} className="block relative group">
+                  <div className="aspect-square bg-[#121212] relative rounded-lg overflow-hidden">
+                    {thumbnailUrl && !imageErrors[model.id] ? (
+                      <img
+                        src={thumbnailUrl}
+                        alt={model.name}
+                        className="w-full h-full object-cover"
+                        onError={() => handleImageError(model.id)}
+                        key={thumbnailUrl} /* Force re-render when URL changes */
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Box className="h-20 w-20 text-[#353535]" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none">
+                    <span className="text-white font-semibold">Use Model</span>
+                  </div>
+                </Link>
+              </CardContent>
+              <CardFooter className="p-4 flex justify-between items-center">
+                <span className="text-sm font-medium text-foreground truncate mr-2">
+                  {model.name}
+                </span>
+                <div className="flex gap-2 flex-shrink-0">
+                  <ModelEditDialog 
+                    model={model} 
+                    onModelUpdated={handleModelUpdated} 
+                  />
+                  <Button
+                    className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
+                    onClick={() => openDeleteDialog(model)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none">
-                  <span className="text-white font-semibold">Use Model</span>
-                </div>
-              </Link>
-            </CardContent>
-            <CardFooter className="p-4 flex justify-between items-center">
-              <span className="text-sm font-medium text-foreground truncate mr-2">
-                {model.name}
-              </span>
-              <div className="flex gap-2 flex-shrink-0">
-                <ModelEditDialog 
-                  model={model} 
-                  onModelUpdated={handleModelUpdated} 
-                />
-                <Button
-                  className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
-                  onClick={() => openDeleteDialog(model)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        ))}
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

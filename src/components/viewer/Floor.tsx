@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTexture } from '@react-three/drei';
 import { DoubleSide, TextureLoader, RepeatWrapping, Texture, MeshStandardMaterial } from 'three';
+import { supabase } from '@/lib/supabase';
 
 export type FloorType = 'grid' | 'none';
 
@@ -46,24 +47,73 @@ export default function Floor({
 }
 
 function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
-  // Load the texture using React Three Fiber's useTexture hook
-  const texture = useTexture(url);
-  console.log('TexturedFloor: Loaded texture object:', texture); // Log texture object
-
-  const materialRef = useRef<MeshStandardMaterial>(null!); // Ref for material
+  const [processedUrl, setProcessedUrl] = useState<string | null>(null);
+  const materialRef = useRef<MeshStandardMaterial>(null!);
+  
+  // Process the URL first to handle Supabase URLs correctly
+  useEffect(() => {
+    // Check if it's a Supabase URL - if so, we'll need to handle it differently
+    const handleTextureUrl = async () => {
+      try {
+        // If it's a standard URL (not Supabase storage URL) just use it directly
+        if (!url.includes('supabase.co/storage')) {
+          setProcessedUrl(url);
+          return;
+        }
+        
+        // For Supabase URLs, extract the path and use the getPublicUrl method
+        // This ensures proper URL formatting and caching headers
+        const urlObj = new URL(url);
+        const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/([^?]+)/);
+        
+        if (pathMatch && pathMatch[1]) {
+          const path = decodeURIComponent(pathMatch[1]);
+          const bucketName = path.split('/')[0];
+          const objectPath = path.split('/').slice(1).join('/');
+          
+          // Get a public URL that avoids the 406 error
+          const { data } = supabase.storage
+            .from(bucketName)
+            .getPublicUrl(objectPath);
+            
+          if (data?.publicUrl) {
+            // Add cache busting to prevent stale textures
+            const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+            console.log('Using processed public URL:', publicUrl);
+            setProcessedUrl(publicUrl);
+          } else {
+            console.error('Failed to get public URL for texture');
+            setProcessedUrl(url); // Fallback to original URL
+          }
+        } else {
+          // If we can't parse the URL, just use the original
+          setProcessedUrl(url);
+        }
+      } catch (error) {
+        console.error('Error processing texture URL:', error);
+        setProcessedUrl(url); // Fallback to original URL
+      }
+    };
+    
+    handleTextureUrl();
+  }, [url]);
+  
+  // Don't try to load the texture until we have the processed URL
+  if (!processedUrl) {
+    return null;
+  }
+  
+  // Now use the processed URL with useTexture
+  const texture = useTexture(processedUrl);
   
   // Configure texture for tiling using useEffect
   useEffect(() => {
     if (texture) {
-      console.log("TexturedFloor Effect: Applying texture settings for:", texture.image?.src); // Log image source
+      console.log("TexturedFloor Effect: Applying texture settings");
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
       texture.repeat.set(10, 10); // Repeat the texture 10 times
       texture.needsUpdate = true; // Signal texture properties changed
-      // Force material update - likely not needed if texture update is signaled
-      // if (materialRef.current) {
-      //   materialRef.current.needsUpdate = true;
-      // }
     }
   }, [texture]); // Run effect when texture object changes
 

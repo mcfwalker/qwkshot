@@ -40,7 +40,9 @@ export async function updateThumbnailUrlAction(
   }
 
   try {
-    const supabase = createServerActionClient({ cookies });
+    // Fix: Create client with awaited cookies
+    const cookieStore = cookies();
+    const supabase = createServerActionClient({ cookies: () => cookieStore });
     
     // Verify the user is authenticated and has access to this model
     const { data: { session } } = await supabase.auth.getSession();
@@ -114,14 +116,20 @@ export async function uploadThumbnailAction(
       return { success: false, error: 'Valid image data is required' };
     }
     
-    // Create regular Supabase client for user session checks
-    const supabase = createServerActionClient({ cookies });
+    console.log('uploadThumbnailAction: Starting upload process for model ID:', modelId);
+    
+    // Fix: Create client with awaited cookies
+    const cookieStore = cookies();
+    const supabase = createServerActionClient({ cookies: () => cookieStore });
     
     // Verify the user is authenticated
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
+      console.error('uploadThumbnailAction: No authenticated session found');
       return { success: false, error: 'Not authenticated' };
     }
+    
+    console.log('uploadThumbnailAction: User authenticated:', session.user.id);
     
     // Verify the user has access to this model
     const { data: model, error: modelError } = await supabase
@@ -131,12 +139,16 @@ export async function uploadThumbnailAction(
       .single();
       
     if (modelError || !model) {
+      console.error('uploadThumbnailAction: Error fetching model:', modelError);
       return { success: false, error: 'Model not found' };
     }
     
     if (model.user_id !== session.user.id) {
+      console.error('uploadThumbnailAction: User not authorized:', session.user.id, 'vs', model.user_id);
       return { success: false, error: 'Not authorized to update this model' };
     }
+    
+    console.log('uploadThumbnailAction: Model found and user authorized');
     
     // Create a Supabase client with service role for storage operations
     // This bypasses RLS policies
@@ -157,7 +169,7 @@ export async function uploadThumbnailAction(
         
         if (pathMatch && pathMatch[1]) {
           const oldPath = decodeURIComponent(pathMatch[1]);
-          console.log('Deleting old thumbnail:', oldPath);
+          console.log('uploadThumbnailAction: Deleting old thumbnail:', oldPath);
           
           await serviceRoleClient.storage
             .from('thumbnails')
@@ -165,7 +177,7 @@ export async function uploadThumbnailAction(
         }
       } catch (cleanupError) {
         // Log but don't fail if cleanup has issues
-        console.warn('Error cleaning up old thumbnail:', cleanupError);
+        console.warn('uploadThumbnailAction: Error cleaning up old thumbnail:', cleanupError);
       }
     }
     
@@ -177,7 +189,7 @@ export async function uploadThumbnailAction(
     const userId = session.user.id;
     const filePath = `${userId}/${modelId}.png`;
     
-    console.log('Uploading thumbnail with service role to:', filePath);
+    console.log('uploadThumbnailAction: Uploading thumbnail with service role to:', filePath);
     
     const { data: uploadData, error: uploadError } = await serviceRoleClient.storage
       .from('thumbnails')
@@ -187,9 +199,11 @@ export async function uploadThumbnailAction(
       });
     
     if (uploadError) {
-      console.error('Upload error details:', uploadError);
+      console.error('uploadThumbnailAction: Upload error details:', uploadError);
       return { success: false, error: `Upload failed: ${uploadError.message}` };
     }
+    
+    console.log('uploadThumbnailAction: Upload successful, getting public URL');
     
     // Get the public URL of the uploaded thumbnail
     const { data: publicUrlData } = serviceRoleClient.storage
@@ -197,18 +211,25 @@ export async function uploadThumbnailAction(
       .getPublicUrl(filePath);
     
     const thumbnailUrl = publicUrlData.publicUrl;
+    console.log('uploadThumbnailAction: Public URL generated:', thumbnailUrl);
     
     // Update the model record with the thumbnail URL using the regular client
+    console.log('uploadThumbnailAction: Updating model record in database');
     const { error: updateError } = await supabase
       .from('models')
       .update({ thumbnail_url: thumbnailUrl })
       .eq('id', modelId);
     
     if (updateError) {
+      console.error('uploadThumbnailAction: Database update error:', updateError);
       return { success: false, error: `Failed to update model: ${updateError.message}` };
     }
     
-    return { success: true, url: thumbnailUrl };
+    // Add a cache-busting parameter to the URL to force refresh in the UI
+    const cacheBustedUrl = `${thumbnailUrl}?t=${Date.now()}`;
+    console.log('uploadThumbnailAction: Success! URL with cache busting:', cacheBustedUrl);
+    
+    return { success: true, url: cacheBustedUrl };
   } catch (error) {
     console.error('Error in uploadThumbnailAction:', error);
     return {
