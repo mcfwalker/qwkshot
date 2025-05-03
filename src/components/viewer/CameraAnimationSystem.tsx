@@ -217,43 +217,48 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   // >>> Add Ref for audio element <<<
   const chimeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lockAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Add a new ref for Web Audio context
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
 
-  // Initialize audio element with improved handling
+  // Initialize audio elements with improved handling
   useEffect(() => {
-    // Create and preload the audio element with more robust setup
+    // Create and preload the chime audio element
     if (!chimeAudioRef.current) {
-      // Create audio element with explicit event listeners
-      const audio = new Audio();
-      
-      // Add event listeners for debugging
-      audio.addEventListener('canplaythrough', () => {
-        // Audio loaded successfully
-      });
-      
-      audio.addEventListener('error', (e) => {
+      const chimeAudio = new Audio();
+      chimeAudio.addEventListener('error', (e) => {
         console.error('Error loading chime audio:', e);
       });
-      
-      // Set properties
-      audio.src = '/sounds/download_success_chime.mp3';
-      audio.preload = 'auto';
-      audio.volume = 1.0; // Ensure volume is at maximum
-      
-      // Store reference
-      chimeAudioRef.current = audio;
-      
-      // Force load
-      audio.load();
+      chimeAudio.src = '/sounds/download_success_chime.mp3';
+      chimeAudio.preload = 'auto';
+      chimeAudio.volume = 1.0;
+      chimeAudioRef.current = chimeAudio;
+      chimeAudio.load();
+    }
+    
+    // Create and preload the lock audio element
+    if (!lockAudioRef.current) {
+      const lockAudio = new Audio();
+      lockAudio.addEventListener('error', (e) => {
+        console.error('Error loading lock audio:', e);
+      });
+      lockAudio.src = '/sounds/lock_screen.mp3';
+      lockAudio.preload = 'auto';
+      lockAudio.volume = 1.0;
+      lockAudioRef.current = lockAudio;
+      lockAudio.load();
     }
     
     return () => {
       if (chimeAudioRef.current) {
         chimeAudioRef.current.pause();
         chimeAudioRef.current = null;
+      }
+      if (lockAudioRef.current) {
+        lockAudioRef.current.pause();
+        lockAudioRef.current = null;
       }
     };
   }, []);
@@ -874,9 +879,28 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       // toggleLock(); 
       const willBeLocked = !isLocked; // Check the *intended* state based on current value
 
+      // Play lock/unlock sound
+      if (lockAudioRef.current) {
+        try {
+          // Reset the audio to the beginning in case it was played before
+          lockAudioRef.current.currentTime = 0;
+          
+          // Play the audio
+          const playPromise = lockAudioRef.current.play();
+          
+          // Modern browsers return a promise from play()
+          if (playPromise !== undefined) {
+            playPromise.catch(error => {
+              console.warn("Could not play lock sound:", error);
+            });
+          }
+        } catch (error) {
+          console.error("Error playing lock sound:", error);
+        }
+      }
+
       if (willBeLocked) {
         console.log('>>> Locking scene. Saving Environmental Metadata...');
-        toast.info("Saving current scene view...");
 
         try {
           // Re-check required refs just before using them
@@ -917,7 +941,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         }
       } else if (isLocked) {
         console.log('Unlocking scene...');
-        toast.info('Scene unlocked'); // Use info for unlock
+        toast.success('Scene unlocked'); // Change from info to success for consistency
       }
       
       // Toggle lock state AFTER potential async operations succeed
