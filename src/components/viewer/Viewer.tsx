@@ -130,7 +130,7 @@ interface ViewerProps {
 function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
-  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>('model');
+  const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>(modelUrl ? 'camera' : 'model');
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
@@ -227,6 +227,20 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
   // State for tracking active camera movement directions
   const [movementDirection, setMovementDirection] = useState<MovementDirection>({ up: false, down: false, left: false, right: false });
+
+  // Use useRef to track previous model URL value
+  const prevModelUrlRef = useRef<string | null>(null);
+
+  // Effect to set the active tab to camera when a model is loaded
+  useEffect(() => {
+    // If we go from no model to having a model, switch to camera tab
+    if (!prevModelUrlRef.current && modelUrl) {
+      setActiveLeftPanelTab('camera');
+    }
+    
+    // Update previous value ref
+    prevModelUrlRef.current = modelUrl;
+  }, [modelUrl]);
 
   // Effect now depends on pathname and modelUrl
   useEffect(() => {
