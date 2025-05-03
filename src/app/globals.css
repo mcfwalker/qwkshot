@@ -86,24 +86,30 @@
     @apply text-foreground;
     background-color: #121212 !important;
     font-family: var(--font-inter-tight);
+    color: #CFD0D0;
+  }
+
+  /* Add global style for SVG icons */
+  svg:not([fill]) {
+    color: #CFD0D0;
   }
 
   /* Define dark theme variables HERE */
   .dark {
     --background: 0 0% 7.1%; /* ~ #121212 */ 
-    --foreground: 0 0% 90%; 
+    --foreground: 0 0% 82%; /* Changed to match #CFD0D0 (roughly 82% lightness) */
     --card: 0 0% 3.9%; 
-    --card-foreground: 0 0% 90%;
+    --card-foreground: 0 0% 82%; /* Changed to match #CFD0D0 */
     --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 90%;
+    --popover-foreground: 0 0% 82%; /* Changed to match #CFD0D0 */
     --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary-foreground: 0 0% 82%; /* Changed to match #CFD0D0 */
     --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted-foreground: 0 0% 82%; /* Changed from 63.9% to match #CFD0D0 but slightly muted */
     --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent-foreground: 0 0% 82%; /* Changed to match #CFD0D0 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 25%;
