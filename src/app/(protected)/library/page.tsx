@@ -49,7 +49,7 @@ export default function LibraryPage() {
 
   console.log('Debug: Library - Page component rendering');
   return (
-    <div className="container px-4 py-8">
+    <div className="container px-4 pt-2 pb-8">
       {/* Flex container for header and tabs */}
       <div className="flex items-center gap-6 mb-10">
         {/* SVG Header */}
@@ -67,16 +67,16 @@ export default function LibraryPage() {
           value={activeTab}
           onValueChange={setActiveTab}
         >
-          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground gap-4">
+          <TabsPrimitive.List className="flex items-center justify-center h-10 text-muted-foreground gap-4">
             <TabsPrimitive.Trigger
               value="models"
               className={cn(
-                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 rounded-lg text-sm font-medium uppercase transition-colors",
+                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
                 activeTab === 'models' 
-                  ? "bg-[#1D1D1D] text-[#C2F751] rounded-xl" 
-                  : "hover:text-foreground/80"
+                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md" 
+                  : "text-[#CFD0D0] hover:text-[#FFFFFF]"
               )}
             >
               MODELS
@@ -84,12 +84,12 @@ export default function LibraryPage() {
             <TabsPrimitive.Trigger
               value="textures"
               className={cn(
-                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 rounded-lg text-sm font-medium uppercase transition-colors",
+                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
                 activeTab === 'textures' 
-                  ? "bg-[#1D1D1D] text-[#C2F751] rounded-xl" 
-                  : "hover:text-foreground/80"
+                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md" 
+                  : "text-[#CFD0D0] hover:text-[#FFFFFF]"
               )}
             >
               TEXTURES

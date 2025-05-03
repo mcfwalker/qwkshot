@@ -39,7 +39,7 @@ export function Navigation() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 w-full h-14 bg-[#121212]">
+    <nav className="sticky top-0 z-[999] w-full h-14 bg-transparent">
       <div className="flex h-full items-center justify-between px-4">
         <Link href="/viewer" className="flex items-center gap-2 group">
           <img 

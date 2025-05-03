@@ -441,14 +441,14 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   }, [showReticle, isReticleLoading]); 
 
   return (
-    <div className={cn('relative w-full h-full', className)}>
+    <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
       {/* Reticle Overlay - Conditionally HIDE via className */}
       <div className={cn(!showReticle && "hidden")}> 
           <CenterReticle />
       </div>
 
       <Canvas
-        className="w-full h-full"
+        className="w-full h-full min-h-screen"
         ref={canvasRef}
         shadows
         camera={{ position: [5, 5, 5], fov }}
@@ -531,7 +531,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
-      <div className="absolute top-16 left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Reverted to original narrower width */} 
+      <div className="absolute top-[96px] left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Changed from top-16 to top-[96px] */} 
         {/* --- NEW Tabbed Panel for Model/Camera --- */}
         <TabsPrimitive.Root 
             value={activeLeftPanelTab}
@@ -596,7 +596,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       </div>
 
       {/* Camera Animation System */}
-      <div className="absolute top-16 right-4 z-10">
+      <div className="absolute top-[96px] right-4 z-10"> {/* Changed from top-16 to top-[96px] */}
         <CameraAnimationSystem
           // PASS modelId as prop
           modelId={currentModelId}
