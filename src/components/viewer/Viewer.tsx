@@ -538,14 +538,14 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
             className="flex flex-col gap-4" // Use flex-col within the tab root
         >
-          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
             <TabsPrimitive.Trigger 
               value="model" 
               className={cn(
                   "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
               )}
             >
               MODEL
@@ -556,7 +556,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
                   "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
               )}
             >
               CAMERA

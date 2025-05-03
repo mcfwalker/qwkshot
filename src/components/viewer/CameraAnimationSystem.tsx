@@ -811,14 +811,14 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           onValueChange={(value) => setActiveTab(value as TabValue)}
           className="flex flex-col w-[288px] gap-4"
       >
-        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-[20px] bg-[#121212] text-muted-foreground w-full">
+        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
           <TabsPrimitive.Trigger 
             value="shotCaller" 
             className={cn(
                 "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
             )}
           >
             SHOT CALLER
@@ -829,14 +829,14 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'playback' ? "bg-[#1D1D1D] text-foreground shadow-sm rounded-[20px]" : "hover:text-foreground/80"
+                activeTab === 'playback' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
             )}
           >
             PLAYBACK
           </TabsPrimitive.Trigger>
         </TabsPrimitive.List>
 
-        <Card className="viewer-card bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col flex-1">
+        <Card className="viewer-card bg-[#1D1D1D] rounded-xl border-0 flex flex-col flex-1">
           <CardContent className="p-0 flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div

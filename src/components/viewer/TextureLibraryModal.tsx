@@ -123,7 +123,7 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
                 <div
                   {...getRootProps()}
                   className={`
-                    border-2 border-dashed rounded-lg p-4 text-center cursor-pointer
+                    border-2 border-dashed rounded-md p-4 text-center cursor-pointer
                     ${isDragActive ? 'border-primary bg-primary/5' : 'border-[#444444]'}
                     ${selectedFile ? 'border-green-500/50' : ''}
                   `}

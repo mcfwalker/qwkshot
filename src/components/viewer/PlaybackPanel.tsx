@@ -65,7 +65,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       {/* Take Label Section - Updated Structure */}
       <div 
         className={cn(
-          "flex items-stretch w-full h-[64px] rounded-2xl bg-[#121212] overflow-hidden", // Changed rounded-lg to rounded-2xl
+          "flex items-stretch w-full h-[64px] rounded-xl bg-[#121212] overflow-hidden", // Changed rounded-2xl to rounded-xl
         )}
       >
         {/* Left Section (Take Count) */}
@@ -93,7 +93,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           variant="primary"
           size="lg"
           className={cn(
-            "flex-1 h-14 rounded-2xl disabled:cursor-not-allowed",
+            "flex-1 h-14 rounded-xl disabled:cursor-not-allowed", // Changed rounded-2xl to rounded-xl
             "relative overflow-hidden" // Add relative positioning and overflow hidden
           )}
           disabled={!hasCommands || isGenerating || isRecording}
@@ -112,7 +112,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           onClick={onDownload}
           variant="primary" // Use primary variant
           size="lg" // Use larger size
-          className="flex-1 h-14 rounded-2xl disabled:cursor-not-allowed" // Added disabled cursor
+          className="flex-1 h-14 rounded-xl disabled:cursor-not-allowed" // Changed rounded-2xl to rounded-xl
           disabled={!hasCommands || isPlaying || isRecording || isGenerating}
         >
           {isRecording ? (

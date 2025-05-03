@@ -52,7 +52,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col w-full p-4 gap-6">
+    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
       
       {/* Instructions Section (Moved Up) */}
       <div className="flex w-[168px] p-4 flex-col justify-center items-center gap-4 rounded-lg bg-[#121212]">

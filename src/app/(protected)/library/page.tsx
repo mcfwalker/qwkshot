@@ -49,7 +49,7 @@ export default function LibraryPage() {
 
   console.log('Debug: Library - Page component rendering');
   return (
-    <div className="container px-4 pt-2 pb-8">
+    <div className="container px-4 pt-10 pb-8">
       {/* Flex container for header and tabs */}
       <div className="flex items-center gap-6 mb-10">
         {/* SVG Header */}

@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface SceneControlsProps {
   gridVisible: boolean;
@@ -44,8 +45,8 @@ export function SceneControlsComponent({
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-[20px] border-0 flex flex-col w-full p-4 gap-6">
-      <CardTitle className="text-sm font-medium text-muted-foreground uppercase">SCENE</CardTitle>
+    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
+      <CardTitle className="text-sm font-medium text-[#C2F751] uppercase">SCENE</CardTitle>
       
       <div className="space-y-6"> 
         <div className="space-y-5"> 
@@ -66,20 +67,11 @@ export function SceneControlsComponent({
 
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-muted-foreground">Grid</Label>
-          <Switch
+          <Checkbox
             checked={gridVisible}
             onCheckedChange={onGridToggle}
             disabled={isLocked}
-            className={cn(
-              "peer inline-flex shrink-0 cursor-pointer items-center border-2 border-transparent shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
-              "h-5 w-10 rounded-full p-[3px]",
-              "data-[state=checked]:bg-[#C2F751]",
-              "data-[state=unchecked]:bg-[#353535]",
-              "[&>span]:h-3.5 [&>span]:w-3.5 [&>span]:rounded-full [&>span]:bg-[#1D1D1D]",
-              "[&>span]:shadow-lg [&>span]:ring-0 [&>span]:transition-transform",
-              "[&>span]:data-[state=checked]:translate-x-5",
-              "[&>span]:data-[state=unchecked]:translate-x-0"
-            )}
+            className="data-[state=checked]:bg-[#C2F751] data-[state=checked]:text-black"
           />
         </div>
 
@@ -87,11 +79,10 @@ export function SceneControlsComponent({
            <Button 
              variant="secondary"
              className={cn(
-                "w-full h-10 px-3 py-0 inline-flex items-center justify-center gap-2.5", 
-                "rounded-xl border-0 bg-[#353535] shadow-[0_2px_0px_0px_rgba(0,0,0,0.25)]",
-                "hover:bg-[#404040]",
+                "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
+                "rounded-md border border-[#353535] bg-[#121212]",
+                "hover:bg-[#353535]",
                 "disabled:opacity-70 disabled:pointer-events-none",
-                "disabled:cursor-not-allowed",
                 "text-sm text-foreground/80"
              )}
              onClick={texture ? onRemoveTexture : onAddTextureClick}
