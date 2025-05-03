@@ -118,10 +118,10 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   return (
     <div className="library-grid">
       {models.map((model) => (
-        <Card key={model.id} className="library-card overflow-hidden">
+        <Card key={model.id} className="library-card overflow-hidden bg-[#1D1D1D] border-0">
           <CardContent className="p-0">
             <Link href={`/viewer/${model.id}`} className="block relative group">
-              <div className="aspect-square bg-[#1a1a1a] relative rounded-lg">
+              <div className="aspect-square bg-[#121212] relative rounded-lg">
                 {/* Remove centered name */}
                 {/* 
                 <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -141,19 +141,19 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
               {model.name}
             </span>
             <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="library-button"
-                onClick={() => handleDelete(model)}
-              >
-                <Trash2 className="library-button-icon" />
-              </Button>
               <Link href={`/library/edit/${model.id}`}>
-                <Button variant="ghost" size="sm" className="library-button">
-                  <Pencil className="library-button-icon" />
+                <Button 
+                  className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
                 </Button>
               </Link>
+              <Button
+                className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
+                onClick={() => handleDelete(model)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </CardFooter>
         </Card>

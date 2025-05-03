@@ -83,9 +83,61 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    /* Explicitly set the font family using ONLY the CSS variable */
+    @apply text-foreground;
+    background-color: #121212 !important;
     font-family: var(--font-inter-tight);
+  }
+
+  /* Define dark theme variables HERE */
+  .dark {
+    --background: 0 0% 7.1%; /* ~ #121212 */ 
+    --foreground: 0 0% 90%; 
+    --card: 0 0% 3.9%; 
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 25%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+
+    /* Other dark specific overrides */
+    [role="radio"] {
+      @apply !border-[#bef264] !text-[#bef264];
+    }
+    [role="radio"][data-state="checked"] {
+      @apply !border-[#bef264];
+    }
+    [role="radio"] .bg-current {
+      @apply !bg-[#bef264];
+    }
+    textarea[data-slot="textarea"].border-input {
+      @apply border-[#444444] bg-transparent text-white;
+    }
+    textarea[data-slot="textarea"].border-input:hover {
+      @apply border-white;
+    }
+    textarea[data-slot="textarea"].border-input:focus-visible {
+      @apply border-white ring-0 outline-none;
+    }
+    textarea[data-slot="textarea"].placeholder\:text-muted-foreground::placeholder {
+      @apply text-gray-500;
+    }
+    textarea[data-slot="textarea"].placeholder\:text-muted-foreground:focus::placeholder {
+      @apply text-transparent;
+    }
+     input[type="number"][data-slot="input"] {
+      @apply text-white;
+    }
   }
 }
 
@@ -310,12 +362,12 @@
 
   /* Library specific styles */
   .library-card {
-    @apply bg-background/95 backdrop-blur-md 
-           !border !border-solid !border-[#444444]
+    @apply bg-red-500
+           border border-[#353535]
            rounded shadow-lg 
            transition-all duration-200
            hover:shadow-xl
-           hover:bg-background/98
+           hover:bg-red-600
            p-4;
   }
   
@@ -373,63 +425,5 @@
   .playback-speed-slider .mark.normal {
     height: 8px;
     background-color: rgb(163, 230, 53);
-  }
-}
-
-@layer base {
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 90%; /* This is approximately #e5e5e5 */
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 90%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 90%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 25%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-  }
-
-  /* Override Radix UI radio button colors */
-  .dark [role="radio"] {
-    @apply !border-[#bef264] !text-[#bef264];
-  }
-
-  .dark [role="radio"][data-state="checked"] {
-    @apply !border-[#bef264];
-  }
-
-  .dark [role="radio"] .bg-current {
-    @apply !bg-[#bef264];
-  }
-
-  /* Override textarea styles with higher specificity */
-  .dark textarea[data-slot="textarea"].border-input {
-    @apply border-[#444444] bg-transparent text-white;
-  }
-
-  .dark textarea[data-slot="textarea"].border-input:hover {
-    @apply border-white;
-  }
-
-  .dark textarea[data-slot="textarea"].border-input:focus-visible {
-    @apply border-white ring-0 outline-none;
-  }
-
-  .dark textarea[data-slot="textarea"].placeholder\:text-muted-foreground::placeholder {
-    @apply text-gray-500;
-  }
-
-  .dark textarea[data-slot="textarea"].placeholder\:text-muted-foreground:focus::placeholder {
-    @apply text-transparent;
   }
 }
