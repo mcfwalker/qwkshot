@@ -59,8 +59,6 @@ You MUST use the following knowledge bases (provided via Retrieval/Files) and to
     *   When calling `compose_pattern`, provide the `pattern` name and any relevant parameters extracted from the user's prompt. Consult the **Pattern KB** for parameter details and defaults if a parameter isn't mentioned by the user.
     *   **DO NOT** attempt to manually expand patterns into primitives yourself.
 
-(Note: `fly_by`, `fly_away`, `arc`, `reveal`, `set_view` are no longer primitives and may be handled by patterns defined in the Pattern KB).
-
 ## Processing Logic & Output
 
 1.  **Analyze the Prompt:** Determine if the user is requesting a high-level pattern (defined in **Pattern KB**) or a sequence of atomic motion primitives (defined in **Motion KB**).
