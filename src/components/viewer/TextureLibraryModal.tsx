@@ -13,7 +13,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from '@/components/ui/dialog'
 
 interface TextureLibraryModalProps {
@@ -91,6 +92,9 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
       <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
         <DialogHeader>
           <DialogTitle>Select Texture</DialogTitle>
+          <DialogDescription>
+            Choose a texture for the floor or upload a new one.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="py-4">

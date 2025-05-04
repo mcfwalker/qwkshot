@@ -29,6 +29,10 @@ import { CenterReticle } from './CenterReticle';
 import { BottomToolbar } from './BottomToolbar';
 import React from 'react';
 import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
+import { supabase } from '@/lib/supabase';
+import { updateThumbnailUrlAction, uploadThumbnailAction } from '@/app/actions/thumbnail';
+import { playSound, Sounds } from '@/lib/soundUtils';
+import { ThumbnailPreviewModal } from './ThumbnailPreviewModal';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -435,7 +439,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   // Handler to REMOVE the texture
   const handleRemoveTexture = useCallback(() => {
     setFloorTexture(null);
-    toast.info("Floor texture removed."); 
+    // toast.info("Floor texture removed."); // Removing this toast notification
   }, []);
 
   // >>> NEW Handler for model selection <<<
@@ -464,6 +468,375 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       setShowReticle(prev => !prev);
       setTimeout(() => setIsReticleLoading(false), 1000); // Reduce timeout to 1000ms
   }, [showReticle, isReticleLoading]); 
+
+  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
+  const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
+  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
+  const [isSavingThumbnail, setIsSavingThumbnail] = useState(false);
+  const [isThumbnailSaved, setIsThumbnailSaved] = useState(false);
+
+  // Handler for capturing thumbnail
+  const handleCaptureThumbnail = useCallback(async () => {
+    if (!modelRef.current || !currentModelId || !canvasRef.current) {
+      toast.error('Cannot capture thumbnail: Model or canvas not available');
+      return;
+    }
+    
+    if (isLocked || isPlaying) {
+      toast.error('Cannot capture thumbnail while scene is locked or playing animation');
+      return;
+    }
+
+    // Directly fetch the model name to ensure it's up-to-date
+    if (currentModelId) {
+      try {
+        const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/models?id=eq.${currentModelId}&select=name`;
+        console.log('Capture thumbnail: Fetching model name from:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0 && data[0].name) {
+            console.log('Capture thumbnail: Setting model name to:', data[0].name);
+            setModelName(data[0].name);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching model name during capture:', error);
+        // Continue with capture even if name fetch fails
+      }
+    }
+
+    // Show the modal immediately with loading state
+    setIsCapturingThumbnail(true);
+    setCapturedThumbnail(null);
+    setShowThumbnailPreview(true);
+    setIsThumbnailSaved(false);
+    
+    try {
+      // Play camera shutter sound
+      await playSound(Sounds.CAMERA_SHUTTER, 0.8);
+      
+      // Create a copy of canvas DOM element with rendering
+      const captureCanvas = document.createElement('canvas');
+      const captureContext = captureCanvas.getContext('2d');
+      
+      if (!captureContext) {
+        throw new Error('Could not create capture context');
+      }
+      
+      // Match dimensions of original canvas
+      const canvas = canvasRef.current;
+      captureCanvas.width = canvas.width;
+      captureCanvas.height = canvas.height;
+      
+      // For debugging purposes
+      console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+      
+      // Force a render by requesting an animation frame and waiting
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          try {
+            // Draw the existing canvas to our capture canvas
+            captureContext.drawImage(canvas, 0, 0);
+            resolve(true);
+          } catch (e) {
+            console.error('Error during capture:', e);
+            resolve(false);
+          }
+        });
+      });
+      
+      // Create a square crop
+      const size = Math.min(captureCanvas.width, captureCanvas.height);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = size;
+      tempCanvas.height = size;
+      const ctx = tempCanvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Could not get 2D context for temporary canvas');
+      }
+      
+      // Draw a clean dark background
+      ctx.fillStyle = '#222222'; // Slightly darker than black for better contrast
+      ctx.fillRect(0, 0, size, size);
+      
+      // Calculate the position to crop from (center of original canvas)
+      const sourceX = (captureCanvas.width - size) / 2;
+      const sourceY = (captureCanvas.height - size) / 2;
+      
+      // Draw the cropped region to the temp canvas
+      ctx.drawImage(
+        captureCanvas,
+        sourceX, sourceY, size, size, // Source rectangle
+        0, 0, size, size // Destination rectangle
+      );
+      
+      // Convert the canvas to a base64 data URL
+      const base64Image = tempCanvas.toDataURL('image/png');
+      
+      // Store the thumbnail to show in modal
+      setCapturedThumbnail(base64Image);
+      
+    } catch (error) {
+      console.error('Error capturing thumbnail:', error);
+      toast.error('Failed to capture thumbnail', { 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      // Close modal on error
+      setShowThumbnailPreview(false);
+    } finally {
+      setIsCapturingThumbnail(false);
+    }
+  }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
+  
+  const [modelName, setModelName] = useState<string>('model');
+  
+  // Effect to fetch model name when currentModelId changes
+  useEffect(() => {
+    if (currentModelId) {
+      const fetchModelName = async () => {
+        console.log('Starting to fetch model name for ID:', currentModelId);
+        try {
+          // Use a direct fetch request instead of the Supabase client
+          // This bypasses potential client configuration issues
+          const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/models?id=eq.${currentModelId}&select=name`;
+          console.log('Fetching from URL:', apiUrl);
+          
+          // Use fetch API directly with proper headers
+          const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          console.log('Received data for model name:', data);
+          if (data && data.length > 0 && data[0].name) {
+            console.log('Setting model name to:', data[0].name);
+            setModelName(data[0].name || 'model');
+          } else {
+            console.log('Model name not found in response:', data);
+            setModelName('model');
+          }
+        } catch (err) {
+          console.error('Error fetching model name:', err);
+          // Use a default name instead of failing
+          setModelName('model');
+        }
+      };
+      
+      fetchModelName();
+    }
+  }, [currentModelId]);
+  
+  // Function to resize an image to specific dimensions
+  const resizeImage = (base64Image: string, maxWidth: number, maxHeight: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create a canvas to resize the image
+        const canvas = document.createElement('canvas');
+        canvas.width = maxWidth;
+        canvas.height = maxHeight;
+        
+        // Draw the image on the canvas at the reduced size
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        // Draw with black background
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(0, 0, maxWidth, maxHeight);
+        
+        // Draw the image centered
+        ctx.drawImage(img, 0, 0, maxWidth, maxHeight);
+        
+        // Get the reduced image as base64
+        const resizedImage = canvas.toDataURL('image/png');
+        resolve(resizedImage);
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Error loading image for resizing'));
+      };
+      
+      img.src = base64Image;
+    });
+  };
+  
+  // Handler for saving thumbnail to server
+  const handleSaveThumbnail = useCallback(async () => {
+    if (!capturedThumbnail || !currentModelId) {
+      toast.error('Thumbnail data is missing');
+      return;
+    }
+    
+    setIsSavingThumbnail(true);
+    
+    // Get the most up-to-date model name directly before saving
+    let nameToUse = modelName;
+    
+    if (nameToUse === 'model' || !nameToUse) {
+      try {
+        // Use Supabase client directly instead of fetch API
+        const { data, error } = await supabase
+          .from('models')
+          .select('name')
+          .eq('id', currentModelId)
+          .single();
+          
+        if (!error && data && data.name) {
+          console.log('Save: Got fresh model name from DB:', data.name);
+          nameToUse = data.name;
+          // Also update the state for future use
+          setModelName(data.name);
+        } else {
+          console.error('Error fetching name before save:', error);
+        }
+      } catch (err) {
+        console.error('Exception fetching model name:', err);
+      }
+    }
+    
+    try {
+      // Resize the image to a more reasonable size for storage (512x512)
+      const resizedImage = await resizeImage(capturedThumbnail, 512, 512);
+      
+      console.log('Viewer: Uploading optimized thumbnail via server action for model ID:', currentModelId);
+      console.log('Viewer: Using model name for server action:', nameToUse);
+      
+      // Use the server action to upload the resized image with the model name
+      let result;
+
+      try {
+        // First try with the model name parameter
+        // @ts-ignore - Ignore type error because server action accepts optional third parameter
+        result = await uploadThumbnailAction(currentModelId, resizedImage, nameToUse);
+        
+        if (!result.success) {
+          console.error('Viewer: Thumbnail upload failed with error:', result.error);
+          throw new Error(`Failed to upload thumbnail: ${result.error}`);
+        }
+      } catch (uploadError) {
+        console.error('Error attempting upload with model name:', uploadError);
+        
+        // Fallback to calling without the model name param if there was an error
+        console.log('Falling back to standard upload without model name parameter');
+        // @ts-ignore - Intentionally ignore TS errors for fallback approach
+        result = await uploadThumbnailAction(currentModelId, resizedImage);
+        
+        if (!result.success) {
+          console.error('Viewer: Fallback thumbnail upload failed with error:', result.error);
+          throw new Error(`Failed to upload thumbnail: ${result.error}`);
+        }
+      }
+      
+      console.log('Viewer: Thumbnail uploaded successfully, URL:', result.url);
+      toast.success('Thumbnail saved successfully');
+      
+      // Keep the modal open, user may want to download the image too
+      // Mark as saved to update the UI
+      setIsThumbnailSaved(true);
+      
+      // Force a refresh after a brief delay to ensure the UI updates
+      setTimeout(() => {
+        supabase.auth.refreshSession();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Viewer: Error saving thumbnail:', error);
+      toast.error('Failed to save thumbnail', { 
+        description: error instanceof Error ? error.message : 'Unknown error',
+        duration: 5000 // Show error longer
+      });
+    } finally {
+      setIsSavingThumbnail(false);
+    }
+  }, [capturedThumbnail, currentModelId, modelName]);
+  
+  // Handler for downloading the thumbnail
+  const handleDownloadThumbnail = useCallback(async () => {
+    if (!capturedThumbnail) {
+      toast.error('No thumbnail to download');
+      return;
+    }
+    
+    console.log('Download thumbnail - current model name state:', modelName);
+    
+    // Get the most up-to-date model name directly before downloading
+    let nameToUse = modelName;
+    
+    if (currentModelId && nameToUse === 'model') {
+      try {
+        // Use Supabase client directly instead of fetch API
+        const { data, error } = await supabase
+          .from('models')
+          .select('name')
+          .eq('id', currentModelId)
+          .single();
+          
+        if (!error && data && data.name) {
+          console.log('Download: Got fresh model name from DB:', data.name);
+          nameToUse = data.name;
+          // Also update the state for future use
+          setModelName(data.name);
+        } else {
+          console.error('Error fetching name before download:', error);
+        }
+      } catch (err) {
+        console.error('Exception fetching model name:', err);
+      }
+    }
+    
+    // Create a formatted date string for the filename
+    const now = new Date();
+    const formattedDate = now.getFullYear() +
+      ('0' + (now.getMonth() + 1)).slice(-2) +
+      ('0' + now.getDate()).slice(-2) +
+      ('0' + now.getHours()).slice(-2) +
+      ('0' + now.getMinutes()).slice(-2);
+    
+    // Create a sanitized version of the model name (remove characters that aren't good for filenames)
+    const safeModelName = nameToUse.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    console.log('Using safe model name for download:', safeModelName);
+    
+    // Create filename 
+    const filename = `${safeModelName}-${formattedDate}.png`;
+    console.log('Generated download filename:', filename);
+    
+    // Create a temporary link element
+    const downloadLink = document.createElement('a');
+    downloadLink.href = capturedThumbnail;
+    downloadLink.download = filename;
+    
+    // Append to the document, click it, and remove it
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    toast.success('Thumbnail downloaded');
+  }, [capturedThumbnail, modelName, currentModelId]);
 
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
@@ -681,7 +1054,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         // >>> Add Reticle Props <<<
         onToggleReticle={handleToggleReticle} 
         isReticleVisible={showReticle} 
-        isReticleLoading={isReticleLoading} 
+        isReticleLoading={isReticleLoading}
+        // >>> Add Thumbnail Props <<< 
+        onCaptureThumbnail={handleCaptureThumbnail}
+        isModelLoaded={!!modelUrl}
+        isCapturingThumbnail={isCapturingThumbnail}
       />
       
       {/* Clear Scene Confirmation Dialog */}
@@ -692,6 +1069,19 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           onCancel={() => setShowClearConfirm(false)}
         />
       )}
+
+      {/* Thumbnail Preview Modal */}
+      <ThumbnailPreviewModal
+        isOpen={showThumbnailPreview}
+        onClose={() => setShowThumbnailPreview(false)}
+        thumbnailImage={capturedThumbnail}
+        onSetAsThumbnail={handleSaveThumbnail}
+        onDownload={handleDownloadThumbnail}
+        isProcessing={isSavingThumbnail}
+        isSaved={isThumbnailSaved}
+        isCapturing={isCapturingThumbnail}
+        modelName={modelName}
+      />
     </div>
   );
 }

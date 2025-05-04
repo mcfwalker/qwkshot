@@ -55,7 +55,6 @@ export default function LibraryPage() {
             alt="Library Header"
             fill
             style={{ objectFit: 'contain' }}
-            priority
           />
         </div>
 
