@@ -10,66 +10,87 @@ Implement the capability within the Prompt-to-Path (P2P) pipeline to execute mul
 
 ## 2. Scope & Use Cases
 
-*   **Initial Supported Combinations:** Define the specific pairs or groups of primitives that should support blending in the first implementation. Consider:
+*   **Initial Supported Combinations:** Define the specific pairs or groups of primitives that should support blending in the first implementation. Tentative initial scope:
     *   Translation + Translation (e.g., `dolly` + `truck`, `dolly` + `pedestal`, `truck` + `pedestal`)
     *   Translation + Orbit (e.g., `dolly` + `orbit`, `truck` + `orbit`)
-    *   Orbit + Pedestal/Zoom? (e.g., `orbit` + `pedestal` for spirals, `orbit` + `zoom`?)
-    *   Pan/Tilt + Translation? (Less common, but possible? e.g., panning while trucking)
-*   **Unsupported Combinations:** Explicitly list combinations that will *not* be supported initially or potentially ever (e.g., `dolly` + `dolly`, `static` + anything).
+    *   Orbit + Pedestal (for spiral-like motion)
+*   **Unsupported Combinations:** Explicitly list combinations that will *not* be supported initially: `dolly`+`dolly`, `truck`+`truck`, `pedestal`+`pedestal`, `static`+anything, `pan`+`tilt` (use `focus_on` or single `rotate`), potentially others TBD.
 *   **Primary Test Case:** "Dolly out while trucking left" - this should be the benchmark for initial success.
 *   **Future Consumers:** Note that implemented patterns (like zigzag, spiral) will eventually leverage this blending capability.
 
 ## 3. LLM Interaction & Prompting
 
 *   **Trigger Phrases:** Identify keywords or phrasing the LLM should recognize as requests for blended motion (e.g., "while", "simultaneously", "as you", "at the same time").
-*   **System Instructions:** How should the Assistant's instructions be updated to guide it in generating the new data structure for blended motion when these phrases are detected?
-*   **Output Structure:** Define how the LLM should represent the request for blending in its output (likely influencing the decision in Section 4).
+*   **System Instructions:** Update Assistant instructions to guide it on recognizing blend requests and generating the appropriate output structure (see below).
+*   **Output Structure Strategy:** Define how the LLM represents the blend request. **Chosen Strategy:** Potentially have the LLM output an intermediate, simpler structure indicating the intent to blend and the motions involved. The backend adapter layer would then normalize this into the standardized `type: "blend"` structure before it reaches the interpreter.
+    *   *Example Intermediate LLM Output:* `{ "blend": true, "motions": [ { "type": "dolly", ... }, { "type": "truck", ... } ] }`
+    *   This simplifies the LLM's task; the adapter handles enforcing the final strict schema.
 
 ## 4. Data Structure Changes (`MotionPlan` / `MotionStep`)
 
-Determine the best way to represent concurrent steps in the JSON `MotionPlan` that flows from the LLM (or potentially an adapter) to the `SceneInterpreter`. Options:
+**Chosen Approach: Option A (Blend Step Type)**
 
-*   **Option A: Blend Step Type:**
-    ```json
-    { "type": "blend", "duration_ratio": 0.5, "steps": [ { "type": "dolly", ... }, { "type": "truck", ... } ] }
-    ```
-*   **Option B: Concurrent Flag:**
-    ```json
-    { "type": "dolly", ..., "concurrentWithNext": true },
-    { "type": "truck", ... } // Both run over the duration of the first step?
-    ```
-*   **Option C: Array of Steps:**
-    ```json
-    // How to group them? Maybe nested array indicates concurrency?
-    { "steps": [ {dolly}, [ {truck}, {orbit} ], {zoom} ] }
-    ```
-*   **Chosen Approach:** Select one option and detail its schema.
-*   **Duration Handling:** Clarify how `duration_ratio` applies to a blended segment.
+Represent concurrent motions using a dedicated `blend` step type within the `MotionPlan.steps` array. This isolates the blended segment and allows uniform application of parameters like duration and easing.
+
+**Schema:**
+
+```json
+{
+  "type": "blend",
+  "duration_ratio": 0.6, // Proportion of total plan duration for this blended segment
+  "parameters": {
+    "easing": "easeInOutCubic", // Optional: Easing for the entire blended segment
+    // Other potential blend-level parameters?
+    "steps": [
+      // Array of standard MotionStep objects to execute concurrently
+      { 
+        "type": "dolly", 
+        // Note: duration_ratio within sub-steps is ignored; blend duration applies
+        "parameters": { "direction": "backward", "distance_descriptor": "large" }
+      },
+      { 
+        "type": "truck", 
+        "parameters": { "direction": "left", "distance_descriptor": "small" }
+      }
+      // Can potentially include more compatible primitives here
+    ]
+  }
+}
+```
+
+*   **Duration Handling:** The `duration_ratio` at the top level of the `blend` step applies to the entire concurrent segment. Any `duration_ratio` specified within the nested `steps` is ignored.
+*   **Easing:** An optional `easing` parameter at the `blend` level applies uniformly to the combined motion over the segment's duration.
+*   **Nested Steps:** The `steps` array within `parameters` contains standard `MotionStep` definitions, excluding `duration_ratio`.
 
 ## 5. `SceneInterpreter` Modifications
 
-This is the core technical challenge.
+This requires significant updates to the interpreter's core logic.
 
-*   **Input Parsing:** Update the interpreter to recognize and correctly parse the chosen data structure (from Section 4) representing concurrent steps.
-*   **Combined Effect Calculation:** Define the mathematical approach for combining the effects of blended primitives:
-    *   **Translations:** Likely vector addition of the calculated position deltas from each translation primitive (`dolly`, `truck`, `pedestal`).
-    *   **Rotations (Orbit/Pan/Tilt):** How to combine simultaneous rotations or rotation + translation? (e.g., Apply translation then rotation? Use quaternion multiplication/SLERP for combined rotation? Calculate target position changes separately and combine?).
-    *   **Zoom:** How does zoom blend with other motions?
-*   **State Update:** Ensure the camera's state (position, target) is updated correctly *after* each blended step calculation, before processing the next step.
-*   **Constraint Application:** Apply safety constraints (min/max distance, height, collision detection via raycasting) to the *net calculated path* of the blended segment, not just individual component primitives.
-*   **Easing:** Define how easing functions apply. Use a single easing function for the entire blended segment? Apply separate easing to components before combining (likely complex)?
-*   **Target Resolution:** How are targets handled when primitives with potentially different implicit targets (e.g., `dolly` along view vector, `orbit` around `object_center`) are blended?
+*   **Input Parsing:** Implement logic to identify `type: "blend"` steps and parse the nested `steps` array within `parameters`.
+*   **Combined Effect Calculation Strategy:**
+    *   **Independent Delta Calculation:** For each nested primitive step within the `blend` parameters, calculate its intended effect over the *full duration* of the blend segment as if it were running alone (e.g., target end position/orientation delta).
+    *   **Translation Combination:** Sum the vector deltas calculated for all concurrent translation primitives (`dolly`, `truck`, `pedestal`) to get a single net translation vector.
+    *   **Rotation Combination:**
+        *   If blending translation(s) and a single rotation (e.g., `dolly` + `orbit`): Calculate the final orientation from the rotation, then apply the net translation vector relative to the start position.
+        *   If blending multiple rotations (less common initial scope): Use quaternion multiplication or SLERP to find the net rotation quaternion.
+    *   **Zoom Combination:** Treat zoom (FOV change or camera distance scaling) as an independent scalar interpolation that layers on top of positional/rotational changes.
+*   **State Update & Interpolation:** Calculate the final target state (position, target/orientation, FOV) after applying the combined effects. Generate keyframes (start and end, potentially intermediate for complex curves) representing the smooth transition to this target state over the blend segment's duration.
+*   **Constraint Application:** Apply safety constraints (min/max distance, height, collision raycasting with dynamic offset) to the *calculated net path* from the start state to the target end state of the *entire blended segment*. If the net path is invalid, reject or clamp the blended step.
+*   **Easing:** Apply the specified `blend`-level `easing` function (or default) to the interpolation parameter `t` (from 0 to 1) over the segment's duration. Use the resulting `t_eased` to interpolate between the start and calculated target state: `newState = lerp(startState, targetState, t_eased)`.
+*   **Target Resolution:** Before calculating deltas, resolve targets for each nested step. If conflicting targets are implied (e.g., dolly towards `current_target` while orbiting `object_center`), prioritize explicit targets or define a clear precedence rule (e.g., orbit target usually dominates). Default to using the camera's current target at the start of the blend segment if no specific targets are provided in the nested steps.
 
 ## 6. `AnimationController` Impact (Client-side)
 
-*   **Goal:** Ideally, the `SceneInterpreter` should output `CameraCommand` keyframes that represent the *final, combined* path of the blended motion.
-*   **Assessment:** If the interpreter successfully calculates the net effect and generates standard keyframes, the `AnimationController` might require minimal or no changes, as it just interpolates between the provided keyframes.
-*   **Verification Needed:** Confirm that interpolating the keyframes generated from blended steps produces a smooth visual result.
+*   **Goal:** Interpreter outputs standard `CameraCommand` keyframes representing the combined path.
+*   **Assessment:** If the interpreter successfully generates valid start/end keyframes for the blended segment, the `AnimationController` should require **no changes**, as it simply interpolates between the states defined in the commands it receives.
+*   **Verification Needed:** Confirm smooth visual interpolation occurs based on the keyframes generated for blended steps.
 
 ## 7. Testing Strategy
 
-*   **Core Cases:** Test the initial supported combinations (e.g., dolly+truck, dolly+orbit) with specific parameters.
-*   **Prompts:** Use prompts with trigger phrases ("dolly out while trucking left", "orbit the top while moving up").
-*   **Visual Verification:** Primarily rely on visual inspection of the resulting animation smoothness and correctness.
-*   **Constraint Tests:** Ensure constraints are still respected during blended moves.
-*   **Edge Cases:** Consider blending near boundaries, blending with very different magnitudes or speeds. 
+*   **Core Cases:** Test initial supported combinations (dolly+truck, dolly+orbit, orbit+pedestal) with varying parameters.
+*   **Prompts:** Use prompts with trigger phrases ("dolly out while trucking left", "spiral up around the model").
+*   **Visual Verification:** Primarily rely on visual inspection of animation smoothness and correctness.
+*   **Snapshot Tests:** Programmatically save camera `position` and `quaternion`/`target` at intervals (e.g., t=0, 0.25, 0.5, 0.75, 1.0) during a blended animation for specific test prompts. Compare against expected values.
+*   **Path Deviation Checks:** For relevant blends (e.g., orbit+dolly), plot the calculated camera path in 2D/3D and compare against expected shapes (e.g., helix for orbit+pedestal).
+*   **Constraint Tests:** Ensure constraints (min/max distance/height, object collision) are respected during blended moves, using mocked scene setups.
+*   **Edge Cases:** Test blending near boundaries, blending primitives with very different magnitudes or speeds, blending from various starting camera angles. 
