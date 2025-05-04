@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { 
     MotionPlan,
     MotionPlannerService,
-    OpenAIAssistantProviderConfig 
+    OpenAIAssistantProviderConfig,
+    AdapterPlanResponse
 } from "../types";
 import { 
     MotionPlannerError, 
@@ -44,9 +45,12 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
     }
 
     /**
-     * Generates a structured motion plan using the configured OpenAI Assistant.
+     * Generates a structured motion plan OR identifies a required function call
+     * using the configured OpenAI Assistant.
+     *
+     * @returns An AdapterPlanResponse object indicating either a motion plan or a function call.
      */
-    async generatePlan(userPrompt: string, requestedDuration?: number): Promise<MotionPlan> {
+    async generatePlan(userPrompt: string, requestedDuration?: number): Promise<AdapterPlanResponse> {
         console.log(`Generating plan with prompt: "${userPrompt}", duration: ${requestedDuration}`);
         let threadId: string | null = null; // Keep track for potential cleanup/logging
         let runId: string | null = null;
@@ -79,14 +83,13 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
 
             while (
                 retrievedRun.status === 'queued' || 
-                retrievedRun.status === 'in_progress' ||
-                retrievedRun.status === 'requires_action' 
+                retrievedRun.status === 'in_progress'
             ) {
                 if (Date.now() - startTime > timeoutMs) {
                     try {
                         await this.openai.beta.threads.runs.cancel(threadId, retrievedRun.id);
                     } catch (cancelError) { /* Ignore cancel error */ }
-                    throw new AssistantInteractionError(`Run timed out after ${timeoutMs / 1000} seconds.`, 'TIMEOUT', { threadId, runId });
+                    throw new AssistantInteractionError(`Run timed out after ${timeoutMs / 1000} seconds while status was ${retrievedRun.status}.`, 'TIMEOUT', { threadId, runId });
                 }
 
                 // --- Use injected timer delay function --- 
@@ -94,95 +97,125 @@ export class OpenAIAssistantAdapter implements MotionPlannerService {
                 // --- End timer handling --- 
                 
                 retrievedRun = await this.openai.beta.threads.runs.retrieve(threadId, retrievedRun.id);
+                console.log(`Run ${runId} status: ${retrievedRun.status}`); // Add status logging
             }
 
-            // Check for unsuccessful terminal states
-            if (retrievedRun.status !== 'completed') {
-                 const errorDetails = retrievedRun.last_error ? 
-                    `${retrievedRun.last_error.code} - ${retrievedRun.last_error.message}` : 
-                    'No error details provided.';
-                throw new AssistantInteractionError(`Run failed or was cancelled. Final status: ${retrievedRun.status}. ${errorDetails}`, retrievedRun.status, { threadId, runId, lastError: retrievedRun.last_error });
-            }
-
-            // 5. Retrieve Assistant Message
-            const messages = await this.openai.beta.threads.messages.list(threadId, { order: "desc", limit: 1 });
-            const assistantMessage = messages.data.find(m => m.role === 'assistant');
-
-            if (!assistantMessage) {
-                throw new AssistantInteractionError('Assistant did not respond in the thread.', 'NO_RESPONSE', { threadId, runId });
-            }
-
-            // 6. Parse JSON
-            let motionPlan: MotionPlan | null = null;
-            let jsonParseError: string | null = null;
-            let rawJsonString: string | null = null;
-
-            if (assistantMessage.content.length > 0 && assistantMessage.content[0].type === 'text') {
-                rawJsonString = assistantMessage.content[0].text.value;
-                let jsonToParse: string | null = null;
-
-                // --- Robust JSON Extraction --- 
-                try {
-                    const startIndex = rawJsonString.indexOf('{');
-                    const endIndex = rawJsonString.lastIndexOf('}');
-
-                    if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
-                        jsonToParse = rawJsonString.substring(startIndex, endIndex + 1);
-                        console.debug('[Adapter DEBUG] Extracted potential JSON:', jsonToParse); // Use console
+            // --- Handle Terminal Statuses --- 
+            
+            // 4a. Check for Requires Action (Function Calling)
+            if (retrievedRun.status === 'requires_action') {
+                console.log(`Run ${runId} requires action.`);
+                if (
+                    retrievedRun.required_action &&
+                    retrievedRun.required_action.type === 'submit_tool_outputs' &&
+                    retrievedRun.required_action.submit_tool_outputs.tool_calls
+                ) {
+                    // Assuming only one tool call is expected for compose_pattern for now
+                    const toolCall = retrievedRun.required_action.submit_tool_outputs.tool_calls[0];
+                    if (toolCall && toolCall.type === 'function') {
+                        console.log(`Detected function call: ${toolCall.function.name}`);
+                        // Return the function call details
+                        return {
+                            type: 'function_call',
+                            name: toolCall.function.name,
+                            arguments: toolCall.function.arguments // Arguments are a JSON string
+                        };
                     } else {
-                        // Could not find valid braces, maybe it IS pure JSON?
-                        jsonToParse = rawJsonString.trim(); 
-                        if (!jsonToParse.startsWith('{') || !jsonToParse.endsWith('}')) {
-                           // If it doesn't look like JSON after trim, parsing will fail
-                           jsonToParse = null; 
-                        }
+                         throw new AssistantInteractionError('Run requires action, but tool call format is unexpected.', 'UNEXPECTED_TOOL_CALL_FORMAT', { threadId, runId, requiredAction: retrievedRun.required_action });
                     }
-                } catch (extractError) {
-                     console.error('[Adapter ERROR] Error during JSON string extraction:', extractError); // Use console
-                     jsonToParse = null; // Ensure parsing fails if extraction errors
+                } else {
+                    throw new AssistantInteractionError('Run requires action, but required_action details are missing or invalid.', 'INVALID_REQUIRED_ACTION', { threadId, runId, requiredAction: retrievedRun.required_action });
                 }
-                // --- End Robust JSON Extraction ---
-                
-                try {
-                    if (jsonToParse) {
-                        // ADDED: Strip comments before parsing
-                        const cleanedJsonString = jsonToParse
-                            .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments /* ... */
-                            .replace(/\/\/.*/g, '');           // Remove single-line comments // ...
+            }
 
-                        // MODIFIED: Attempt to parse the *cleaned* string
-                        const parsedJson = JSON.parse(cleanedJsonString);
-                        // Validate structure
-                        if (parsedJson && Array.isArray(parsedJson.steps)) {
-                            motionPlan = parsedJson as MotionPlan;
+            // 4b. Check for Completed Status (Standard JSON Response)
+            if (retrievedRun.status === 'completed') {
+                console.log(`Run ${runId} completed. Retrieving messages...`);
+                const messages = await this.openai.beta.threads.messages.list(threadId, { order: "desc", limit: 1 });
+                const assistantMessage = messages.data.find(m => m.role === 'assistant');
+
+                if (!assistantMessage) {
+                    throw new AssistantInteractionError('Assistant did not respond in the thread after run completion.', 'NO_RESPONSE', { threadId, runId });
+                }
+
+                // 6. Parse JSON
+                let motionPlan: MotionPlan | null = null;
+                let jsonParseError: string | null = null;
+                let rawJsonString: string | null = null;
+
+                if (assistantMessage.content.length > 0 && assistantMessage.content[0].type === 'text') {
+                    rawJsonString = assistantMessage.content[0].text.value;
+                    let jsonToParse: string | null = null;
+
+                    // --- Robust JSON Extraction --- 
+                    try {
+                        const startIndex = rawJsonString.indexOf('{');
+                        const endIndex = rawJsonString.lastIndexOf('}');
+
+                        if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
+                            jsonToParse = rawJsonString.substring(startIndex, endIndex + 1);
+                            console.debug('[Adapter DEBUG] Extracted potential JSON:', jsonToParse); // Use console
                         } else {
-                            jsonParseError = "Extracted JSON does not conform to MotionPlan structure (missing 'steps' array).";
+                            // Could not find valid braces, maybe it IS pure JSON?
+                            jsonToParse = rawJsonString.trim(); 
+                            if (!jsonToParse.startsWith('{') || !jsonToParse.endsWith('}')) {
+                               // If it doesn't look like JSON after trim, parsing will fail
+                               jsonToParse = null; 
+                            }
                         }
-                    } else {
-                         jsonParseError = "Could not find valid JSON block in Assistant response.";
+                    } catch (extractError) {
+                         console.error('[Adapter ERROR] Error during JSON string extraction:', extractError); // Use console
+                         jsonToParse = null; // Ensure parsing fails if extraction errors
                     }
-                } catch (e) {
-                    jsonParseError = `Failed to parse extracted JSON: ${e instanceof Error ? e.message : String(e)}`;
-                    console.error("[Adapter ERROR] JSON Parsing Error. Raw content:"); // Use console
-                    console.error("---");
-                    console.error(rawJsonString);
-                    console.error("---");
+                    // --- End Robust JSON Extraction ---
+                    
+                    try {
+                        if (jsonToParse) {
+                            // ADDED: Strip comments before parsing
+                            const cleanedJsonString = jsonToParse
+                                .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments /* ... */
+                                .replace(/\/\/.*/g, '');           // Remove single-line comments // ...
+
+                            // MODIFIED: Attempt to parse the *cleaned* string
+                            const parsedJson = JSON.parse(cleanedJsonString);
+                            // Validate structure
+                            if (parsedJson && Array.isArray(parsedJson.steps)) {
+                                motionPlan = parsedJson as MotionPlan;
+                            } else {
+                                jsonParseError = "Extracted JSON does not conform to MotionPlan structure (missing 'steps' array).";
+                            }
+                        } else {
+                             jsonParseError = "Could not find valid JSON block in Assistant response.";
+                        }
+                    } catch (e) {
+                        jsonParseError = `Failed to parse extracted JSON: ${e instanceof Error ? e.message : String(e)}`;
+                        console.error("[Adapter ERROR] JSON Parsing Error. Raw content:"); // Use console
+                        console.error("---");
+                        console.error(rawJsonString);
+                        console.error("---");
+                    }
+                } else {
+                    jsonParseError = "Assistant message content is empty or not in the expected text format.";
                 }
-            } else {
-                jsonParseError = "Assistant message content is empty or not in the expected text format.";
+
+                if (!motionPlan) {
+                    throw new MotionPlanParsingError(jsonParseError || "Unknown error parsing MotionPlan.", { threadId, runId, rawContent: rawJsonString });
+                }
+
+                // 8. Add metadata
+                if (!motionPlan.metadata) motionPlan.metadata = {};
+                if (requestedDuration !== undefined) motionPlan.metadata.requested_duration = requestedDuration;
+                motionPlan.metadata.original_prompt = userPrompt;
+
+                // 9. Return MotionPlan
+                return { type: 'motion_plan', plan: motionPlan };
             }
 
-            if (!motionPlan) {
-                throw new MotionPlanParsingError(jsonParseError || "Unknown error parsing MotionPlan.", { threadId, runId, rawContent: rawJsonString });
-            }
-
-            // 8. Add metadata
-            if (!motionPlan.metadata) motionPlan.metadata = {};
-            if (requestedDuration !== undefined) motionPlan.metadata.requested_duration = requestedDuration;
-            motionPlan.metadata.original_prompt = userPrompt;
-
-            // 9. Return MotionPlan
-            return motionPlan;
+            // 4c. Handle other unsuccessful terminal states
+            const errorDetails = retrievedRun.last_error ? 
+                `${retrievedRun.last_error.code} - ${retrievedRun.last_error.message}` : 
+                'No error details provided.';
+            throw new AssistantInteractionError(`Run ended unexpectedly. Final status: ${retrievedRun.status}. ${errorDetails}`, retrievedRun.status, { threadId, runId, lastError: retrievedRun.last_error });
 
         } catch (error: unknown) {
             console.error("Error during Assistant API interaction:", error);
