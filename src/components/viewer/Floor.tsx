@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { useTexture } from '@react-three/drei';
-import { DoubleSide, TextureLoader, RepeatWrapping, Texture, MeshStandardMaterial } from 'three';
+import { DoubleSide, TextureLoader, RepeatWrapping, Texture, MeshStandardMaterial, LinearFilter } from 'three';
 import { supabase } from '@/lib/supabase';
 
 export type FloorType = 'grid' | 'none';
@@ -27,9 +27,19 @@ export default function Floor({
   // Don't render anything if type is 'none' and no texture
   if (type === 'none' && !texture) return null;
 
-  // If we have a texture, render the textured floor
+  // If we have a texture, render the textured floor with fallback to grid
   if (texture) {
-    return <TexturedFloor url={texture} size={size} />;
+    return (
+      <Suspense fallback={
+        <gridHelper
+          args={[size, divisions, color, color]}
+          rotation={[0, 0, 0]}
+          position={[0, -0.01, 0]} 
+        />
+      }>
+        <TexturedFloor url={texture} size={size} fallbackColor={color} />
+      </Suspense>
+    );
   }
 
   // Default to grid if no texture and type is grid
@@ -46,9 +56,10 @@ export default function Floor({
   return null;
 }
 
-function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
+// Wrapper component that handles URL processing
+function TexturedFloor({ url, size = 20, fallbackColor = '#444444' }: { url: string; size?: number; fallbackColor?: string }) {
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
-  const materialRef = useRef<MeshStandardMaterial>(null!);
+  const [error, setError] = useState<boolean>(false);
   
   // Process the URL first to handle Supabase URLs correctly
   useEffect(() => {
@@ -57,65 +68,121 @@ function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
       try {
         // If it's a standard URL (not Supabase storage URL) just use it directly
         if (!url.includes('supabase.co/storage')) {
+          console.log('Using direct URL:', url);
           setProcessedUrl(url);
           return;
         }
         
-        // For Supabase URLs, extract the path and use the getPublicUrl method
-        // This ensures proper URL formatting and caching headers
-        const urlObj = new URL(url);
-        const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/([^?]+)/);
+        console.log('Processing Supabase URL:', url);
         
-        if (pathMatch && pathMatch[1]) {
-          const path = decodeURIComponent(pathMatch[1]);
-          const bucketName = path.split('/')[0];
-          const objectPath = path.split('/').slice(1).join('/');
+        // Parse the URL to extract the bucket and path
+        // Example: https://xxx.supabase.co/storage/v1/object/sign/floor-textures/image.jpg
+        const urlObj = new URL(url);
+        
+        // Extract the path pattern, handling both "sign", "public", etc.
+        const pathRegex = /\/storage\/v1\/object\/([^\/]+)\/([^?]+)/;
+        const match = urlObj.pathname.match(pathRegex);
+        
+        if (!match) {
+          console.error('Could not parse Supabase URL pattern:', url);
+          setError(true);
+          return;
+        }
+        
+        // match[1] will be "sign", "public", etc.
+        // match[2] will be the rest of the path including bucket
+        const accessType = match[1]; // e.g., "sign"
+        const fullPath = match[2];   // e.g., "floor-textures/image.jpg"
+        
+        // Split the full path into bucket and object path
+        const pathParts = fullPath.split('/');
+        const bucketName = pathParts[0];
+        const objectPath = pathParts.slice(1).join('/');
+        
+        console.log(`URL details: accessType=${accessType}, bucket=${bucketName}, path=${objectPath}`);
+        
+        // If the URL already has a token, just use it directly
+        if (url.includes('token=')) {
+          console.log('URL already has authentication token, using as-is');
+          setProcessedUrl(url);
+          return;
+        }
+        
+        // Otherwise, generate a fresh URL
+        if (accessType === 'sign') {
+          // For signed URLs, we need to get a signed URL
+          const { data, error } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(objectPath, 3600); // 1 hour expiration
+            
+          if (error || !data?.signedUrl) {
+            console.error('Failed to get signed URL for texture:', error);
+            setError(true);
+            return;
+          }
           
-          // Get a public URL that avoids the 406 error
+          console.log('Generated signed URL:', data.signedUrl);
+          setProcessedUrl(data.signedUrl);
+        } 
+        else {
+          // For public URLs, use getPublicUrl
           const { data } = supabase.storage
             .from(bucketName)
             .getPublicUrl(objectPath);
             
-          if (data?.publicUrl) {
-            // Add cache busting to prevent stale textures
-            const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
-            console.log('Using processed public URL:', publicUrl);
-            setProcessedUrl(publicUrl);
-          } else {
+          if (!data?.publicUrl) {
             console.error('Failed to get public URL for texture');
-            setProcessedUrl(url); // Fallback to original URL
+            setError(true);
+            return;
           }
-        } else {
-          // If we can't parse the URL, just use the original
-          setProcessedUrl(url);
+          
+          // Add cache busting to prevent stale textures
+          const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+          console.log('Using processed public URL:', publicUrl);
+          setProcessedUrl(publicUrl);
         }
       } catch (error) {
         console.error('Error processing texture URL:', error);
-        setProcessedUrl(url); // Fallback to original URL
+        setError(true);
       }
     };
     
     handleTextureUrl();
   }, [url]);
-  
-  // Don't try to load the texture until we have the processed URL
-  if (!processedUrl) {
-    return null;
+
+  // If there was an error or we don't have a URL yet, show the fallback grid
+  if (error || !processedUrl) {
+    return (
+      <gridHelper
+        args={[size, 20, fallbackColor, fallbackColor]}
+        rotation={[0, 0, 0]}
+        position={[0, -0.01, 0]}
+      />
+    );
   }
+
+  // When we have a processedUrl, render the inner component
+  return <TexturedMesh url={processedUrl} size={size} />;
+}
+
+// Inner component that actually uses the texture hook
+function TexturedMesh({ url, size = 20 }: { url: string; size?: number }) {
+  const materialRef = useRef<MeshStandardMaterial>(null!);
   
-  // Now use the processed URL with useTexture
-  const texture = useTexture(processedUrl);
+  // Always call useTexture (no conditionals)
+  const texture = useTexture(url);
   
-  // Configure texture for tiling using useEffect
+  // Configure texture for tiling using useEffect only
   useEffect(() => {
     if (texture) {
-      console.log("TexturedFloor Effect: Applying texture settings");
+      console.log("Applying texture settings for:", url);
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
       texture.repeat.set(10, 10); // Repeat the texture 10 times
+      texture.minFilter = LinearFilter;
       texture.needsUpdate = true; // Signal texture properties changed
     }
-  }, [texture]); // Run effect when texture object changes
+  }, [texture, url]); // Run effect when texture object changes
 
   return (
     <mesh 
@@ -125,7 +192,7 @@ function TexturedFloor({ url, size = 20 }: { url: string; size?: number }) {
     >
       <planeGeometry args={[size, size]} />
       <meshStandardMaterial 
-        ref={materialRef} // Assign ref to material
+        ref={materialRef}
         map={texture}
         color="#ffffff" 
         side={DoubleSide}

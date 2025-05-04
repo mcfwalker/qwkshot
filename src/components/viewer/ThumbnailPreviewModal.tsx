@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
@@ -20,6 +21,7 @@ interface ThumbnailPreviewModalProps {
   isProcessing: boolean;
   isSaved?: boolean;
   isCapturing?: boolean;
+  modelName?: string;
 }
 
 export function ThumbnailPreviewModal({
@@ -30,7 +32,8 @@ export function ThumbnailPreviewModal({
   onDownload,
   isProcessing,
   isSaved = false,
-  isCapturing = false
+  isCapturing = false,
+  modelName = 'model'
 }: ThumbnailPreviewModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -41,6 +44,9 @@ export function ThumbnailPreviewModal({
       <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Preview</DialogTitle>
+          <DialogDescription>
+            Preview the captured thumbnail before saving or downloading.
+          </DialogDescription>
         </DialogHeader>
         
         {isCapturing ? (

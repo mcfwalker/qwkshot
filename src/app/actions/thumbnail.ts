@@ -103,7 +103,8 @@ export async function updateThumbnailUrlAction(
  */
 export async function uploadThumbnailAction(
   modelId: string,
-  base64Image: string
+  base64Image: string,
+  modelName?: string
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
     // Verify modelId is provided
@@ -117,6 +118,9 @@ export async function uploadThumbnailAction(
     }
     
     console.log('uploadThumbnailAction: Starting upload process for model ID:', modelId);
+    if (modelName) {
+      console.log('uploadThumbnailAction: Using provided model name:', modelName);
+    }
     
     // Fix: Create client with awaited cookies
     const cookieStore = cookies();
@@ -131,21 +135,33 @@ export async function uploadThumbnailAction(
     
     console.log('uploadThumbnailAction: User authenticated:', session.user.id);
     
-    // Verify the user has access to this model
-    const { data: model, error: modelError } = await supabase
+    // Get model data if needed
+    let model: { user_id: string; thumbnail_url?: string; name?: string } | null = null;
+    let modelNameToUse = modelName;
+    
+    // Verify the user has access to this model and get model data if name not provided
+    const { data: modelData, error: modelError } = await supabase
       .from('models')
-      .select('user_id, thumbnail_url')
+      .select('user_id, thumbnail_url, name')
       .eq('id', modelId)
       .single();
       
-    if (modelError || !model) {
+    if (modelError || !modelData) {
       console.error('uploadThumbnailAction: Error fetching model:', modelError);
       return { success: false, error: 'Model not found' };
     }
     
-    if (model.user_id !== session.user.id) {
-      console.error('uploadThumbnailAction: User not authorized:', session.user.id, 'vs', model.user_id);
+    if (modelData.user_id !== session.user.id) {
+      console.error('uploadThumbnailAction: User not authorized:', session.user.id, 'vs', modelData.user_id);
       return { success: false, error: 'Not authorized to update this model' };
+    }
+    
+    model = modelData;
+    
+    // Use provided name or fallback to DB name
+    if (!modelNameToUse && model.name) {
+      modelNameToUse = model.name;
+      console.log('uploadThumbnailAction: Using model name from DB:', modelNameToUse);
     }
     
     console.log('uploadThumbnailAction: Model found and user authorized');
@@ -184,10 +200,19 @@ export async function uploadThumbnailAction(
     // Convert base64 to binary data using server-side method
     const imageData = base64ToUint8Array(base64Image);
     
+    // Get the model name for the filename
+    const finalModelName = modelNameToUse || model.name || 'model';
+    
+    // Sanitize the model name for use in a filename (remove special chars)
+    const safeModelName = finalModelName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    
+    // Use timestamp to ensure uniqueness
+    const timestamp = Date.now();
+    
     // Upload the thumbnail to the storage bucket using service role
-    // Store in a user-specific folder for organization (userId/modelId.png)
+    // Store in a user-specific folder with model name (userId/modelName-modelId-timestamp.png)
     const userId = session.user.id;
-    const filePath = `${userId}/${modelId}.png`;
+    const filePath = `${userId}/${safeModelName}-${modelId.substring(0,8)}-${timestamp}.png`;
     
     console.log('uploadThumbnailAction: Uploading thumbnail with service role to:', filePath);
     
