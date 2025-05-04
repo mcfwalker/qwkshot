@@ -3,21 +3,32 @@ import {
   SceneInterpreter,
   SceneInterpreterConfig,
   CameraCommand,
+  InterpretationError
 } from '@/types/p2p/scene-interpreter';
 import { CameraPath } from '@/types/p2p/llm-engine';
 import { ValidationResult, PerformanceMetrics, Logger } from '@/types/p2p/shared';
 import * as THREE from 'three'; // Import THREE namespace for easing functions potentially
-import { CatmullRomCurve3, Vector3, Box3 } from 'three'; // Explicitly import Box3
+import { CatmullRomCurve3, Vector3, Box3, Ray, Quaternion } from 'three'; // Explicitly import Box3
 import { MotionPlan, MotionStep } from '@/lib/motion-planning/types'; // Added
 import { SceneAnalysis } from '@/types/p2p/scene-analyzer'; // Added
 import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer'; // Added
 import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing';
+import {
+  resolveTargetPosition,
+  clampPositionWithRaycast,
+  mapDescriptorToValue,
+  mapDescriptorToGoalDistance,
+  normalizeDescriptor,
+  Descriptor, // Keep Descriptor import if needed locally
+  MagnitudeType // Keep MagnitudeType import if needed locally
+} from './interpreter-utils'; // Import the new utils
+import { handleStaticStep } from './primitive-handlers/handleStaticStep'; // Import the new handler
 
 // Define Canonical Descriptor type (KEEP OUTSIDE CLASS)
-type Descriptor = 'tiny' | 'small' | 'medium' | 'large' | 'huge';
+// type Descriptor = 'tiny' | 'small' | 'medium' | 'large' | 'huge';
 
 // Define Magnitude type (KEEP OUTSIDE CLASS)
-type MagnitudeType = 'distance' | 'factor' | 'pass_distance';
+// type MagnitudeType = 'distance' | 'factor' | 'pass_distance';
 
 // Define a simple logger for this module
 const logger = {
@@ -123,481 +134,6 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return { isValid, errors };
   }
 
-  /**
-   * Helper method to resolve a target name string into a Vector3 position.
-   * Uses SceneAnalysis data and the current camera target.
-   */
-  private _resolveTargetPosition(
-    targetName: string,
-    sceneAnalysis: SceneAnalysis,
-    envAnalysis: EnvironmentalAnalysis, // <-- Pass full envAnalysis
-    currentTarget: Vector3
-  ): Vector3 | null {
-    this.logger.debug(`Resolving target name: '${targetName}'`);
-
-    // Extract user offset (use optional chaining and nullish coalescing)
-    const userVerticalAdjustment = envAnalysis?.userVerticalAdjustment ?? 0;
-    this.logger.debug(`Using userVerticalAdjustment: ${userVerticalAdjustment}`);
-
-    if (targetName === 'current_target') {
-      this.logger.debug('Resolved target to current_target');
-      return currentTarget.clone();
-    }
-
-    // --- Standard Object References ---
-    const bounds = sceneAnalysis?.spatial?.bounds;
-    if (bounds && bounds.center && bounds.min && bounds.max) {
-        const center = bounds.center;
-        const min = bounds.min;
-        const max = bounds.max;
-
-        switch (targetName) {
-            case 'object_center':
-                this.logger.debug('Resolved target to object_center');
-                // Apply user offset to Y component
-                return new Vector3(center.x, center.y + userVerticalAdjustment, center.z);
-            case 'object_top_center':
-                this.logger.debug('Resolved target to object_top_center');
-                // Apply user offset to Y component
-                return new Vector3(center.x, max.y + userVerticalAdjustment, center.z);
-            case 'object_bottom_center':
-                this.logger.debug('Resolved target to object_bottom_center');
-                // Apply user offset to Y component
-                return new Vector3(center.x, min.y + userVerticalAdjustment, center.z);
-            case 'object_left_center': // Assuming -X is left
-                this.logger.debug('Resolved target to object_left_center');
-                // Apply user offset to Y component
-                return new Vector3(min.x, center.y + userVerticalAdjustment, center.z);
-            case 'object_right_center': // Assuming +X is right
-                this.logger.debug('Resolved target to object_right_center');
-                // Apply user offset to Y component
-                return new Vector3(max.x, center.y + userVerticalAdjustment, center.z);
-            case 'object_front_center': // Assuming +Z is front
-                this.logger.debug('Resolved target to object_front_center');
-                // Apply user offset to Y component
-                return new Vector3(center.x, center.y + userVerticalAdjustment, max.z);
-            case 'object_back_center': // Assuming -Z is back
-                this.logger.debug('Resolved target to object_back_center');
-                // Apply user offset to Y component
-                return new Vector3(center.x, center.y + userVerticalAdjustment, min.z);
-            // --- ADDED Corner Cases --- 
-            case 'object_bottom_left': 
-            case 'object_bottom_left_center': // Alias
-            case 'object_bottom_left_corner': // Alias
-                this.logger.debug('Resolved target to object_bottom_left');
-                return new Vector3(min.x, min.y + userVerticalAdjustment, center.z);
-            case 'object_bottom_right': 
-            case 'object_bottom_right_center': // Alias
-            case 'object_bottom_right_corner': // Alias
-                this.logger.debug('Resolved target to object_bottom_right');
-                return new Vector3(max.x, min.y + userVerticalAdjustment, center.z);
-            case 'object_top_left': 
-            case 'object_top_left_center': // Alias
-            case 'object_top_left_corner': // Alias
-                this.logger.debug('Resolved target to object_top_left');
-                return new Vector3(min.x, max.y + userVerticalAdjustment, center.z);
-            case 'object_top_right': 
-            case 'object_top_right_center': // Alias
-            case 'object_top_right_corner': // Alias
-                this.logger.debug('Resolved target to object_top_right');
-                return new Vector3(max.x, max.y + userVerticalAdjustment, center.z);
-            // TODO: Add front/back corner combinations if needed later
-        }
-    } else if ([
-        'object_center', 'object_top_center', 'object_bottom_center', 
-        'object_left_center', 'object_right_center', 'object_front_center', 'object_back_center',
-        'object_bottom_left', 'object_bottom_right', 'object_top_left', 'object_top_right',
-        'object_bottom_left_center', 'object_bottom_right_center', 'object_top_left_center', 'object_top_right_center', // Add center aliases here too
-        'object_bottom_left_corner', 'object_bottom_right_corner', 'object_top_left_corner', 'object_top_right_corner' // Add corner aliases here too
-        ].includes(targetName)) {
-        this.logger.warn(`Cannot resolve target '${targetName}': SceneAnalysis missing required spatial bounds (center, min, max).`);
-        return null; // Cannot calculate without bounds
-    }
-    // --- End Standard Object References ---
-
-    // Resolve named features (assuming LLM uses feature.id or feature.description)
-    if (sceneAnalysis?.features && Array.isArray(sceneAnalysis.features)) {
-      const foundFeature = sceneAnalysis.features.find(
-        (feature) => feature.id === targetName || feature.description === targetName
-      );
-      if (foundFeature?.position) {
-        // Ensure position is a Vector3 (it should be based on SceneAnalysis type)
-        if (foundFeature.position instanceof Vector3) {
-           this.logger.debug(`Resolved target to feature '${targetName}' at ${foundFeature.position.toArray()}`);
-           return foundFeature.position.clone();
-        } else {
-           this.logger.error(`Feature '${targetName}' found, but its position is not a Vector3 object.`);
-           return null;
-        }
-      }
-    }
-    
-    // TODO: Potentially add resolution for other known points like 'highest', 'lowest' from sceneAnalysis.spatial.referencePoints
-
-    this.logger.warn(`Could not resolve target name '${targetName}'.`);
-    return null; // Target not found
-  }
-
-  /**
-   * Helper method to clamp a position using raycasting against a bounding box.
-   * If the path from start to end intersects the box, returns the intersection point (slightly offset).
-   * Otherwise, returns the intended end position.
-   */
-  private _clampPositionWithRaycast(
-    startPosition: Vector3,
-    intendedEndPosition: Vector3,
-    objectBounds: Box3,
-    userVerticalAdjustment: number // <-- ADDED userVerticalAdjustment parameter
-  ): Vector3 {
-    const movementVector = new Vector3().subVectors(intendedEndPosition, startPosition);
-    const distanceToEnd = movementVector.length();
-    const movementDirection = movementVector.normalize(); // Store normalized direction
-
-    // --- Calculate Dynamic Offset --- START ---
-    let dynamicOffset = 0.1; // Default minimum offset
-    try {
-        const objectSize = objectBounds.getSize(new Vector3()).length(); // Diagonal size
-        // Use a small fraction of object size, but ensure a minimum absolute offset, and cap maximum reasonable offset
-        dynamicOffset = Math.max(0.1, Math.min(objectSize * 0.05, 0.5)); // E.g., 5% of size, min 0.1, max 0.5
-        this.logger.debug(`Using dynamic offset: ${dynamicOffset.toFixed(3)} (based on object size: ${objectSize.toFixed(2)})`);
-    } catch (sizeError) {
-        this.logger.error("Error calculating object size for dynamic offset, using default 0.1:", sizeError);
-        dynamicOffset = 0.1; // Fallback to default minimum if size calculation fails
-    }
-    // --- Calculate Dynamic Offset --- END ---
-
-    if (distanceToEnd < 1e-6) {
-      return startPosition.clone(); // No movement, return start
-    }
-
-    const ray = new THREE.Ray(startPosition, movementDirection); // Use normalized direction
-    const intersectionPoint = new Vector3();
-
-    // Create an offset bounding box based on the user adjustment
-    const offsetBounds = objectBounds.clone().translate(new Vector3(0, userVerticalAdjustment, 0));
-    this.logger.debug(`Raycast check using offset bounds: MinY=${offsetBounds.min.y.toFixed(2)}, MaxY=${offsetBounds.max.y.toFixed(2)}`);
-
-    // Use the offsetBounds for collision checks
-    if (ray.intersectBox(offsetBounds, intersectionPoint)) { // <-- Use offsetBounds
-      const distanceToIntersection = startPosition.distanceTo(intersectionPoint);
-      
-      if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
-        this.logger.warn(`Raycast: Path intersects bounding box at distance ${distanceToIntersection.toFixed(2)}. Clamping position with dynamic offset.`);
-        const finalClampedPosition = new Vector3()
-            .copy(intersectionPoint)
-            .addScaledVector(movementDirection, -dynamicOffset); // Use dynamicOffset
-        return finalClampedPosition;
-      }
-    }
-
-    // Use the offsetBounds for containsPoint check
-    if (offsetBounds.containsPoint(intendedEndPosition)) { // <-- Use offsetBounds
-        this.logger.warn('Raycast: Intended end position is inside offset bounds. Clamping to surface as fallback with dynamic offset.');
-        const clampedToSurface = offsetBounds.clampPoint(intendedEndPosition, new Vector3()); // <-- Use offsetBounds
-        // Calculate outward normal (approximate) based on offset center
-        const outwardNormal = new Vector3().subVectors(intendedEndPosition, offsetBounds.getCenter(new Vector3())).normalize(); // <-- Use offsetBounds
-        // Ensure normal is valid before applying offset
-        if (Number.isFinite(outwardNormal.x) && Number.isFinite(outwardNormal.y) && Number.isFinite(outwardNormal.z) && outwardNormal.lengthSq() > 1e-6) {
-             return clampedToSurface.addScaledVector(outwardNormal, dynamicOffset); // Use dynamicOffset
-        } else {
-             this.logger.warn('Could not determine valid outward normal for offset, returning clamped surface point.');
-             return clampedToSurface; // Return point on surface if normal is invalid
-        }
-    }
-
-    return intendedEndPosition.clone();
-  }
-
-  /**
-   * Helper method to calculate the effective numeric distance for dolly, truck, or pedestal
-   * based on qualitative string inputs (e.g., "close", "a_bit") or a direct number.
-   *
-   * @param rawDistance The distance parameter from the MotionStep (string, number, or undefined).
-   * @param motionType The type of motion ('dolly', 'truck', 'pedestal').
-   * @param sceneAnalysis Provides context like object size.
-   * @param envAnalysis Provides context like camera constraints.
-   * @param currentPosition Current camera position (needed for dolly).
-   * @param currentTarget Current camera target (needed for dolly).
-   * @param defaultDistance Fallback distance if calculation fails.
-   * @returns The calculated numeric distance.
-   */
-  private _calculateEffectiveDistance(
-    rawDistance: string | number | boolean | undefined | null,
-    motionType: 'dolly' | 'truck' | 'pedestal',
-    sceneAnalysis: SceneAnalysis,
-    envAnalysis: EnvironmentalAnalysis,
-    currentPosition: Vector3,
-    currentTarget: Vector3,
-    defaultDistance: number
-  ): number {
-    let effectiveDistance: number | null = null;
-
-    // 1. Handle direct numeric input
-    if (typeof rawDistance === 'number' && rawDistance > 0) {
-      effectiveDistance = rawDistance;
-      this.logger.debug(`Using numeric distance for ${motionType}: ${effectiveDistance}`);
-      return effectiveDistance;
-    } else if (typeof rawDistance === 'number' && rawDistance <= 0) {
-       this.logger.warn(`Non-positive numeric distance provided for ${motionType}: ${rawDistance}. Using default.`);
-       // Falls through to default
-    }
-
-    // 2. Handle qualitative string input
-    if (typeof rawDistance === 'string') {
-      const distStr = rawDistance.toLowerCase().replace(/_/g, ''); // Normalize
-      const objectSize = sceneAnalysis.spatial?.bounds?.dimensions.length() ?? 1.0;
-      const objectHeight = sceneAnalysis.spatial?.bounds?.dimensions.y ?? 0.5;
-      const currentDistanceToTarget = currentPosition.distanceTo(currentTarget); // Dolly specific
-      const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1; // Dolly specific
-
-      this.logger.debug(`Calculating ${motionType} distance for qualitative term: '${distStr}' (objectSize: ${objectSize.toFixed(2)}, objectHeight: ${objectHeight.toFixed(2)}, currentDist: ${currentDistanceToTarget.toFixed(2)}, minDist: ${minConstraintDist.toFixed(2)})`);
-
-      switch (motionType) {
-        case 'dolly':
-          switch (distStr) {
-            case 'veryclose':
-            case 'extremelyclose':
-              // Move almost to the minimum allowed distance
-              effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSize * 0.05)); // Adjusted factor
-              break;
-            case 'close':
-            case 'closer':
-              // Move 60% of the way towards the target (capped by min distance)
-              effectiveDistance = Math.max(0, currentDistanceToTarget - (minConstraintDist + objectSize * 0.1)) * 0.6; // Simple ratio, ensures we don't overshoot min dist boundary
-              // Alternative: effectiveDistance = currentDistanceToTarget * 0.6; // Simpler, but might violate minDistance more easily if not clamped later
-              break;
-            case 'abit':
-            case 'alittle':
-            case 'smallamount':
-            case 'slightly':
-              // Move by a fraction of current distance or object size
-              effectiveDistance = Math.min(currentDistanceToTarget * 0.2, objectSize * 0.5, 2.0);
-              break;
-            case 'medium':
-            case 'mediumdistance': // <<< ADD THIS CASE
-              // Move 40% of the way
-              effectiveDistance = currentDistanceToTarget * 0.4;
-              break;
-            // Add cases for "far", "further", "largeamount" if needed for dolly backward?
-            // --- ADDED: Dolly backward large distance ---
-            case 'far':
-            case 'further':
-            case 'largeamount':
-            case 'largedistance':
-              // For dolly backward, move a significant distance away
-              // e.g., double the current distance or a large fixed step
-              effectiveDistance = Math.max(currentDistanceToTarget * 1.0, objectSize * 2.0, 5.0); // Double distance OR 2x object size OR 5 units, whichever is largest
-              this.logger.debug(`Dolly backward large distance interpreted as ${effectiveDistance.toFixed(2)} units away.`);
-              break;
-            // --- END ADDED ---
-            default:
-              this.logger.warn(`Unknown qualitative dolly distance: '${rawDistance}'. Using default.`);
-              effectiveDistance = defaultDistance;
-          }
-          break;
-
-        case 'truck':
-          switch (distStr) {
-            case 'abit':
-            case 'alittle':
-            case 'smallamount':
-            case 'slightly':
-              effectiveDistance = Math.min(objectSize * 0.5, 2.0);
-              break;
-            case 'medium':
-            case 'mediumdistance': // <<< ADD THIS CASE
-              effectiveDistance = Math.min(objectSize * 1.0, 4.0);
-              break;
-            case 'far':
-            case 'largeamount':
-            case 'significantly':
-              // --- INCREASED multiplier and cap --- 
-              effectiveDistance = Math.min(objectSize * 3.0, 10.0);
-              break;
-            default:
-              this.logger.warn(`Unknown qualitative truck distance: '${rawDistance}'. Using default.`);
-              effectiveDistance = defaultDistance;
-          }
-          break;
-
-        case 'pedestal':
-          switch (distStr) {
-            case 'abit':
-            case 'alittle':
-            case 'smallamount':
-            case 'slightly':
-              effectiveDistance = Math.min(objectHeight * 0.5, 1.0);
-              break;
-            case 'medium':
-            case 'mediumdistance': // <<< ADD THIS CASE
-              effectiveDistance = Math.min(objectHeight * 1.0, 2.0);
-              break;
-            case 'far': // "far" for pedestal might mean a larger vertical move
-            case 'largeamount':
-            case 'significantly':
-            case 'largedistance': // <<< ADD THIS CASE
-              // --- INCREASED multiplier and cap --- 
-              effectiveDistance = Math.min(objectHeight * 2.5, 5.0);
-              break;
-            default:
-              this.logger.warn(`Unknown qualitative pedestal distance: '${rawDistance}'. Using default.`);
-              effectiveDistance = defaultDistance;
-          }
-          break;
-      }
-
-      // Ensure calculated distance is positive if it was calculated
-      if (effectiveDistance !== null) {
-          effectiveDistance = Math.max(1e-6, effectiveDistance);
-          this.logger.debug(`Calculated effective ${motionType} distance: ${effectiveDistance.toFixed(2)}`);
-          return effectiveDistance;
-      }
-    } else if (rawDistance !== undefined && rawDistance !== null) {
-        // Handle other invalid types (like boolean passed accidentally)
-        this.logger.warn(`Invalid distance type provided for ${motionType}: ${typeof rawDistance}. Using default.`);
-    }
-
-    // 3. Fallback to default if no valid distance found
-    this.logger.warn(`Could not determine effective distance for ${motionType} from input: ${rawDistance}. Using default: ${defaultDistance}`);
-    return defaultDistance;
-  }
-
-  /**
- * Maps a canonical descriptor (tiny, small, medium, large, huge) to a context-aware numeric value.
- *
- * @param descriptor The canonical descriptor string.
- * @param magnitudeType Type of magnitude being calculated ('distance', 'factor', 'pass_distance').
- * @param motionType The type of motion ('dolly', 'zoom', etc.).
- * @param sceneAnalysis Provides context like object size.
- * @param envAnalysis Provides context like camera constraints.
- * @param currentCameraState Current camera position and target.
- * @param direction Optional: Direction ('in'/'out') specifically for zoom factor calculation.
- * @returns Calculated numeric value (distance or factor).
- */
-private _mapDescriptorToValue(
-  descriptor: Descriptor, // Use global Descriptor type
-  magnitudeType: MagnitudeType, // Use global MagnitudeType
-  motionType: MotionPlan['steps'][0]['type'],
-  sceneAnalysis: SceneAnalysis,
-  envAnalysis: EnvironmentalAnalysis,
-  currentCameraState: { position: Vector3; target: Vector3 },
-  direction?: 'in' | 'out'
-): number {
-  this.logger.debug(`Mapping descriptor '${descriptor}' for ${motionType} (${magnitudeType})`);
-
-  const { position: currentPosition, target: currentTarget } = currentCameraState;
-  const objectSize = sceneAnalysis.spatial?.bounds?.dimensions?.length() ?? 1.0;
-  const objectHeight = sceneAnalysis.spatial?.bounds?.dimensions?.y ?? objectSize * 0.5;
-  const objectWidth = sceneAnalysis.spatial?.bounds?.dimensions?.x ?? objectSize * 0.5;
-  const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
-  const minConstraintDist = envAnalysis.cameraConstraints?.minDistance ?? 0.1;
-  const maxConstraintDist = envAnalysis.cameraConstraints?.maxDistance ?? Infinity;
-
-  let value: number;
-
-  if (magnitudeType === 'factor' && motionType === 'zoom') {
-    // Zoom Factor Mapping
-    if (!direction) {
-      this.logger.error('Zoom factor mapping requires direction (\'in\'/\'out\'). Defaulting factor to 1.0');
-      return 1.0;
-    }
-    const factorMap: { [key in Descriptor]: number } = {
-      tiny: direction === 'in' ? 0.9 : 1.1,
-      small: direction === 'in' ? 0.7 : 1.3,
-      medium: direction === 'in' ? 0.5 : 1.8,
-      large: direction === 'in' ? 0.3 : 2.5,
-      huge: direction === 'in' ? 0.15 : 4.0,
-    };
-    value = factorMap[descriptor];
-    this.logger.debug(`Mapped zoom descriptor '${descriptor}' (direction: ${direction}) to base factor: ${value}`);
-    // Clamping logic...
-    let projectedDistance = currentDistanceToTarget * value;
-    if (projectedDistance < minConstraintDist) {
-        value = minConstraintDist / currentDistanceToTarget;
-        this.logger.warn(`Zoom factor clamped due to minDistance. New factor: ${value.toFixed(3)}`);
-    }
-    if (projectedDistance > maxConstraintDist) {
-        value = maxConstraintDist / currentDistanceToTarget;
-        this.logger.warn(`Zoom factor clamped due to maxDistance. New factor: ${value.toFixed(3)}`);
-    }
-    if (direction === 'in' && value >= 1.0) value = 0.99;
-    if (direction === 'out' && value <= 1.0) value = 1.01;
-
-  } else {
-    // Distance Mapping
-    let baseMetric: number;
-    switch (motionType) {
-        case 'pedestal': baseMetric = objectHeight; break;
-        case 'truck': baseMetric = objectWidth; break;
-        case 'dolly': baseMetric = Math.max(objectSize * 0.5, currentDistanceToTarget * 0.5); break; // Adjusted dolly case
-        default: baseMetric = objectSize;
-    }
-    baseMetric = Math.max(baseMetric, 0.1);
-
-    const scaleMap: { [key in Descriptor]: number } = {
-        tiny: 0.1, small: 0.3, medium: 0.75, large: 1.5, huge: 3.0,
-    };
-    const scaleFactor = scaleMap[descriptor];
-    value = baseMetric * scaleFactor;
-
-    // Adjustments & Clamping...
-    if (motionType === 'dolly' && (descriptor === 'tiny' || descriptor === 'small') && currentDistanceToTarget < baseMetric) {
-        value = currentDistanceToTarget * scaleFactor;
-    }
-    const maxReasonableDist = Math.max(objectSize * 5, 20.0);
-    if (value > maxReasonableDist) {
-      this.logger.warn(`Clamping calculated distance ${value.toFixed(2)} to max reasonable ${maxReasonableDist.toFixed(2)}.`);
-      value = maxReasonableDist;
-    }
-    value = Math.max(value, 1e-6);
-    this.logger.debug(`Mapped distance descriptor '${descriptor}' for ${motionType} to value: ${value.toFixed(3)}`);
-  }
-  return value;
-}
-
-  private _mapDescriptorToGoalDistance(
-    descriptor: Descriptor,
-    sceneAnalysis: SceneAnalysis
-  ): number {
-    // Map qualitative proximity descriptor to an absolute camera–target distance.
-    // We purposely *ignore* current camera state so that the meaning of the descriptor
-    // is stable regardless of where the camera currently is.
-    const objectSize = sceneAnalysis.spatial?.bounds?.dimensions?.length() ?? 1.0;
-    // Scale factors chosen so that:
-    //   tiny   → ~0.5 × objectSize  (very close)
-    //   small  → ~1.0 × objectSize  (close)
-    //   medium → ~1.5 × objectSize  (comfortable framing)
-    //   large  → ~2.5 × objectSize  (wide framing)
-    //   huge   → ~4.0 × objectSize  (far)
-    const scaleMap: { [key in Descriptor]: number } = {
-      tiny: 0.5,
-      small: 1.0,
-      medium: 1.5,
-      large: 2.5,
-      huge: 4.0,
-    };
-    const goalDist = Math.max(scaleMap[descriptor] * objectSize, 0.05);
-    this.logger.debug(
-      `GoalDistance: descriptor '${descriptor}' mapped to goal distance ${goalDist.toFixed(3)}`
-    );
-    return goalDist;
-  }
-
-  // Helper to map raw qualitative words (e.g. "close", "very_far") to a canonical descriptor
-  private _normalizeDescriptor(raw: any): Descriptor | null {
-    if (typeof raw !== 'string') return null;
-    const key = raw.toLowerCase().replace(/[\s_-]/g, '');
-    const aliasMap: Record<string, Descriptor> = {
-      // closest buckets
-      tiny: 'tiny', verytiny: 'tiny', extremelytiny: 'tiny',
-      small: 'small', verysmall: 'small', close: 'small', nearer: 'small', near: 'small', closer: 'small',
-      medium: 'medium', mid: 'medium', moderate: 'medium',
-      large: 'large', verylarge: 'large', far: 'large', farther: 'large', distant: 'large',
-      huge: 'huge', veryhuge: 'huge', gigantic: 'huge', veryfar: 'huge', extremelyfar: 'huge'
-    };
-    return aliasMap[key] ?? null;
-  }
-
   interpretPath(
     plan: MotionPlan,
     sceneAnalysis: SceneAnalysis,
@@ -687,13 +223,13 @@ private _mapDescriptorToValue(
       }
       // Add other motion type specific default targets here if needed
 
-      const nextTarget = this._resolveTargetPosition(
+      const nextTarget = resolveTargetPosition( // Use imported function
         nextTargetName,
         sceneAnalysis,
         envAnalysis, // <-- Pass full envAnalysis
-        currentTarget
-        // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
-      ); // Pass currentTarget as fallback for 'current_target'
+        currentTarget,
+        this.logger // Pass logger
+      ); 
 
       if (nextTarget && !currentTarget.equals(nextTarget)) {
           this.logger.debug(`Target change detected between steps. Previous: ${currentTarget.toArray()}, Next: ${nextTarget.toArray()}. Inserting blend command.`);
@@ -750,21 +286,25 @@ private _mapDescriptorToValue(
       }
       // --- END Target Blending Logic ---
 
-      // Add debug log before switch
-      this.logger.debug(`Switching on type: '${step.type}' (Length: ${step.type?.length ?? 'undefined'})`);
-      // Pass stepDuration down to generators (already done implicitly as it's in scope)
+      let stepCommands: CameraCommand[] = [];
+      let nextPositionStep: Vector3 = currentPosition.clone(); // Initialize with current state
+      let nextTargetStep: Vector3 = currentTarget.clone(); // Initialize with current state
+
+      this.logger.debug(`Switching on type: '${step.type}'`);
       switch (step.type) {
-        case 'static': {          
-          // Hold current position and target
-          const command: CameraCommand = {
-            position: currentPosition.clone(),
-            target: currentTarget.clone(),
-            duration: stepDuration > 0 ? stepDuration : 0.1, 
-            easing: 'linear' // Static should always be linear, ignore speed/easing params
-          };
-          commands.push(command);
-          this.logger.debug('Generated static command:', command);
-          // State update: Position and target remain the same for the next step
+        case 'static': {
+          const result = handleStaticStep(
+            step,
+            currentPosition,
+            currentTarget,
+            stepDuration,
+            sceneAnalysis, // Pass context even if unused by static
+            envAnalysis,
+            this.logger
+          );
+          stepCommands = result.commands;
+          nextPositionStep = result.nextPosition;
+          nextTargetStep = result.nextTarget;
           break;
         }
         case 'zoom': {
@@ -795,19 +335,18 @@ private _mapDescriptorToValue(
             this.logger.debug(`Zoom: Using factor_override: ${effectiveFactor}`);
           } else {
             // 2. Check for descriptor
-            const factorDescriptor = typeof rawFactorDescriptor === 'string' && [
-              'tiny', 'small', 'medium', 'large', 'huge'
-            ].includes(rawFactorDescriptor) ? rawFactorDescriptor as Descriptor : null;
+            const factorDescriptor = normalizeDescriptor(rawFactorDescriptor); // Use imported function
 
             if (factorDescriptor) {
               // Map descriptor to value
-              effectiveFactor = this._mapDescriptorToValue(
+              effectiveFactor = mapDescriptorToValue( // Use imported function
                 factorDescriptor,
                 'factor',
                 'zoom',
                 sceneAnalysis,
                 envAnalysis,
                 { position: currentPosition, target: currentTarget },
+                this.logger, // Pass logger
                 direction // Pass direction for zoom factor mapping
               );
               this.logger.debug(`Zoom: Mapped factor_descriptor '${factorDescriptor}' to factor: ${effectiveFactor}`);
@@ -826,12 +365,12 @@ private _mapDescriptorToValue(
           const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium'; // Validate speed
 
           // 1. Resolve target point (uses targetName)
-          const zoomTargetPosition = this._resolveTargetPosition(
+          const zoomTargetPosition = resolveTargetPosition( // Use imported function
               targetName,
               sceneAnalysis,
               envAnalysis, // <-- Pass full envAnalysis
-              currentTarget
-              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+              currentTarget,
+              this.logger // Pass logger
           );
           if (!zoomTargetPosition) {
             this.logger.error(`Could not resolve zoom target '${targetName}'. Skipping step.`);
@@ -843,11 +382,11 @@ private _mapDescriptorToValue(
           const currentDistance = vectorToTarget.length();
           let newDistance: number;
           
-          // --- NEW: Compute factor from goal‑distance descriptor if provided and factor still undefined ---
+          // --- NEW: Compute factor from goal-distance descriptor if provided and factor still undefined ---
           if (effectiveFactor === null) {
-              const goalDescriptor = this._normalizeDescriptor(rawGoalDistanceDescriptor);
+              const goalDescriptor = normalizeDescriptor(rawGoalDistanceDescriptor); // Use imported function
               if (goalDescriptor) {
-                  const goalDistance = this._mapDescriptorToGoalDistance(goalDescriptor, sceneAnalysis);
+                  const goalDistance = mapDescriptorToGoalDistance(goalDescriptor, sceneAnalysis, this.logger); // Use imported function, pass logger
                   const delta = currentDistance - goalDistance;
                   if (Math.abs(delta) < 1e-6) {
                       this.logger.debug(`Zoom: Already at goal distance for descriptor '${goalDescriptor}'. Generating static command.`);
@@ -934,11 +473,12 @@ private _mapDescriptorToValue(
           // b) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              const clampedPosition = this._clampPositionWithRaycast(
+              const clampedPosition = clampPositionWithRaycast( // Use imported function
                   currentPosition, // Start from previous position
                   newPositionCandidate, // Target the candidate position
                   objectBounds, // Pass normalized bounds
-                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
+                  envAnalysis.userVerticalAdjustment ?? 0, // Pass user offset
+                  this.logger // Pass logger
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -985,6 +525,12 @@ private _mapDescriptorToValue(
           currentPosition = finalPosition.clone();
           currentTarget = zoomTargetPosition.clone(); // Keep looking at the resolved target
           // --- End Zoom Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = finalPosition.clone(); 
+          // currentTarget = zoomTargetPosition.clone(); 
+          // Assign the *final* state calculated within zoom to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'orbit': {
@@ -1026,12 +572,12 @@ private _mapDescriptorToValue(
           // 1. Resolve target / orbit center
           let orbitCenter: Vector3;
           // Use the centralized resolver function for ALL named targets
-          const resolvedTarget = this._resolveTargetPosition(
+          const resolvedTarget = resolveTargetPosition( // Use imported function
               targetName, // Pass the target name from the step parameters
               sceneAnalysis,
               envAnalysis, // <-- Pass full envAnalysis
-              currentTarget // Pass current target for potential 'current_target' resolution
-              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+              currentTarget, // Pass current target for potential 'current_target' resolution
+              this.logger // Pass logger
           );
 
           if (resolvedTarget) {
@@ -1183,11 +729,12 @@ private _mapDescriptorToValue(
               // c) Bounding box constraint (using raycast)
               if (spatial?.bounds) {
                   const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-                  const clampedPositionStep = this._clampPositionWithRaycast(
+                  const clampedPositionStep = clampPositionWithRaycast( // Use imported function
                       previousPosition, // Raycast from previous step's position
                       newPositionCandidateStep,
                       objectBounds,
-                      envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
+                      envAnalysis.userVerticalAdjustment ?? 0, // Pass user offset
+                      this.logger // Pass logger
                   );
                   if (!clampedPositionStep.equals(newPositionCandidateStep)) {
                       finalPositionStep.copy(clampedPositionStep);
@@ -1216,6 +763,12 @@ private _mapDescriptorToValue(
           currentPosition = previousPosition.clone(); // previousPosition holds the last step's final position
           currentTarget = orbitCenter.clone(); // Update target to the orbit center
           // --- End Orbit Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = previousPosition.clone(); 
+          // currentTarget = orbitCenter.clone(); 
+          // Assign the *final* state calculated within orbit to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'pan': {
@@ -1306,6 +859,12 @@ private _mapDescriptorToValue(
           currentTarget = newTarget.clone();
           // currentPosition remains the same
           // --- End Pan Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = currentPosition.clone(); 
+          // currentTarget = newTarget.clone(); 
+          // Assign the *final* state calculated within pan to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'tilt': {
@@ -1343,13 +902,13 @@ private _mapDescriptorToValue(
           let isAbsoluteTarget = false;
           if (targetName) {
               // An explicit target was specified in the step parameters
-              const resolvedExplicitTarget = this._resolveTargetPosition(
+              const resolvedExplicitTarget = resolveTargetPosition( // Use imported function
                 targetName,
                 sceneAnalysis,
                 envAnalysis, // <-- Pass full envAnalysis
-                initialTarget // Use initialTarget here
-                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
-            ); // Try resolving it
+                initialTarget, // Use initialTarget here
+                this.logger // Pass logger
+              ); // Try resolving it
               if (resolvedExplicitTarget) {
                   finalTarget = resolvedExplicitTarget.clone();
                   this.logger.debug(`Tilt: Using explicitly provided target '${targetName}' resolved to ${finalTarget.toArray()}`);
@@ -1432,6 +991,12 @@ private _mapDescriptorToValue(
           currentTarget = finalTarget.clone(); // <<< Update state with the actual final target
           // currentPosition remains the same
           // --- End Tilt Logic (REVISED) ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = finalPosition.clone(); 
+          // currentTarget = finalTarget.clone(); 
+          // Assign the *final* state calculated within tilt to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'dolly': {
@@ -1450,16 +1015,13 @@ private _mapDescriptorToValue(
           let effectiveDistance: number | null = null;
           let isDestinationMove = false;
 
-          // --- NEW: Handle goal‑distance descriptor early ---
-          const goalDistanceDescriptor = this._normalizeDescriptor(rawGoalDistanceDescriptor);
+          // --- NEW: Handle goal-distance descriptor early ---
+          const goalDistanceDescriptor = normalizeDescriptor(rawGoalDistanceDescriptor); // Use imported function
 
           if (goalDistanceDescriptor) {
             // Compute absolute goal distance, then derive delta & direction.
             const currentDistanceToTarget = currentPosition.distanceTo(currentTarget);
-            const goalDistance = this._mapDescriptorToGoalDistance(
-              goalDistanceDescriptor,
-              sceneAnalysis,
-            );
+            const goalDistance = mapDescriptorToGoalDistance(goalDistanceDescriptor, sceneAnalysis, this.logger); // Use imported function, pass logger
             const delta = currentDistanceToTarget - goalDistance;
             if (Math.abs(delta) < 1e-6) {
               this.logger.debug(
@@ -1488,16 +1050,16 @@ private _mapDescriptorToValue(
 
           const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
-          // Only evaluate destination_target logic if goal‑distance was *not* used.
+          // Only evaluate destination_target logic if goal-distance was *not* used.
           if (!goalDistanceDescriptor && destinationTargetName) {
             // Attempt to calculate direction from destination target
             this.logger.debug(`Dolly: Destination target '${destinationTargetName}' provided. Calculating required distance and direction.`);
-            const destinationTarget = this._resolveTargetPosition(
+            const destinationTarget = resolveTargetPosition( // Use imported function
               destinationTargetName,
               sceneAnalysis,
               envAnalysis, // <-- Pass full envAnalysis
-              currentTarget
-              // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+              currentTarget,
+              this.logger // Pass logger
             );
             if (destinationTarget) {
               const viewDirectionVec = new Vector3().subVectors(currentTarget, currentPosition).normalize();
@@ -1516,7 +1078,7 @@ private _mapDescriptorToValue(
             }
           }
 
-          // If direction wasn't set by goal‑descriptor or destination logic, use rawDirection
+          // If direction wasn't set by goal-descriptor or destination logic, use rawDirection
           if (!direction) {
             let assistantDirection = typeof rawDirection === 'string' ? rawDirection.toLowerCase() : null;
             if (assistantDirection === 'in') assistantDirection = 'forward';
@@ -1538,13 +1100,17 @@ private _mapDescriptorToValue(
               this.logger.debug(`Dolly: Using distance_override: ${effectiveDistance}`);
             } else {
               // 2. Check Descriptor
-              const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+              const distanceDescriptor = normalizeDescriptor(rawDistanceDescriptor); // Use imported function
 
               if (distanceDescriptor) {
-                effectiveDistance = this._mapDescriptorToValue(
-                  distanceDescriptor, 'distance', 'dolly',
-                  sceneAnalysis, envAnalysis,
-                  { position: currentPosition, target: currentTarget }
+                effectiveDistance = mapDescriptorToValue( // Use imported function
+                  distanceDescriptor,
+                  'distance',
+                  'dolly',
+                  sceneAnalysis,
+                  envAnalysis,
+                  { position: currentPosition, target: currentTarget },
+                  this.logger, // Pass logger
                 );
                 this.logger.debug(`Dolly: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
               } else {
@@ -1620,11 +1186,12 @@ private _mapDescriptorToValue(
           // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              const clampedPosition = this._clampPositionWithRaycast(
+              const clampedPosition = clampPositionWithRaycast( // Use imported function
                   currentPosition,
                   newPositionCandidate,
                   objectBounds,
-                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
+                  envAnalysis.userVerticalAdjustment ?? 0, // Pass user offset
+                  this.logger // Pass logger
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -1671,6 +1238,12 @@ private _mapDescriptorToValue(
           currentPosition = finalPosition.clone();
           // currentTarget remains the same
           // --- End Dolly Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = finalPosition.clone(); 
+          // currentTarget = currentTarget.clone(); 
+          // Assign the *final* state calculated within dolly to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'truck': {
@@ -1693,12 +1266,12 @@ private _mapDescriptorToValue(
           // --- Check for Destination Target --- 
           if (destinationTargetName) {
             this.logger.debug(`Truck: Destination target '${destinationTargetName}' provided. Calculating required distance.`);
-            const destinationTarget = this._resolveTargetPosition(
+            const destinationTarget = resolveTargetPosition( // Use imported function
                 destinationTargetName,
                 sceneAnalysis,
                 envAnalysis, // <-- Pass full envAnalysis
-                currentTarget
-                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+                currentTarget,
+                this.logger // Pass logger
             );
 
             if (destinationTarget) {
@@ -1742,16 +1315,17 @@ private _mapDescriptorToValue(
                 this.logger.debug(`Truck: Using distance_override: ${effectiveDistance}`);
              } else {
                 // 2. Check Descriptor
-                const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+                const distanceDescriptor = normalizeDescriptor(rawDistanceDescriptor); // Use imported function
                 
                 if (distanceDescriptor) {
-                  effectiveDistance = this._mapDescriptorToValue(
+                  effectiveDistance = mapDescriptorToValue( // Use imported function
                     distanceDescriptor,
                     'distance',
                     'truck',
                     sceneAnalysis,
                     envAnalysis,
-                    { position: currentPosition, target: currentTarget }
+                    { position: currentPosition, target: currentTarget },
+                    this.logger, // Pass logger
                   );
                   this.logger.debug(`Truck: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
                 } else {
@@ -1795,7 +1369,7 @@ private _mapDescriptorToValue(
              cameraRight.set(1, 0, 0); // Fallback to world X axis
           }
 
-          // Fallback: use explicit direction parameter if destination‑target logic
+          // Fallback: use explicit direction parameter if destination-target logic
           // didn't set it.
           if (!direction) {
             const explicitDir =
@@ -1846,11 +1420,12 @@ private _mapDescriptorToValue(
           // ... (Bounding box constraint using raycast from currentPosition to newPositionCandidate) ...
           if (spatial?.bounds) { // <<< Make sure spatial is defined here
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              const clampedPosition = this._clampPositionWithRaycast(
+              const clampedPosition = clampPositionWithRaycast( // Use imported function
                   currentPosition,
                   newPositionCandidate,
                   objectBounds,
-                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
+                  envAnalysis.userVerticalAdjustment ?? 0, // Pass user offset
+                  this.logger // Pass logger
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -1903,6 +1478,12 @@ private _mapDescriptorToValue(
           currentPosition = finalPosition.clone();
           currentTarget = finalTarget.clone(); // <<< UPDATE TARGET STATE
           // --- End Truck Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = finalPosition.clone(); 
+          // currentTarget = finalTarget.clone(); 
+          // Assign the *final* state calculated within truck to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
         case 'pedestal': {
@@ -1929,12 +1510,12 @@ private _mapDescriptorToValue(
             // Assuming modelOffset is directly on envAnalysis or fetched separately
             const userVerticalAdjustmentValue = envAnalysis.userVerticalAdjustment ?? 0; // Use ?? 0 for null/undefined fallback // <-- FIX LINTER ERROR
             this.logger.debug(`Using userVerticalAdjustmentValue: ${userVerticalAdjustmentValue}`); // Add log
-            const destinationTarget = this._resolveTargetPosition(
+            const destinationTarget = resolveTargetPosition( // Use imported function
                 destinationTargetName,
                 sceneAnalysis,
                 envAnalysis, // <-- Pass full envAnalysis
-                currentTarget
-                // envAnalysis.modelOffset ?? 0 // <-- REMOVE old offset param
+                currentTarget,
+                this.logger // Pass logger
             );
 
             if (destinationTarget) {
@@ -1967,16 +1548,17 @@ private _mapDescriptorToValue(
                 this.logger.debug(`Pedestal: Using distance_override: ${effectiveDistance}`);
              } else {
                  // 2. Check Descriptor
-                const distanceDescriptor = this._normalizeDescriptor(rawDistanceDescriptor);
+                const distanceDescriptor = normalizeDescriptor(rawDistanceDescriptor); // Use imported function
 
                 if (distanceDescriptor) {
-                  effectiveDistance = this._mapDescriptorToValue(
+                  effectiveDistance = mapDescriptorToValue( // Use imported function
                     distanceDescriptor,
                     'distance',
                     'pedestal',
                     sceneAnalysis,
                     envAnalysis,
-                    { position: currentPosition, target: currentTarget }
+                    { position: currentPosition, target: currentTarget },
+                    this.logger, // Pass logger
                   );
                   this.logger.debug(`Pedestal: Mapped distance_descriptor '${distanceDescriptor}' to distance: ${effectiveDistance}`);
                 } else {
@@ -2012,7 +1594,7 @@ private _mapDescriptorToValue(
           let cameraUp = new Vector3(0, 1, 0); 
           if (Math.abs(viewDirection.y) < 0.999) { /* calculate local up */ }
           
-          // Fallback: use explicit direction parameter if destination‑target logic
+          // Fallback: use explicit direction parameter if destination-target logic
           // didn't set it.
           if (!direction) {
             const explicitDir =
@@ -2079,11 +1661,12 @@ private _mapDescriptorToValue(
           // c) Bounding box constraint (using raycast)
           if (spatial?.bounds) {
               const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-              const clampedPosition = this._clampPositionWithRaycast(
+              const clampedPosition = clampPositionWithRaycast( // Use imported function
                   currentPosition,
                   newPositionCandidate,
                   objectBounds,
-                  envAnalysis.userVerticalAdjustment ?? 0 // Pass user offset
+                  envAnalysis.userVerticalAdjustment ?? 0, // Pass user offset
+                  this.logger // Pass logger
               );
               if (!clampedPosition.equals(newPositionCandidate)) {
                   finalPosition.copy(clampedPosition);
@@ -2131,288 +1714,186 @@ private _mapDescriptorToValue(
           currentPosition = finalPosition.clone();
           currentTarget = finalTarget.clone(); // <<< UPDATE TARGET STATE
           // --- End Pedestal Logic ---
+          // Make sure currentPosition and currentTarget are updated within this block
+          // currentPosition = finalPosition.clone(); 
+          // currentTarget = finalTarget.clone(); 
+          // Assign the *final* state calculated within pedestal to nextPositionStep/nextTargetStep
+          nextPositionStep = currentPosition.clone(); // Use the locally updated currentPosition
+          nextTargetStep = currentTarget.clone();   // Use the locally updated currentTarget
           break;
         }
-        case 'move_to': { // <<< NEW CASE
+        case 'move_to': { 
           const {
-            target: rawTargetName,
-            speed: rawSpeed = 'medium', // Default to medium
-            easing: rawEasingName = DEFAULT_EASING
+            destination_target: rawDestinationTargetName,
+            look_at_target: rawLookAtTargetName = 'object_center', // Default look_at
+            easing: rawEasingName = DEFAULT_EASING,
+            speed: rawSpeed = 'medium'
           } = step.parameters;
 
-          // Validate target
-          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
-          if (!targetName) {
-            this.logger.error(`MoveTo: Missing required target parameter. Skipping step.`);
+          // Validate destination target name
+          const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
+          if (!destinationTargetName) {
+            this.logger.error('MoveTo: Missing required destination_target parameter. Skipping step.');
             continue;
           }
+          
+          const lookAtTargetName = typeof rawLookAtTargetName === 'string' ? rawLookAtTargetName : 'object_center'; // Default if invalid
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
 
-          // Resolve the destination target position
-          const destinationPosition = this._resolveTargetPosition(
-            targetName,
-            sceneAnalysis,
-            envAnalysis,
-            currentTarget // Pass currentTarget for context, though move_to doesn't use it directly
+          // Resolve destination and look-at points
+          const destinationPosition = resolveTargetPosition(
+              destinationTargetName,
+              sceneAnalysis,
+              envAnalysis,
+              currentTarget, // Context
+              this.logger // Pass logger
+          );
+          const lookAtTargetPosition = resolveTargetPosition(
+              lookAtTargetName,
+              sceneAnalysis,
+              envAnalysis,
+              currentTarget, // Context
+              this.logger // Corrected: Pass logger
           );
 
           if (!destinationPosition) {
-            this.logger.error(`MoveTo: Could not resolve target position for '${targetName}'. Skipping step.`);
+            this.logger.error(`MoveTo: Could not resolve destination target '${destinationTargetName}'. Skipping step.`);
             continue;
           }
-
-          // Validate speed
-          const speed = typeof rawSpeed === 'string' && ['instant', 'slow', 'medium', 'fast'].includes(rawSpeed) 
-              ? rawSpeed 
-              : 'medium';
-          if (rawSpeed !== speed && typeof rawSpeed === 'string') { // Check type again before warning
-             this.logger.warn(`MoveTo: Invalid speed '${rawSpeed}', defaulting to 'medium'.`);
+          if (!lookAtTargetPosition) {
+            this.logger.warn(`MoveTo: Could not resolve look_at target '${lookAtTargetName}'. Using resolved destinationPosition as target.`);
+            // Fallback handled below by setting finalTarget = finalPosition
           }
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
-              ? rawEasingName as EasingFunctionName 
-              : DEFAULT_EASING;
 
-          // Determine effective easing (ignored for instant)
-          let effectiveEasingName = easingName;
-          if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
-          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+          // Calculate the final position candidate
+          const endPositionCandidate = destinationPosition.clone();
+          let finalPosition = endPositionCandidate.clone(); // Initialize finalPosition
 
-          const commandsList: CameraCommand[] = [];
-          let finalPosition: Vector3; // Declare finalPosition outside the if/else
-          let finalTarget: Vector3;   // Declare finalTarget outside the if/else
+          // Determine final target position (handle fallback)
+          const finalTarget = lookAtTargetPosition ? lookAtTargetPosition.clone() : destinationPosition.clone(); // Look at destination if look_at fails
 
-          if (speed === 'instant') {
-            this.logger.debug(`MoveTo: Generating instant cut to ${destinationPosition.toArray()}`);
-            // Instant cut: Determine final state and add one command
-            const offsetDirection = new Vector3(0, 0.5, 1.5); // Simple offset
-            finalPosition = new Vector3().copy(destinationPosition).add(offsetDirection);
-            finalTarget = destinationPosition.clone(); // Look directly at the target
-
-            commandsList.push({
-                position: finalPosition,
-                target: finalTarget,
-                duration: 0.01, // Very small duration for a cut 
-                easing: 'linear' 
-            });
-            // Update state immediately
-            currentPosition = finalPosition.clone();
-            currentTarget = finalTarget.clone();
-          } else {
-            // Smooth move: Generate start and end commands
-            this.logger.debug(`MoveTo: Generating smooth move to ${destinationPosition.toArray()}`);
-            // Determine end state positioning logic
-            const offsetDirection = new Vector3(0, 0.5, 1.5);
-            const endPositionCandidate = new Vector3().copy(destinationPosition).add(offsetDirection);
-            const endTargetCandidate = destinationPosition.clone();
-
-            // Apply constraints to the end position candidate
-            finalPosition = endPositionCandidate.clone(); // Initialize finalPosition
-            const { cameraConstraints } = envAnalysis;
-            const { spatial } = sceneAnalysis;
-            let clamped = false;
-            if (cameraConstraints) {
-                if (finalPosition.y < cameraConstraints.minHeight) { finalPosition.y = cameraConstraints.minHeight; clamped = true; }
-                if (finalPosition.y > cameraConstraints.maxHeight) { finalPosition.y = cameraConstraints.maxHeight; clamped = true; }
-                // Add min/max distance checks if needed relative to finalTarget
+          // Clamping final position
+          const { spatial } = sceneAnalysis;
+          if (spatial?.bounds) {
+            const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
+            const clampedPos = clampPositionWithRaycast(
+              currentPosition, 
+              endPositionCandidate, 
+              objectBounds, 
+              envAnalysis.userVerticalAdjustment ?? 0,
+              this.logger // Corrected: Pass logger
+            );
+            if (!clampedPos.equals(endPositionCandidate)) {
+              this.logger.warn(`MoveTo: Clamped final position due to bounding box intersection/containment.`);
+              finalPosition.copy(clampedPos);
+            } else {
+              finalPosition.copy(endPositionCandidate);
             }
-            if (spatial?.bounds) {
-                const objectBounds = new Box3(spatial.bounds.min, spatial.bounds.max);
-                const clampedPos = this._clampPositionWithRaycast(currentPosition, endPositionCandidate, objectBounds, envAnalysis.userVerticalAdjustment ?? 0);
-                if (!clampedPos.equals(endPositionCandidate)) {
-                    finalPosition.copy(clampedPos);
-                    clamped = true;
-                }
-            } // If clamping occurred, finalPosition holds the clamped position
-            finalTarget = endTargetCandidate.clone(); // Target remains the resolved destination
-            if (clamped) this.logger.warn('MoveTo: Final position was clamped by constraints.');
-
-            // Add start command
-            commandsList.push({
-                position: currentPosition.clone(),
-                target: currentTarget.clone(), 
-                duration: 0,
-                easing: effectiveEasingName 
-            });
-            // Add end command
-            commandsList.push({
-                position: finalPosition.clone(), // Use clamped final position
-                target: finalTarget.clone(), // Use final target
-                duration: stepDuration > 0 ? stepDuration : 1.0, // Use step duration or default
-                easing: effectiveEasingName
-            });
-            // Update state for next step
-            currentPosition = finalPosition.clone();
-            currentTarget = finalTarget.clone();
-          }
-
-          this.logger.debug(`Generated move_to commands:`, commandsList);
-          commands.push(...commandsList);
-
-          break;
-        }
-        case 'focus_on': { // <<< NEW CASE
-          const {
-            target: rawTargetName,
-            adjust_framing: rawAdjustFraming = true, // Default true per instructions
-            speed: rawSpeed = 'medium', // Speed might influence blend/settle
-            easing: rawEasingName = DEFAULT_EASING 
-          } = step.parameters;
-
-          // Validate target
-          const targetName = typeof rawTargetName === 'string' ? rawTargetName : null;
-          if (!targetName) {
-            this.logger.error(`FocusOn: Missing required target parameter. Skipping step.`);
-            continue;
-          }
-
-          // Resolve the new target position
-          const newTarget = this._resolveTargetPosition(
-            targetName,
-            sceneAnalysis,
-            envAnalysis,
-            currentTarget // Pass current target for context
-          );
-
-          if (!newTarget) {
-            this.logger.error(`FocusOn: Could not resolve target position for '${targetName}'. Skipping step.`);
-            continue;
-          }
-
-          // Validate adjust_framing (just log for now)
-          const adjustFraming = typeof rawAdjustFraming === 'boolean' ? rawAdjustFraming : true;
-          if (adjustFraming) {
-              this.logger.warn('FocusOn: adjust_framing=true is requested, but automatic framing adjustment is not yet implemented. Only changing target.');
-              // TODO: Implement dolly/zoom logic here based on distance to newTarget if needed.
-          }
-          
-          // Validate speed/easing for potential use in blending (though focus_on itself is just target change)
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
-              ? rawEasingName as EasingFunctionName 
-              : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
-          let effectiveEasingName = easingName;
-          // Apply speed logic similar to other non-instant moves
-          if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
-          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
-
-          // Create CameraCommands (Position stays same, Target changes)
-          const commandsList: CameraCommand[] = [];
-          commandsList.push({
-              position: currentPosition.clone(), 
-              target: currentTarget.clone(), // Start at current target
-              duration: 0,
-              easing: effectiveEasingName
-          });
-          commandsList.push({
-              position: currentPosition.clone(), // Position does not change
-              target: newTarget.clone(), // End looking at the new target
-              duration: stepDuration > 0 ? stepDuration : 0.1, // Use allocated duration or small default
-              easing: effectiveEasingName
-          });
-          this.logger.debug(`Generated focus_on commands:`, commandsList);
-          commands.push(...commandsList);
-
-          // Update state for the next step (Only target changes)
-          currentTarget = newTarget.clone();
-          // currentPosition remains the same
-          break;
-        }
-        case 'rotate': { // <<< Restore correct rotate logic
-          const {
-            axis: rawAxisName = 'yaw',
-            angle: rawAngle,
-            speed: rawSpeed = 'medium',
-            easing: rawEasingName = DEFAULT_EASING
-          } = step.parameters;
-
-          // Validate parameters
-          let axis: 'yaw' | 'pitch' | 'roll' = 'yaw'; // Default
-          const lowerAxisName = typeof rawAxisName === 'string' ? rawAxisName.toLowerCase() : null;
-          if (lowerAxisName === 'pitch') {
-              axis = 'pitch';
-          } else if (lowerAxisName === 'roll') {
-              axis = 'roll';
-          } else if (lowerAxisName && lowerAxisName !== 'yaw') { 
-              this.logger.warn(`Rotate: Invalid axis '${rawAxisName}', defaulting to 'yaw'.`);
-          }
-          const angle = typeof rawAngle === 'number' && rawAngle !== 0 ? rawAngle : null;
-          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) 
-              ? rawEasingName as EasingFunctionName 
-              : DEFAULT_EASING;
-          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
-
-          if (angle === null) {
-            this.logger.error(`Rotate: Invalid, missing, or zero angle: ${rawAngle}. Skipping step.`);
-            continue;
-          }
-          
-          if (axis === 'roll') {
-             this.logger.warn('Rotate: \'roll\' axis is not fully implemented for visual effect. Camera will not visually roll.');
-             if (stepDuration > 0) {
-                commands.push({
-                    position: currentPosition.clone(),
-                    target: currentTarget.clone(),
-                    duration: stepDuration, 
-                    easing: 'linear'
-                });
-             }
-             continue; 
-          }
-
-          const viewDirection = new Vector3().subVectors(currentTarget, currentPosition).normalize();
-          let cameraUp = new Vector3(0, 1, 0); 
-          let cameraRight = new Vector3();
-          if (Math.abs(viewDirection.y) > 0.999) { 
-              cameraRight.set(1, 0, 0); 
-              cameraUp.crossVectors(viewDirection, cameraRight).normalize(); 
           } else {
-              cameraRight.crossVectors(viewDirection, cameraUp).normalize(); 
-              cameraUp.crossVectors(cameraRight, viewDirection).normalize(); 
+             finalPosition.copy(endPositionCandidate);
           }
 
-          let rotationAxis: Vector3;
-          if (axis === 'yaw') { 
-              rotationAxis = cameraUp;
-          } else { 
-              rotationAxis = cameraRight;
-          }
-
-          const angleRad = THREE.MathUtils.degToRad(angle);
-          const quaternion = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angleRad);
-
-          const targetVector = new Vector3().subVectors(currentTarget, currentPosition);
-          targetVector.applyQuaternion(quaternion);
-          const newTarget = new Vector3().addVectors(currentPosition, targetVector);
-          
+          // Determine effective easing based on speed
           let effectiveEasingName = easingName;
-          if (speed === 'very_fast') effectiveEasingName = 'linear'; 
-          else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
-          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+          // ... (easing logic based on speed) ...
 
+          // Create commands
           const commandsList: CameraCommand[] = [];
           commandsList.push({
               position: currentPosition.clone(),
-              target: currentTarget.clone(), 
+              target: currentTarget.clone(),
               duration: 0,
               easing: effectiveEasingName
           });
           commandsList.push({
-              position: currentPosition.clone(), 
-              target: newTarget.clone(), 
-              duration: stepDuration > 0 ? stepDuration : 0.1,
+              position: finalPosition.clone(),
+              target: finalTarget.clone(),
+              duration: stepDuration > 0 ? stepDuration : 0.5, // Longer default for move_to
               easing: effectiveEasingName
           });
-          this.logger.debug(`Generated rotate (${axis}) commands:`, commandsList);
+          this.logger.debug('Generated move_to commands:', commandsList);
           commands.push(...commandsList);
 
-          currentTarget = newTarget.clone();
-          break;
+          // Update state
+          currentPosition = finalPosition.clone();
+          currentTarget = finalTarget.clone();
+          break; 
+        }
+        case 'focus_on': { 
+          const { 
+            target: rawTargetName, 
+            easing: rawEasingName = DEFAULT_EASING, 
+            speed: rawSpeed = 'medium' 
+          } = step.parameters;
+
+          const targetName = typeof rawTargetName === 'string' ? rawTargetName : 'object_center';
+          const easingName = typeof rawEasingName === 'string' && (rawEasingName in easingFunctions) ? rawEasingName as EasingFunctionName : DEFAULT_EASING;
+          const speed = typeof rawSpeed === 'string' ? rawSpeed : 'medium';
+          
+          // Resolve the new target position
+          const focusTargetPosition = resolveTargetPosition(
+              targetName, // Use targetName from step params
+              sceneAnalysis,
+              envAnalysis,
+              currentTarget, // Pass current target for context
+              this.logger // Pass logger
+          );
+          
+          if (!focusTargetPosition) {
+            this.logger.error(`FocusOn: Could not resolve target position for '${targetName}'. Skipping step.`);
+            continue;
+          }
+          
+          // Determine effective easing based on speed
+          let effectiveEasingName = easingName;
+          if (speed === 'very_fast') effectiveEasingName = 'linear';
+          else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+          else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+
+          // Create commands: One to start, one to end looking at the new target
+          const commandsList: CameraCommand[] = [];
+          commandsList.push({
+            position: currentPosition.clone(),
+            target: currentTarget.clone(),
+            duration: 0,
+            easing: effectiveEasingName
+          });
+          commandsList.push({
+            position: currentPosition.clone(),
+            target: focusTargetPosition.clone(), // Use focusTargetPosition here
+            duration: stepDuration > 0 ? stepDuration : 0.1,
+            easing: effectiveEasingName
+          });
+          this.logger.debug('Generated focus_on commands:', commandsList);
+          commands.push(...commandsList);
+
+          // Update state for the next step
+          currentTarget = focusTargetPosition.clone(); // Use focusTargetPosition here
+          break; 
         }
         default: {
           this.logger.error(`Unknown motion type: ${step.type}. Skipping step.`);
-          continue;
+          // Ensure loop continues gracefully
+          stepCommands = [];
+          nextPositionStep = currentPosition.clone();
+          nextTargetStep = currentTarget.clone();
+          // continue; // No need for continue, loop proceeds naturally
+          break; // Add break for clarity
         }
       }
-    }
+
+      // Add the commands generated by this step
+      commands.push(...stepCommands);
+
+      // --- State Update --- 
+      // Update the loop's state based on the calculated next state from the handler
+      // (or the direct calculation within the case block for unrefactored primitives)
+      currentPosition = nextPositionStep;
+      currentTarget = nextTargetStep;
+      this.logger.debug(`State updated after step ${index + 1}: Pos=${currentPosition.toArray().map(v => v.toFixed(2))}, Target=${currentTarget.toArray().map(v => v.toFixed(2))}`);
+
+    } // End of loop over steps
 
     // if (!validationResult.isValid) { ... handle validation errors ... }
 
