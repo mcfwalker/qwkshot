@@ -497,21 +497,24 @@ export async function GET(request: NextRequest) {
     3. Calls `MetadataManager.getModelMetadata` (fetches from `metadata` and `scene_analysis` columns) and `MetadataManager.getEnvironmentalMetadata` (fetches locked state including camera state and `userVerticalAdjustment`).
     4. Calls `deserializeSceneAnalysis` (utility function) on fetched `scene_analysis` data to get `SceneAnalysis` object.
     5. Constructs `initialCameraState` from fetched environmental metadata.
-    6. Instantiates the `OpenAIAssistantAdapter` (LLM Engine implementation) with necessary configuration (API Key, Assistant ID).
-    7. Calls `adapter.generatePlan(prompt, duration)`, which handles interaction with the OpenAI Assistants API:
-        - Creates a thread.
-        - Adds the user message (prompt).
-        - Creates and polls a run using the configured Assistant ID.
-        - The Assistant uses its instructions and the associated Motion KB file (via Retrieval) to generate a structured `MotionPlan` JSON.
-        - The adapter parses and validates the `MotionPlan` JSON response.
+    6. Instantiates the `OpenAIAssistantAdapter` (LLM Engine implementation).
+    7. Calls `adapter.generatePlan(prompt, duration)`.
     8. Instantiates the `SceneInterpreterImpl`.
-    9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The interpreter:
-        - Processes the `MotionPlan` steps sequentially.
-        - Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **using the normalized coordinates from `SceneAnalysis` and applying the `userVerticalAdjustment` from the provided `EnvironmentalAnalysis` to the Y coordinate**, ensuring alignment with the user-adjusted visual model.
-        - **Handles quantitative/qualitative/goal parameters (with priority):**
-            *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance`.
-        - Applies constraints and easing.
-        - Generates `CameraCommand[]` (keyframes).
+    9. Calls `interpreter.interpretPath(motionPlan, sceneAnalysis, environmentalAnalysis, initialCameraState)`. The `interpretPath` method:
+        *   Loops through the `MotionPlan` steps.
+        *   Performs target blending logic (if needed).
+        *   **Dispatches** each step to the appropriate external handler function (e.g., `handleDollyStep`) in `primitive-handlers/` based on `step.type`.
+        *   Each handler receives the step, current state, context, and logger.
+        *   The **handler** is responsible for:
+            *   Using utility functions from `interpreter-utils.ts`.
+            *   Resolving targets (applying `userVerticalAdjustment`).
+            *   Handling parameter variations (quantitative, qualitative, goal-based).
+            *   Applying constraints (height, distance, bounding box).
+            *   Determining easing.
+            *   Generating `CameraCommand[]` for the step.
+            *   Returning `{ commands, nextPosition, nextTarget }`.
+        *   `interpretPath` receives the handler's result, appends the commands, and updates its internal `currentPosition` and `currentTarget` using the returned `nextPosition` and `nextTarget`.
+        *   After the loop, `interpretPath` performs final checks (e.g., velocity) and returns the full `CameraCommand[]`.
     10. Calls `interpreter.validateCommands` passing the generated commands and the **normalized** bounding box from `SceneAnalysis`.
     11. If validation fails (e.g., bounding box violation), returns specific 422 error.
     12. Otherwise, returns final serialized `CameraCommand[]` to client (or other error).
