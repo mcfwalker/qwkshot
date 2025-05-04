@@ -1,0 +1,21 @@
+{
+  "patterns": {
+    "zigzag": {
+      "description": "Alternating lateral trucks while advancing/retreating.",
+      "parameters": {
+        "segments": { "type": "integer", "default": 4, "min": 2, "max": 10, "description": "Number of alternating segments in the zig-zag path." },
+        "amplitude": { "type": "string", "enum": ["tiny","small","medium","large","huge"], "default": "small", "description": "The lateral distance descriptor for each truck movement." }
+      },
+      "macro": "zigzagComposer"
+    },
+    "fly_by": {
+      "description": "Approach target, optionally climb above it, descend, and exit generally along the initial heading.",
+      "parameters": {
+        "apex_height": { "type": "string", "enum": ["none","tiny","small","medium","large","huge"], "default": "large", "description": "Descriptor for the peak height reached above the target during the fly-by. 'none' implies a level pass." },
+        "speed":       { "type": "string", "enum": ["slow","normal","fast"], "default": "fast", "description": "Overall speed hint for the pattern execution." },
+        "second_pass": { "type": "boolean", "default": false, "description": "If true, performs a second pass in the opposite direction." }
+      },
+      "macro": "flyByComposer"
+    }
+  }
+} 

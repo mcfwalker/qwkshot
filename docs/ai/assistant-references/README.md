@@ -6,6 +6,7 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 
 -   `/system-instructions`: Contains timestamped versions of the system instructions provided to the Assistant.
 -   `/motion-kb`: Contains timestamped versions of the Motion Knowledge Base JSON file provided to the Assistant via Retrieval.
+-   `/pattern-kb`: Contains timestamped versions of the Pattern Knowledge Base JSON file provided to the Assistant via Retrieval.
 
 ## Files & Workflow
 
@@ -14,6 +15,12 @@ This directory contains reference files used by the OpenAI Assistant for motion 
     *   It is provided to the Assistant via the Retrieval tool.
     *   **Versioning:** To update the KB, create a **new file** with the current timestamp suffix (`YYYY-MM-DD-HHMM`). Do not edit older files directly.
     *   **Updating:** Changes made locally MUST be manually uploaded to the OpenAI Assistant via the File API (replacing the previous file used for Retrieval) to take effect. Update the list below.
+
+*   **Pattern Knowledge Base (`pattern_kb_YYYY-MM-DD-HHMM.json`):**
+    *   This JSON file defines high-level motion patterns (e.g., `zigzag`, `fly_by`) and their parameters.
+    *   It is used by the Assistant, likely via Retrieval, to understand available patterns and potentially inform the use of the `compose_pattern` function.
+    *   **Versioning:** To update the Pattern KB, create a **new file** with the current timestamp suffix (`YYYY-MM-DD-HHMM`) in the `/pattern-kb/` directory. Do not edit older files directly.
+    *   **Updating:** Like the Motion KB, changes made locally MUST be manually uploaded to the OpenAI Assistant's configuration (e.g., associated with the Retrieval tool) to take effect. Update the list below.
 
 *   **System Instructions (`SYSTEM_INSTRUCTIONS_REF_YYYY-MM-DD-HHMM.txt`):** 
     *   Contains the plain text system instructions for the OpenAI Assistant.
@@ -41,6 +48,11 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 
 *   `motion-kb/motion_kb_2025-04-28-1805.json` - Added `rotate`, `move_to`, `focus_on`; removed `fly_by`, `fly_away`; aligned `rotate` params.
 *   `motion-kb/motion_kb_4-28-2025-1224.json` - (Older version, check content if needed)
+
+## Current Pattern KB Version
+*(Latest file represents the KB uploaded for Assistant Retrieval/Tools)*
+
+*   `pattern-kb/pattern_kb_2024-07-25-1530.json` - Initial creation with `zigzag` and `fly_by`.
 
 ## Tips for Updating System Instructions
 
