@@ -3,11 +3,11 @@ import {
   SceneInterpreter,
   SceneInterpreterConfig,
   CameraCommand,
-  InterpretationError
+  // InterpretationError // Removed unused import
 } from '@/types/p2p/scene-interpreter';
 // import { CameraPath } from '@/types/p2p/llm-engine'; // Removed CameraPath
 import { ValidationResult, PerformanceMetrics, Logger } from '@/types/p2p/shared';
-import * as THREE from 'three'; // Keep for Vector3, Box3 - can refine later if only specific members needed
+// import * as THREE from 'three'; // REMOVED unused namespace import
 // import { CatmullRomCurve3, Vector3, Box3, Ray, Quaternion } from 'three'; // Removed Ray, Quaternion, CatmullRomCurve3
 import { Vector3, Box3 } from 'three'; // Keep Vector3, Box3 explicitly
 import { MotionPlan /*, MotionStep*/ } from '@/lib/motion-planning/types'; // Removed MotionStep
@@ -16,7 +16,7 @@ import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
 import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing';
 import {
   resolveTargetPosition,
-  clampPositionWithRaycast, // Still used?
+  // clampPositionWithRaycast, // REMOVED - No longer used directly in interpreter.ts
   // mapDescriptorToValue, // Removed
   // mapDescriptorToGoalDistance, // Removed
   // normalizeDescriptor, // Removed
@@ -449,7 +449,7 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return commands;
   }
 
-  async executeCommand(camera: Camera, command: CameraCommand): Promise<void> {
+  async executeCommand(_camera: Camera, command: CameraCommand): Promise<void> {
     this.logger.info('Executing camera command (placeholder)', { command });
     // TODO: Implement actual command execution logic if needed on backend,
     // or confirm this is handled purely client-side by AnimationController.
@@ -457,11 +457,11 @@ export class SceneInterpreterImpl implements SceneInterpreter {
     return Promise.resolve();
   }
 
-  async executeCommands(camera: Camera, commands: CameraCommand[]): Promise<void> {
+  async executeCommands(_camera: Camera, commands: CameraCommand[]): Promise<void> {
     this.logger.info(`Executing ${commands.length} camera commands (placeholder).`);
     // This likely won't be used if commands are sent to client for execution.
     for (const command of commands) {
-        await this.executeCommand(camera, command);
+        await this.executeCommand(_camera, command);
     }
     return Promise.resolve();
   }

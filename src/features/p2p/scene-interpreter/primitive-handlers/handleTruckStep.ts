@@ -10,8 +10,6 @@ import {
   clampPositionWithRaycast,
   mapDescriptorToValue,
   normalizeDescriptor,
-  Descriptor,
-  MagnitudeType,
 } from '../interpreter-utils';
 
 interface TruckStepResult {
@@ -160,8 +158,7 @@ export function handleTruckStep(
   const newTargetCandidate = new Vector3().addVectors(currentTarget, moveVector);
 
   let finalPosition = newPositionCandidate.clone();
-  let finalTarget = newTargetCandidate.clone(); // Start final target based on parallel move
-  let clamped = false;
+  let finalTarget = newTargetCandidate.clone();
 
   // --- Constraint Checking (Apply primarily to Position) ---
   const { cameraConstraints } = envAnalysis;
@@ -171,12 +168,10 @@ export function handleTruckStep(
   if (cameraConstraints) {
     if (finalPosition.y < cameraConstraints.minHeight) {
       finalPosition.y = cameraConstraints.minHeight;
-      clamped = true;
       logger.warn(`Truck: Clamped position to minHeight (${cameraConstraints.minHeight})`);
     }
     if (finalPosition.y > cameraConstraints.maxHeight) {
       finalPosition.y = cameraConstraints.maxHeight;
-      clamped = true;
       logger.warn(`Truck: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
     }
   }
@@ -193,7 +188,6 @@ export function handleTruckStep(
     );
     if (!clampedPositionResult.equals(newPositionCandidate)) {
       finalPosition.copy(clampedPositionResult);
-      clamped = true;
       logger.warn(`Truck: Clamped position due to raycast.`);
     }
   } else {

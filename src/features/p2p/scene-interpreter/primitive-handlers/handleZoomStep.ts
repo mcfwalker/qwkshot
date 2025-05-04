@@ -11,7 +11,6 @@ import {
   mapDescriptorToValue,
   mapDescriptorToGoalDistance,
   normalizeDescriptor,
-  Descriptor, // Need Descriptor type locally if used directly
 } from '../interpreter-utils';
 
 interface ZoomStepResult {
@@ -155,17 +154,14 @@ export function handleZoomStep(
 
   // --- Constraint Checking (Distance) ---
   const { cameraConstraints } = envAnalysis;
-  let distanceClamped = false;
   if (cameraConstraints) {
     if (newDistance < cameraConstraints.minDistance) {
       logger.warn(`Zoom: Calculated newDistance (${newDistance.toFixed(2)}) violates minDistance (${cameraConstraints.minDistance}). Clamping distance.`);
       newDistance = cameraConstraints.minDistance;
-      distanceClamped = true;
     }
     if (newDistance > cameraConstraints.maxDistance) {
       logger.warn(`Zoom: Calculated newDistance (${newDistance.toFixed(2)}) violates maxDistance (${cameraConstraints.maxDistance}). Clamping distance.`);
       newDistance = cameraConstraints.maxDistance;
-      distanceClamped = true;
     }
   }
 
@@ -177,19 +173,16 @@ export function handleZoomStep(
 
   // --- Constraint Checking (Height & Bounding Box) ---
   let finalPosition = newPositionCandidate.clone();
-  let posClamped = false;
   const { spatial } = sceneAnalysis;
 
   // a) Height constraints
   if (cameraConstraints) {
     if (finalPosition.y < cameraConstraints.minHeight) {
       finalPosition.y = cameraConstraints.minHeight;
-      posClamped = true;
       logger.warn(`Zoom: Clamped final position to minHeight (${cameraConstraints.minHeight})`);
     }
     if (finalPosition.y > cameraConstraints.maxHeight) {
       finalPosition.y = cameraConstraints.maxHeight;
-      posClamped = true;
       logger.warn(`Zoom: Clamped final position to maxHeight (${cameraConstraints.maxHeight})`);
     }
   }
@@ -206,7 +199,6 @@ export function handleZoomStep(
     );
     if (!clampedPositionResult.equals(newPositionCandidate)) {
       finalPosition.copy(clampedPositionResult);
-      posClamped = true;
       logger.warn(`Zoom: Clamped final position due to raycast.`);
     }
   } else {

@@ -7,7 +7,7 @@ import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { EasingFunctionName, easingFunctions, DEFAULT_EASING } from '@/lib/easing';
 import {
-  resolveTargetPosition,
+  // resolveTargetPosition, // REMOVED unused import
   // clampPositionWithRaycast, // Not needed for pan
 } from '../interpreter-utils';
 
@@ -26,8 +26,8 @@ export function handlePanStep(
   currentPosition: Vector3,
   currentTarget: Vector3,
   stepDuration: number,
-  sceneAnalysis: SceneAnalysis,
-  envAnalysis: EnvironmentalAnalysis,
+  _sceneAnalysis: SceneAnalysis, // Prefixed unused param
+  _envAnalysis: EnvironmentalAnalysis, // Prefixed unused param
   logger: Logger
 ): PanStepResult {
   logger.debug('Handling pan step...', step.parameters);

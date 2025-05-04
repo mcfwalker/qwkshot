@@ -23,8 +23,8 @@ export function handleRotateStep(
   currentPosition: Vector3,
   currentTarget: Vector3,
   stepDuration: number,
-  sceneAnalysis: SceneAnalysis,
-  envAnalysis: EnvironmentalAnalysis,
+  _sceneAnalysis: SceneAnalysis,
+  _envAnalysis: EnvironmentalAnalysis,
   logger: Logger
 ): RotateStepResult {
   logger.debug('Handling rotate step...', step.parameters);

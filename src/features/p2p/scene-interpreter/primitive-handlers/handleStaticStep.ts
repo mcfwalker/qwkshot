@@ -4,7 +4,6 @@ import { MotionStep } from '@/lib/motion-planning/types';
 import { SceneAnalysis } from '@/types/p2p/scene-analyzer';
 import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
-import { EasingFunctionName } from '@/lib/easing';
 
 interface StaticStepResult {
   commands: CameraCommand[];
@@ -17,12 +16,12 @@ interface StaticStepResult {
  * Generates a command to hold the current camera position and target for the step duration.
  */
 export function handleStaticStep(
-  step: MotionStep,
+  _step: MotionStep,
   currentPosition: Vector3,
   currentTarget: Vector3,
   stepDuration: number,
-  sceneAnalysis: SceneAnalysis,
-  envAnalysis: EnvironmentalAnalysis,
+  _sceneAnalysis: SceneAnalysis,
+  _envAnalysis: EnvironmentalAnalysis,
   logger: Logger
 ): StaticStepResult {
   logger.debug('Handling static step...');

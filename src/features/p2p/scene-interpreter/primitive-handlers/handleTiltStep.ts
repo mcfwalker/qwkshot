@@ -7,8 +7,7 @@ import { EnvironmentalAnalysis } from '@/types/p2p/environmental-analyzer';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { EasingFunctionName, easingFunctions, DEFAULT_EASING } from '@/lib/easing';
 import {
-  resolveTargetPosition,
-  // clampPositionWithRaycast, // Not needed for tilt
+  // resolveTargetPosition, // REMOVED unused import
 } from '../interpreter-utils';
 
 interface TiltStepResult {
@@ -27,8 +26,8 @@ export function handleTiltStep(
   currentPosition: Vector3,
   currentTarget: Vector3, // This is the target *after* potential blending
   stepDuration: number,
-  sceneAnalysis: SceneAnalysis,
-  envAnalysis: EnvironmentalAnalysis,
+  _sceneAnalysis: SceneAnalysis, // Prefixed unused param
+  _envAnalysis: EnvironmentalAnalysis, // Prefixed unused param
   logger: Logger,
   currentStepExplicitTargetName: string | null
 ): TiltStepResult {

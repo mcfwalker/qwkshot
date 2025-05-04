@@ -11,8 +11,6 @@ import {
   mapDescriptorToValue,
   mapDescriptorToGoalDistance,
   normalizeDescriptor,
-  Descriptor,
-  MagnitudeType
 } from '../interpreter-utils'; // Import utils from the parent directory
 
 interface DollyStepResult {
@@ -182,7 +180,6 @@ export function handleDollyStep(
   // Calculate candidate position
   const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
   let finalPosition = newPositionCandidate.clone();
-  let clamped = false;
 
   // --- Constraint Checking ---
   const { cameraConstraints } = envAnalysis;
@@ -192,12 +189,10 @@ export function handleDollyStep(
   if (cameraConstraints) {
     if (finalPosition.y < cameraConstraints.minHeight) {
       finalPosition.y = cameraConstraints.minHeight;
-      clamped = true;
       logger.warn(`Dolly: Clamped position to minHeight (${cameraConstraints.minHeight})`);
     }
     if (finalPosition.y > cameraConstraints.maxHeight) {
       finalPosition.y = cameraConstraints.maxHeight;
-      clamped = true;
       logger.warn(`Dolly: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
     }
   }
@@ -208,13 +203,11 @@ export function handleDollyStep(
     if (distanceToTarget < cameraConstraints.minDistance) {
       const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
       finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
-      clamped = true;
       logger.warn(`Dolly: Clamped position to minDistance (${cameraConstraints.minDistance})`);
     }
     if (distanceToTarget > cameraConstraints.maxDistance) {
       const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
       finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
-      clamped = true;
       logger.warn(`Dolly: Clamped position to maxDistance (${cameraConstraints.maxDistance})`);
     }
   }
@@ -231,12 +224,10 @@ export function handleDollyStep(
     );
     if (!clampedPositionResult.equals(newPositionCandidate)) {
       finalPosition.copy(clampedPositionResult);
-      clamped = true;
       logger.warn(`Dolly: Clamped position due to raycast.`);
     }
     // No else needed, finalPosition already holds candidate if not clamped
   } else {
-      // Should this be an error or just proceed without clamping?
       logger.warn('Dolly: Bounding box data missing, skipping bounding box constraint check.');
   }
   // --- End Constraint Checking ---

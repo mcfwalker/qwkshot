@@ -11,8 +11,6 @@ import {
   mapDescriptorToValue,
   normalizeDescriptor,
   // mapDescriptorToGoalDistance, // Not applicable to pedestal
-  Descriptor,
-  MagnitudeType,
 } from '../interpreter-utils';
 
 interface PedestalStepResult {
@@ -146,7 +144,6 @@ export function handlePedestalStep(
 
   let finalPosition = newPositionCandidate.clone();
   let finalTarget = newTargetCandidate.clone();
-  let clamped = false;
 
   // --- Constraint Checking (Apply primarily to Position) ---
   const { cameraConstraints } = envAnalysis;
@@ -156,12 +153,10 @@ export function handlePedestalStep(
   if (cameraConstraints) {
     if (finalPosition.y < cameraConstraints.minHeight) {
       finalPosition.y = cameraConstraints.minHeight;
-      clamped = true;
       logger.warn(`Pedestal: Clamped position to minHeight (${cameraConstraints.minHeight})`);
     }
     if (finalPosition.y > cameraConstraints.maxHeight) {
       finalPosition.y = cameraConstraints.maxHeight;
-      clamped = true;
       logger.warn(`Pedestal: Clamped position to maxHeight (${cameraConstraints.maxHeight})`);
     }
   }
@@ -172,13 +167,11 @@ export function handlePedestalStep(
     if (distanceToTarget < cameraConstraints.minDistance) {
        const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
        finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
-       clamped = true;
        logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance}) relative to shifted target`);
     }
     if (distanceToTarget > cameraConstraints.maxDistance) {
        const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
        finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
-       clamped = true;
        logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance}) relative to shifted target`);
     }
   }
@@ -195,7 +188,6 @@ export function handlePedestalStep(
     );
     if (!clampedPositionResult.equals(newPositionCandidate)) {
       finalPosition.copy(clampedPositionResult);
-      clamped = true;
       logger.warn(`Pedestal: Clamped position due to raycast.`);
     }
   } else {
