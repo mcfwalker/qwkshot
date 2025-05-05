@@ -1,6 +1,6 @@
 # 📽️ Prompt-to-Path Pipeline Overview (v3 - Assistants API Refactor)
 
-**Status:** Reflects the architecture after completing the core Phase 3 refinements and initial Phase 4 E2E testing/bug fixing.
+**Status:** Reflects the architecture after the Scene Interpreter Refactor (May 2025).
 
 ## High-Level Explanation
 
@@ -11,25 +11,25 @@ The process leverages the OpenAI Assistants API for high-level planning and a lo
 1.  The user provides a **text prompt**.
 2.  The backend interacts with a configured **OpenAI Assistant** (via our `OpenAIAssistantAdapter`).
 3.  The Assistant consults its **Motion Knowledge Base (KB)** (a file defining available camera moves like "zoom", "orbit", "pan", and their parameters) using OpenAI's Retrieval tool.
-4.  The Assistant generates a structured **`MotionPlan`** (a JSON object detailing a sequence of steps, like `[{ type: "orbit", direction: "left", angle: 90, duration_ratio: 1.0 }]`).
-    *   For "move to destination" requests (e.g., 'pedestal to the top'), the Assistant includes a `destination_target` parameter (e.g., `object_top_center`) instead of a `distance` parameter.
-    *   For "move to proximity" requests (e.g., 'dolly in close'), the Assistant includes a `target_distance_descriptor` parameter.
+4.  The Assistant generates a structured **`MotionPlan`** (a JSON object detailing a sequence of steps).
 5.  This `MotionPlan` is passed to the **Scene Interpreter** on our backend.
-6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**. The EnvironmentalAnalysis context provided to the interpreter includes the userVerticalAdjustment.
-7.  The Scene Interpreter processes each step in the `MotionPlan`:
-    *   It uses the `type` (e.g., "orbit") to select the correct internal logic.
-    *   It uses the step's `parameters` (e.g., direction, angle) combined with the local scene/environmental context to calculate precise camera movements.
-    *   It resolves targets (e.g., 'object_center', feature names). **Crucially, it resolves spatial references like 'object_top_center' using the *normalized coordinates* from `SceneAnalysis` and applies the `userVerticalAdjustment` (from `EnvironmentalAnalysis`)** to the Y-component, ensuring alignment with the model's visually adjusted position. It also handles `'current_target'` for applicable motions.
-    *   **It handles quantitative, qualitative, and goal-based magnitude parameters** with a specific priority order for each motion type, utilizing helper functions like `_mapDescriptorToValue` and `_mapDescriptorToGoalDistance` to convert canonical descriptors (`tiny`...`huge`) into context-aware numeric values.
-        *   For example, in `dolly`, it prioritizes `target_distance_descriptor` (calculating required distance), then `destination_target` (calculating distance), then `distance_override` (direct numeric input), then `distance_descriptor` (mapped qualitative input).
-        *   For `zoom`, it prioritizes `factor_override`, then `factor_descriptor`, then `target_distance_descriptor` (calculating required factor).
-    *   It enforces constraints (like not colliding with the model bounding box or exceeding maximum camera distance/height) during calculation, using dynamic offsets for collision avoidance.
-    *   It determines appropriate easing based on parameters (`speed`, `easing`), potentially overriding easing based on the speed hint.
-8.  The Interpreter outputs a list of **`CameraCommand[]`** objects, typically representing **keyframes** (often a start and end state for each logical motion step, or multiple intermediate steps for smoother rotations like orbits).
-9.  These commands are sent to the frontend client.
-10. A dedicated **AnimationController** component within the React Three Fiber render loop reads these commands and smoothly interpolates the Three.js camera between keyframes, producing the final animation.
+6.  Crucially, the Scene Interpreter *also* receives detailed **local context** about the 3D model (**SceneAnalysis**) and its environment (**EnvironmentalAnalysis**), fetched via the **Metadata Manager**.
+7.  The Scene Interpreter (`SceneInterpreterImpl`) processes each step in the `MotionPlan`:
+    *   It uses the `type` (e.g., "orbit") in a `switch` statement to **dispatch** the step to the appropriate **external handler function** located in `src/features/p2p/scene-interpreter/primitive-handlers/` (e.g., `handleOrbitStep`).
+    *   Each handler function receives the step details, current camera state (position, target), step duration, and the full scene/environmental context.
+    *   **Inside the handler:**
+        *   The handler performs all necessary calculations, using shared helper functions imported from `src/features/p2p/scene-interpreter/interpreter-utils.ts` (e.g., `resolveTargetPosition`, `mapDescriptorToValue`, `clampPositionWithRaycast`).
+        *   It resolves targets (e.g., 'object_center', feature names), including applying `userVerticalAdjustment`.
+        *   It handles quantitative, qualitative, and goal-based magnitude parameters with specific priority orders.
+        *   It enforces constraints (e.g., height, distance, bounding box).
+        *   It determines appropriate easing.
+    *   The handler returns an object containing the calculated `CameraCommand[]` for that step and the resulting `nextPosition` and `nextTarget` camera state at the end of the step.
+8.  The `SceneInterpreterImpl.interpretPath` method receives the result from the handler. It appends the returned commands to the main list and **updates its internal `currentPosition` and `currentTarget`** based on the `nextPosition` and `nextTarget` returned by the handler, preparing for the next step in the loop.
+9.  After processing all steps, the interpreter returns the complete list of **`CameraCommand[]`** objects (keyframes) to the API route.
+10. These commands are sent to the frontend client.
+11. A dedicated **AnimationController** component within the React Three Fiber render loop reads these commands and smoothly interpolates the Three.js camera between keyframes.
 
-This architecture separates the AI's natural language understanding and planning from the deterministic, context-aware geometric execution, improving reliability and control.
+This architecture separates AI planning (Assistant) from deterministic execution (Interpreter + Handlers), with the Interpreter now acting as a lean orchestrator.
 
 ## 🔄 Pipeline Data Flow (v3)
 
@@ -68,7 +68,7 @@ graph TD
     OpenAI -- "8. MotionPlan (JSON)" --> OAIAdapter
     OAIAdapter -- "9. Parsed MotionPlan Object" --> API
     API -- "10. Instantiate Interpreter" --> Interpreter
-    API -- "11. interpretPath(MotionPlan, SceneAnalysis, EnvAnalysis, InitialCameraState)" --> Interpreter
+    API -- "11. interpretPath(...) -> Calls appropriate handle<Primitive>Step(...) handler" --> Interpreter
     Interpreter -- "12. CameraCommand[]" --> API
     API -- "13. Response: Serialized CameraCommand[]" --> UI
     UI -- "14. Update State (isPlaying=true, commands - deserialize vectors)" --> AnimController
@@ -110,29 +110,30 @@ graph TD
         *   Sends the user prompt.
         *   Receives and parses the structured `MotionPlan` JSON.
         *   Returns the validated `MotionPlan` object.
-*   **Scene Interpreter:** (`src/features/p2p/scene-interpreter/`) **(Major Refactor/Rewrite & Refinement)**
-    *   Receives the `MotionPlan` object AND local context (`SceneAnalysis`, `EnvironmentalAnalysis`, `initialCameraState`) from the API route.
-    *   **Does NOT call any LLM.**
-    *   Loops through `MotionPlan.steps`.
-    *   For each step:
-        *   Selects the appropriate internal generator logic based on `step.type`.
-        *   Uses `step.parameters` and local context to calculate precise camera movements.
-        *   Resolves targets: Handles `'current_target'`. Resolves geometric landmarks (e.g., 'object_center', 'object_top_center') **using the normalized coordinates from `SceneAnalysis` and applying the `userVerticalAdjustment` from the provided `EnvironmentalAnalysis` to the Y coordinate**, ensuring alignment with the normalized visual model.
-        *   **Handles quantitative/qualitative/goal parameters (with priority):**
-            *   Uses helper functions like `_normalizeDescriptor`, `_mapDescriptorToValue`, and `_mapDescriptorToGoalDistance` for calculations.
-            *   **`dolly/truck/pedestal` Priority:**
-                1.  `destination_target` (Calculates required distance/direction)
-                2.  `distance_override` (Uses direct number)
-                3.  `distance_descriptor` (Maps descriptor to distance via `_mapDescriptorToValue`)
-                4.  `target_distance_descriptor` (For `dolly` only; maps descriptor to goal distance via `_mapDescriptorToGoalDistance`, then calculates required distance/direction)
-            *   **`zoom` Priority:**
-                1.  `factor_override` (Uses direct number)
-                2.  `factor_descriptor` (Maps descriptor to factor via `_mapDescriptorToValue`)
-                3.  `target_distance_descriptor` (Maps descriptor to goal distance via `_mapDescriptorToGoalDistance`, then calculates required factor)
-        *   Applies constraints (height, distance, bounding box via raycasting with **dynamic offset**) during calculation.
-        *   Determines appropriate **effective easing function** (using `d3-ease`) based on speed/easing parameters, potentially overriding explicit easing.
-        *   Handles duration allocation.
-    *   Outputs an array of `CameraCommand` objects representing **keyframes** (often start/end pairs per step, or multiple intermediate steps for rotations like `orbit`) defining the path.
+*   **Scene Interpreter:** (`src/features/p2p/scene-interpreter/`) **(REFACTORED - May 2025)**
+    *   **`interpreter.ts` (`SceneInterpreterImpl`):**
+        *   Receives the `MotionPlan` object AND local context (`SceneAnalysis`, `EnvironmentalAnalysis`, `initialCameraState`) from the API route.
+        *   **Does NOT call any LLM.**
+        *   The `interpretPath` method loops through `MotionPlan.steps`.
+        *   For each step, it performs target blending logic (if needed) and then **dispatches** to the appropriate handler function (e.g., `handleDollyStep`) located in `primitive-handlers/` based on `step.type`.
+        *   Receives `{ commands, nextPosition, nextTarget }` from the handler.
+        *   Appends `commands` to the main list.
+        *   **Updates its internal `currentPosition` and `currentTarget`** based on the returned `nextPosition` and `nextTarget` to prepare for the next step.
+        *   After the loop, performs final checks (e.g., velocity) and returns the complete `CameraCommand[]`.
+    *   **`primitive-handlers/*.ts` (New Directory):**
+        *   Contains one handler function per primitive type (e.g., `handleDollyStep.ts`).
+        *   Each handler receives the step, current state, duration, context, and logger.
+        *   **Handler Responsibilities:** Contains the specific logic for calculating the primitive's motion:
+            *   Uses shared utility functions from `interpreter-utils.ts`.
+            *   Resolves targets (including applying `userVerticalAdjustment`).
+            *   Handles quantitative/qualitative/goal parameters.
+            *   Applies constraints (height, distance, bounding box).
+            *   Determines easing.
+            *   Generates the `CameraCommand[]` for that *single* step (often start/end keyframes, or multiple for rotations).
+            *   Returns `{ commands, nextPosition, nextTarget }` reflecting the state *after* the step.
+    *   **`interpreter-utils.ts` (New File):**
+        *   Contains shared helper functions (e.g., `resolveTargetPosition`, `clampPositionWithRaycast`, `mapDescriptorToValue`, `mapDescriptorToGoalDistance`, `normalizeDescriptor`) previously private to `SceneInterpreterImpl`.
+        *   Functions accept context (sceneAnalysis, envAnalysis, logger, etc.) as arguments.
 *   **Animation Controller (Client):** (`src/components/viewer/AnimationController.tsx`) **(Largely Unchanged Conceptually)**
     *   Receives the `CameraCommand[]` from the API response (via UI state).
     *   Runs within the React Three Fiber `useFrame` loop.
@@ -152,8 +153,9 @@ The pipeline relies on data stored (typically via `MetadataManager`) likely in a
 
 ## 📝 Notes
 
--   This v3 architecture prioritizes separating AI planning from deterministic execution.
--   Context is used *locally* by the Scene Interpreter, not sent to the LLM.
+-   This v3 architecture (with the May 2025 interpreter refactor) prioritizes separating AI planning from deterministic execution.
+-   Context is used *locally* by the Scene Interpreter's handlers, not sent to the LLM.
 -   The `MotionPlan` schema is the key interface between the LLM Engine and Scene Interpreter.
--   The `CameraCommand` schema is the key interface between the Scene Interpreter and the client-side Animation Controller, with the array now representing a sequence of keyframes defining the path segments.
+-   The handler function signature and return type (`{ commands, nextPosition, nextTarget }`) are the key interface between the Scene Interpreter dispatcher and the individual primitive handlers.
+-   The `CameraCommand` schema is the key interface between the Scene Interpreter and the client-side Animation Controller.
 -   `d3-ease` is used for standardized easing functions.
