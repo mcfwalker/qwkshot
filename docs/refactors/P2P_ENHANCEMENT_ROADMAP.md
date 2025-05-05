@@ -1,55 +1,41 @@
 # P2P Pipeline Enhancement Roadmap
 
-This document outlines the proposed sequence for implementing major enhancements and features for the Prompt-to-Path (P2P) pipeline, following the completion of the Backend Normalization and Primitive Implementation refactors.
+This document outlines the proposed sequence for implementing major enhancements and features for the Prompt-to-Path (P2P) pipeline, following the completion of the Backend Normalization and Scene Interpreter Refactor (May 2025).
 
 ## Proposed Sequence
 
 1.  **Complete Primitives (Visual Roll)**
-    *   **Task:** Implement the visual effect for the `rotate` primitive when `axis: 'roll'` is specified. This requires updating the `SceneInterpreter` and likely the client-side `AnimationController` to handle camera `up` vector interpolation (e.g., using Quaternions and SLERP) and potential conflicts with `OrbitControls`.
+    *   **Task:** Implement the visual effect for the `rotate` primitive when `axis: 'roll'` is specified. Requires updating `AnimationController` to handle camera `up` vector interpolation.
     *   **Goal:** Complete the full intended functionality of all defined motion primitives.
 
-2.  **Pattern Layer Implementation**
-    *   **Task 1: Pattern KB Definition:** Define the structure and initial content for a Pattern Knowledge Base (`pattern_kb.json`) listing high-level motion patterns (e.g., `fly_by`, `zig_zag`, `reveal`) and their parameters.
-    *   **Task 2: Assistant Function Spec:** Define the specific function signature (`compose_pattern({ pattern: <patternName>, ...parameters })`) that the Assistant should call when it detects a pattern request.
-    *   **Task 3: Backend Pattern Composers:** Implement backend logic (potentially a new module or service) that receives calls from the Assistant (via the adapter/API route) and translates a pattern name + parameters into a sequence of primitive `MotionStep` objects based on the Pattern KB.
-    *   **Task 4: Integration & Testing:** Update Assistant instructions to utilize `compose_pattern`. Modify the API route/adapter to handle function calls and integrate the composer output back into the `MotionPlan` before it reaches the interpreter. Verify patterns like `fly_by` expand correctly.
-    *   **Goal:** Enable the system to handle complex, named motion sequences by composing primitives.
+2.  **Frontend Sequential Smoothing (Phase 1 & 2)**
+    *   **Task:** Implement the client-side smoothing plan (`FRONTEND_ANIMATION_SMOOTHING_PLAN.md`) covering basic Catmull-Rom/Slerp interpolation and corner blend point injection.
+    *   **Goal:** Eliminate visual jerkiness *within* and *between* sequential motion segments for smoother transitions.
 
-3.  **Parallel Motion Blending ("while" support)**
-    *   **Task:** Add capability to execute certain primitives concurrently (e.g., "orbit while dollying"). This may involve:
-        *   Updating the `MotionPlan` / `CameraCommand` schema (e.g., a `concurrent?: boolean` flag).
-        *   Modifying the `SceneInterpreter` to potentially output commands that can be blended.
-        *   Significantly enhancing the client-side `AnimationController` to interpolate and sum/apply multiple transformations simultaneously (e.g., adding dolly vector to orbit position change).
-    *   **Goal:** Allow for more complex, layered animations specified via natural language.
+3.  **Duration Inference (from Speed Qualifiers)**
+    *   **Task:** Allow users to specify qualitative durations (e.g., "quickly", "slowly"). Update LLM to pass `speed_descriptor`. Update backend (`interpretPath`) to calculate reference durations per step, scale by descriptor, and normalize against optional total duration. See `DURATION_INFERENCE_REQUIREMENTS.md`.
+    *   **Goal:** Make animation duration specification more flexible and intuitive based on natural language speed requests.
 
-4.  **Frontend Smoothing & Transitions**
-    *   **Task:** Implement the client-side smoothing plan (`docs/refactors/FRONTEND_ANIMATION_SMOOTHING_PLAN.md`).
-        *   Phase 1: Basic Catmull-Rom/Slerp interpolation within `AnimationController`.
-        *   Phase 2: Corner detection and blend point injection in `PathSmoother` logic.
-    *   **Goal:** Eliminate visual jerkiness within and between motion segments.
+4.  **Parallel Motion Blending ("while" support)**
+    *   **Task:** Add capability to execute certain primitives concurrently (e.g., "orbit while dollying"). May involve schema updates, interpreter/handler logic changes to provide transformation info, and significant `AnimationController` enhancements to combine transformations frame-by-frame.
+    *   **Goal:** Allow for more complex, layered animations specified via natural language. Prerequisite for complex patterns.
 
-5.  **Duration Inference**
-    *   **Task:** Allow users to specify qualitative durations (e.g., "quickly", "slowly").
-        *   Update Assistant instructions/KB to map time descriptors to duration estimates or hints.
-        *   Potentially update interpreter or adapter to use these hints when calculating `duration_ratio` or final command durations if no explicit duration is provided.
-    *   **Goal:** Make animation duration specification more flexible.
+5.  **Pattern Layer Implementation**
+    *   **Task:** Implement the Pattern Meta Layer as defined in `PATTERN_META_LAYER_REQUIREMENTS.md`. Includes Pattern KB, Assistant function calling (`compose_pattern`), backend Composer module, and API route integration. Leverages sequential and parallel execution capabilities.
+    *   **Goal:** Enable the system to handle complex, named motion sequences (e.g., "zigzag", "fly_by", "spiral_down") by composing primitives.
 
 6.  **Points of Interest (User-Defined Targets)**
-    *   **Task:** Implement the full feature:
-        *   Backend: Database schema changes (e.g., `feature_points` table), API/Server Actions for creating/managing points.
-        *   Frontend: UI for users to select and name points on the model.
-        *   Interpreter: Update `_resolveTargetPosition` to query and use these custom points.
-        *   Assistant: Update instructions/KB to allow targeting these user-defined points by name.
+    *   **Task:** Implement the full feature: Backend (DB, API), Frontend (UI), Interpreter (`resolveTargetPosition` update), Assistant (KB/Instructions).
     *   **Goal:** Enable highly specific targeting in user prompts.
 
 7.  **Enhanced Logging & Monitoring**
-    *   **Task:** Implement more structured logging throughout the pipeline (Adapter, Interpreter, Client). Integrate with a monitoring service (e.g., Sentry) for better error tracking. Can run in parallel once core mechanics are stable.
+    *   **Task:** Implement structured logging and integrate with a monitoring service (e.g., Sentry).
     *   **Goal:** Improve debuggability and observability.
 
 8.  **Text-to-Image / Image-to-3D Pipeline (Separate Epic)**
-    *   **Task:** Design and implement the workflow for users to generate 3D models from text or images, integrating with external generation services.
+    *   **Task:** Design and implement the workflow for users to generate 3D models from text or images.
     *   **Goal:** Add model creation capabilities.
 
 9.  **UI Polish**
-    *   **Task:** Refine controls, loading states, error messages, and overall user experience after core functional milestones are met.
+    *   **Task:** Refine controls, loading states, error messages, and overall user experience.
     *   **Goal:** Improve usability and aesthetics. 
