@@ -1,0 +1,62 @@
+{
+  "name": "compose_pattern",
+  "description": "Expands a named high-level cinematic pattern (like 'zigzag' or 'fly_by') into a sequence of atomic motion primitives. Use this when the user's prompt explicitly requests a named pattern or describes motion that clearly matches a defined pattern.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "strict": true,
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "The name of the pattern to compose.",
+        "enum": [
+          "zigzag",
+          "fly_by"
+        ]
+      },
+      "segments": {
+        "type": "integer",
+        "description": "Number of alternating segments for the 'zigzag' pattern. Default: 4, Min: 2, Max: 10."
+      },
+      "amplitude": {
+        "type": "string",
+        "description": "The lateral distance descriptor for each truck movement in the 'zigzag' pattern. Default: 'small'.",
+        "enum": [
+          "tiny",
+          "small",
+          "medium",
+          "large",
+          "huge"
+        ]
+      },
+      "apex_height": {
+        "type": "string",
+        "description": "Descriptor for the peak height reached above the target during the 'fly_by' pattern. 'none' implies a level pass. Default: 'large'.",
+        "enum": [
+          "none",
+          "tiny",
+          "small",
+          "medium",
+          "large",
+          "huge"
+        ]
+      },
+      "speed": {
+        "type": "string",
+        "description": "Overall speed hint for the 'fly_by' pattern execution. Default: 'fast'.",
+        "enum": [
+          "slow",
+          "normal",
+          "fast"
+        ]
+      },
+      "second_pass": {
+        "type": "boolean",
+        "description": "If true, performs a second pass in the opposite direction for the 'fly_by' pattern. Default: false."
+      }
+    },
+    "required": [
+      "pattern"
+    ]
+  }
+}
