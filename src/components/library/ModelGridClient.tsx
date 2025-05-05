@@ -154,14 +154,16 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
     <>
       <div className="library-grid">
         {models.map((model) => {
-          // Create a cache-busting URL for the thumbnail
-          const thumbnailUrl = useMemo(() => {
-            if (!model.thumbnail_url) return null;
-            // Add a timestamp if not already present
-            if (model.thumbnail_url.includes('?t=')) return model.thumbnail_url;
-            return `${model.thumbnail_url}?t=${Date.now()}`;
-          }, [model.thumbnail_url]);
-          
+          // Calculate cache-busting URL directly without useMemo
+          let thumbnailUrl: string | null = null;
+          if (model.thumbnail_url) {
+            if (model.thumbnail_url.includes('?t=')) {
+              thumbnailUrl = model.thumbnail_url;
+            } else {
+              thumbnailUrl = `${model.thumbnail_url}?t=${Date.now()}`;
+            }
+          }
+
           return (
             <Card key={model.id} className="library-card overflow-hidden bg-[#1D1D1D] border-0">
               <CardContent className="p-0">
