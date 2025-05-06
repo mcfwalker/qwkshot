@@ -78,6 +78,7 @@ export class PathProcessor {
     }
     
     // Create the Catmull-Rom curve using the filtered waypoints
+    // Revert tension parameter back to default for 'centripetal' type
     const positionCurve = new CatmullRomCurve3(processedWaypoints, false, 'centripetal');
 
     // Pre-sample positions using the filtered total duration
