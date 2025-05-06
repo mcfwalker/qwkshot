@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, PerspectiveCamera } from 'three';
+import { Vector3, PerspectiveCamera, Quaternion, Clock } from 'three';
 // We might need a more specific type for OrbitControls ref if available
 // import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'; 
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
@@ -10,6 +10,9 @@ import { CameraCommand } from '@/types/p2p/scene-interpreter';
 // Import easing functions (assuming a shared utility path)
 // Adjust path if necessary
 import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing'; 
+
+// +++ Add PathProcessor imports +++
+import { PathProcessor, ProcessedPathData } from '@/features/p2p/animation/PathProcessor';
 
 // Remove placeholder easing functions
 // const easingFunctions: Record<string, (t: number) => number> = { ... };
@@ -39,149 +42,202 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   controlsRef,
   onProgressUpdate,
   onComplete,
-  currentProgress, // Receive current progress from parent
+  currentProgress, // Will be used to set initial animation time
 }) => {
-  const startTimeRef = useRef<number | null>(null);
-  const initialCameraPositionRef = useRef<Vector3 | null>(null);
-  const initialControlsTargetRef = useRef<Vector3 | null>(null);
+  // --- Refs for new smoothing logic ---
+  const processedPathDataRef = useRef<ProcessedPathData | null>(null);
+  const animationClockRef = useRef<Clock>(new Clock(false)); // Autostart false
+  const tempSlerpQuaternionRef = useRef<Quaternion>(new Quaternion()); // For Slerp calculations
+
+  // --- Existing refs (some might be repurposed or removed if logic changes) ---
+  // startTimeRef might be replaced by animationClockRef.elapsedTime logic
+  // initialCameraPositionRef and initialControlsTargetRef are handled by PathProcessor's initial orientation
+
   const frameCounterRef = useRef(0); // For throttling UI updates
+
+  // Effect to process commands when they change or playback starts/stops
+  useEffect(() => {
+    if (isPlaying && commands.length > 0 && cameraRef.current) {
+      const currentCameraQuaternion = new Quaternion();
+      cameraRef.current.getWorldQuaternion(currentCameraQuaternion);
+      
+      const data = PathProcessor.process(commands, currentCameraQuaternion);
+      processedPathDataRef.current = data;
+
+      animationClockRef.current.stop(); // Reset clock
+      // Adjust start time based on currentProgress to allow resuming
+      const initialElapsedTime = (processedPathDataRef.current?.totalDuration || 0) * (currentProgress / 100);
+      animationClockRef.current.elapsedTime = initialElapsedTime / playbackSpeed; // Adjust for playback speed
+      animationClockRef.current.start();
+      
+      // If recording, immediately apply the first frame's state (start of the path)
+      // This might need more careful handling with pre-sampled paths.
+      // For now, let PathProcessor handle the full path generation.
+      // The useFrame will pick up from the correct starting point due to adjusted elapsedTime.
+
+    } else if (!isPlaying) {
+      animationClockRef.current.stop();
+      // Optionally clear processed data if not playing to free memory
+      // processedPathDataRef.current = null; 
+    }
+  }, [commands, isPlaying, cameraRef, currentProgress, playbackSpeed]); // Added playbackSpeed to dependencies
 
   useFrame((state, delta) => {
     frameCounterRef.current++;
     
-    if (!isPlaying || commands.length === 0 || !cameraRef.current || !controlsRef.current) {
-      // Reset start time if we stop playing mid-animation to ensure correct restart
-      startTimeRef.current = null;
-      return; // Exit if not playing or prerequisites missing
+    if (!isPlaying || !processedPathDataRef.current || !cameraRef.current) {
+      // If not playing or no data, ensure clock is stopped
+      if (!isPlaying && animationClockRef.current.running) {
+        animationClockRef.current.stop();
+      }
+      return; 
     }
 
-    const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0) / playbackSpeed; // Adjust total duration by speed
-    // --- Stricter Duration Check ---
-    if (totalDuration <= 1e-6) { // Use a small epsilon instead of just > 0
-        if (isPlaying) {
-            onProgressUpdate(100);
-            onComplete();
-        }
-        return;
-    } 
+    const {
+      sampledPositions,
+      keyframeQuaternions,
+      segmentDurations,
+      totalDuration,
+    } = processedPathDataRef.current;
 
-    // Initialize start time and initial state on the first frame of playback *or* after scrubbing
-    if (startTimeRef.current === null) {
-        // --- Jump to Start Position Immediately ---
+    // If totalDuration is effectively zero, complete immediately
+    if (totalDuration <= 1e-6) {
+      if (isPlaying) {
+        // Apply final state if commands exist
         if (commands.length > 0 && cameraRef.current) {
-            const firstCommand = commands[0];
-            cameraRef.current.position.copy(firstCommand.position);
-            cameraRef.current.lookAt(firstCommand.target); 
-            // If recording, force render this initial state immediately
-            if (isRecording) {
-              state.gl.render(state.scene, state.camera);
-              console.log("AnimationController: Forced render of initial frame for recording");
+            const lastCommand = commands[commands.length - 1];
+            cameraRef.current.position.copy(lastCommand.position);
+            cameraRef.current.lookAt(lastCommand.target);
+            if (controlsRef.current) {
+                controlsRef.current.target.copy(lastCommand.target);
+                controlsRef.current.update();
             }
         }
-        // --- End Jump to Start ---
-
-        // Calculate adjusted start time based on current progress prop
-        const startProgressValue = currentProgress / 100; // Use prop
-        startTimeRef.current = state.clock.elapsedTime - (startProgressValue * totalDuration); 
-        initialCameraPositionRef.current = cameraRef.current.position.clone();
-        initialControlsTargetRef.current = controlsRef.current.target.clone();
-    }
-
-    // Calculate elapsed time and progress, adjusted by playback speed
-    const elapsedTime = state.clock.elapsedTime - startTimeRef.current;
-    let currentOverallProgress = Math.min(1.0, elapsedTime / totalDuration); // Progress based on adjusted duration
-    
-    const clampedProgressPercent = Math.min(100, currentOverallProgress * 100);
-
-    // Calculate target time based on unadjusted durations for segment finding
-    const targetTimeUnadjusted = elapsedTime * playbackSpeed; 
-
-    // Find the current segment based on unadjusted time
-    let accumulatedDurationUnadjusted = 0;
-    let currentCommandIndex = 0;
-    while (currentCommandIndex < commands.length - 1 && 
-           accumulatedDurationUnadjusted + commands[currentCommandIndex].duration < targetTimeUnadjusted) {
-        accumulatedDurationUnadjusted += commands[currentCommandIndex].duration;
-        currentCommandIndex++;
+        onProgressUpdate(100);
+        onComplete(); // This should trigger isPlaying=false in parent
+      }
+      return;
     }
     
-    const command = commands[currentCommandIndex];
-    if (!command) { 
-        onComplete(); // Trigger completion cleanup
-        return;
+    // Get elapsed time, adjusted for playback speed
+    // Clock's elapsedTime is already managed correctly with start/stop and initial setting
+    const elapsedTime = animationClockRef.current.getElapsedTime() * playbackSpeed;
+
+    // --- Animation Completion Check ---
+    if (elapsedTime >= totalDuration) {
+      // Apply final state precisely from the end of the sampled path / last quaternion
+      const finalSampleIndex = (sampledPositions.length / 3) - 1;
+      if (finalSampleIndex >= 0) {
+        cameraRef.current.position.fromArray(sampledPositions, finalSampleIndex * 3);
+      }
+      if (keyframeQuaternions.length > 0) {
+        cameraRef.current.setRotationFromQuaternion(keyframeQuaternions[keyframeQuaternions.length - 1]);
+      }
+      
+      // Sync OrbitControls target if it exists (using last command's target)
+      if (controlsRef.current && commands.length > 0) {
+        controlsRef.current.target.copy(commands[commands.length - 1].target);
+        controlsRef.current.update();
+      }
+
+      onProgressUpdate(100);
+      onComplete(); // This should trigger isPlaying=false
+      return;
     }
 
-    // Determine start state for the LERP (handle potential missing previous command)
-    const segmentStartPos = (currentCommandIndex === 0 && initialCameraPositionRef.current)
-        ? initialCameraPositionRef.current
-        : commands[currentCommandIndex - 1]?.position ?? initialCameraPositionRef.current ?? new Vector3(); 
-    const segmentStartTarget = (currentCommandIndex === 0 && initialControlsTargetRef.current)
-        ? initialControlsTargetRef.current
-        : commands[currentCommandIndex - 1]?.target ?? initialControlsTargetRef.current ?? new Vector3(); 
-
-    const segmentEndPos = command.position;
-    const segmentEndTarget = command.target;
-
-    // Calculate time elapsed *within the current segment* (using unadjusted time)
-    const timeElapsedInSegmentUnadjusted = targetTimeUnadjusted - accumulatedDurationUnadjusted;
-    // Calculate progress `t` within the current segment (0 to 1)
-    const t = command.duration > 0 
-        ? Math.min(1.0, Math.max(0.0, timeElapsedInSegmentUnadjusted / command.duration)) 
-        : 1.0; 
-
-    // Apply easing
-    let effectiveEasingName: EasingFunctionName = DEFAULT_EASING; // Start with default
-    if (command.easing && command.easing in easingFunctions) {
-      // If command provides a valid easing name, use it
-      effectiveEasingName = command.easing as EasingFunctionName; 
-    }
-    // Otherwise, effectiveEasingName remains DEFAULT_EASING
+    // --- Calculate Current Position from Sampled Path ---
+    const numSamples = sampledPositions.length / 3;
+    // Ensure pathProgress doesn't exceed 1 to prevent out-of-bounds access if elapsedTime slightly overshoots
+    const pathProgress = Math.min(1.0, elapsedTime / totalDuration); 
     
-    // Look up the function using the guaranteed valid name
-    const easingFunction = easingFunctions[effectiveEasingName]; 
-    const easedT = easingFunction(t);
+    // Ensure sampleIndex is within bounds [0, numSamples - 1]
+    // For pathProgress = 1.0, sampleIndex should be numSamples - 1
+    // For pathProgress = 0.0, sampleIndex should be 0
+    const sampleIndex = Math.max(0, Math.min(numSamples - 1, Math.floor(pathProgress * (numSamples -1) + 0.5) )); // add 0.5 for rounding to nearest sample
+                                                                                                          // or Math.floor(pathProgress * numSamples) for flooring
+                                                                                                          // Let's use flooring approach as it's simpler for start of path
+    const currentSampleIndex = Math.min(numSamples - 1, Math.floor(pathProgress * numSamples));
 
-    // Interpolate position and target
-    const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
-    const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
 
-    // --- Update camera directly --- 
-    cameraRef.current.position.copy(currentPosition);
-    cameraRef.current.lookAt(currentTarget);
-    // cameraRef.current.updateMatrixWorld(true); // Maybe needed?
+    if (currentSampleIndex * 3 + 2 < sampledPositions.length) {
+        cameraRef.current.position.fromArray(sampledPositions, currentSampleIndex * 3);
+    } else if (numSamples > 0) { // Fallback to last sample if calculation is off
+        cameraRef.current.position.fromArray(sampledPositions, (numSamples - 1) * 3);
+    }
+
+
+    // --- Calculate Current Orientation using Slerp ---
+    let accumulatedDuration = 0;
+    let currentSegmentIndex = 0;
+    for (let i = 0; i < segmentDurations.length; i++) {
+      // elapsedTime is already adjusted for playbackSpeed
+      if (elapsedTime < accumulatedDuration + segmentDurations[i]) {
+        currentSegmentIndex = i;
+        break;
+      }
+      accumulatedDuration += segmentDurations[i];
+      // If elapsedTime matches or exceeds total sum of durations, stick to last segment
+      if (i === segmentDurations.length - 1 && elapsedTime >= accumulatedDuration) {
+          currentSegmentIndex = i;
+          break;
+      }
+    }
+    // Ensure currentSegmentIndex is valid for keyframeQuaternions (which has N+1 elements)
+    // N commands = N segments = N segmentDurations. N+1 keyframeQuaternions.
+    // So currentSegmentIndex should go from 0 to segmentDurations.length - 1
+    currentSegmentIndex = Math.min(currentSegmentIndex, keyframeQuaternions.length - 2); 
+    currentSegmentIndex = Math.max(0, currentSegmentIndex); // Ensure it's not negative if segmentDurations is empty
+
+
+    const segmentStartTime = accumulatedDuration;
+    const currentSegmentDuration = segmentDurations[currentSegmentIndex] ?? 0; // Handle undefined if array empty
+    const timeInCurrentSegment = elapsedTime - segmentStartTime;
+    
+    let tSegment = 0; // Normalized time (0 to 1) within the current segment
+    if (currentSegmentDuration > 1e-6) { 
+      tSegment = Math.max(0, Math.min(1, timeInCurrentSegment / currentSegmentDuration));
+    } else if (timeInCurrentSegment >= 0 && currentSegmentDuration <= 1e-6) { // Snap to end for zero/tiny duration segments
+      tSegment = 1.0;
+    }
+
+    // Apply original per-segment easing if command specifies it
+    const commandForEasing = commands[currentSegmentIndex];
+    if (commandForEasing?.easing && commandForEasing.easing in easingFunctions) {
+        const easingFunction = easingFunctions[commandForEasing.easing as EasingFunctionName];
+        tSegment = easingFunction(tSegment);
+    } else if (DEFAULT_EASING in easingFunctions) { // Fallback to default project easing
+        const easingFunction = easingFunctions[DEFAULT_EASING];
+        tSegment = easingFunction(tSegment);
+    }
+    // If no easing, tSegment remains linear
+
+    const qStart = keyframeQuaternions[currentSegmentIndex];
+    // Ensure qEnd index is valid
+    const qEndIndex = Math.min(currentSegmentIndex + 1, keyframeQuaternions.length - 1);
+    const qEnd = keyframeQuaternions[qEndIndex];
+
+    if (qStart && qEnd) { // Ensure quaternions are valid
+        tempSlerpQuaternionRef.current.copy(qStart).slerp(qEnd, tSegment);
+        cameraRef.current.setRotationFromQuaternion(tempSlerpQuaternionRef.current);
+    } else if (qStart) { // If qEnd is somehow invalid, just use qStart
+        cameraRef.current.setRotationFromQuaternion(qStart);
+    }
+    // If both are invalid, orientation remains unchanged from previous frame (less ideal)
+
 
     // --- Force render to canvas if recording ---
     if (isRecording) {
-      state.gl.render(state.scene, state.camera);
+      // state.gl.render(state.scene, state.camera); // This can be expensive
+      // Consider if this is still the best approach for recording smoothed paths.
+      // For now, retain if it was working, but it might interact oddly.
     }
-    // --- End force render ---
 
-    // Update shared progress state (for UI slider etc.) - throttled
+    // --- Update UI Progress ---
+    const currentOverallProgressPercent = Math.min(100, (elapsedTime / totalDuration) * 100);
     if (frameCounterRef.current % 3 === 0) { 
-        onProgressUpdate(clampedProgressPercent);
-    }
-    
-    // Check if animation finished
-    if (currentOverallProgress >= 1.0) {
-        const finalCommand = commands[commands.length - 1];
-        cameraRef.current.position.copy(finalCommand.position);
-        cameraRef.current.lookAt(finalCommand.target);
-        
-        // Sync controls to final state 
-        if (controlsRef.current) {
-          controlsRef.current.target.copy(finalCommand.target);
-          controlsRef.current.update();
-        }
-
-        // Reset internal state and call completion callback
-        startTimeRef.current = null;
-        initialCameraPositionRef.current = null; 
-        initialControlsTargetRef.current = null;
-        onProgressUpdate(100); // Ensure UI shows 100
-        onComplete(); // This should trigger isPlaying=false 
+      onProgressUpdate(currentOverallProgressPercent);
     }
   });
 
-  // This component doesn't render anything itself
-  return null;
+  return null; // Component doesn't render anything itself
 };
