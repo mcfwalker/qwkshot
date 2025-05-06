@@ -31,6 +31,8 @@ export interface CameraCommand {
   target: Vector3;
   duration: number;
   easing?: EasingFunctionName;
+  easeHint?: 'auto' | 'hardStop' | 'blend'; // Further hint for PathSmoother
+  allowCornerBlending?: boolean; // Hint: If false, force linear join even if angle is sharp
 }
 
 /**
