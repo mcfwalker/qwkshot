@@ -8,7 +8,7 @@ const POSITION_EPSILON = 1e-6; // Small tolerance for comparing Vector3 equality
 // --- Constants for Phase 2 Blending --- 
 const CORNER_ANGLE_THRESHOLD_RADIANS = THREE.MathUtils.degToRad(30); 
 const BLEND_OFFSET_FRACTION = 0.3; 
-const MIN_BLEND_OFFSET = 0.1; 
+const MIN_BLEND_OFFSET = 0.75; 
 const MAX_BLEND_OFFSET_FACTOR = 0.45; 
 // --- End Constants ---
 
@@ -94,25 +94,21 @@ export class PathProcessor {
       };
     }
     
-    // --- Step 2 & 3: Corner Detection and Blend Point Calculation --- 
+    // --- Step 2 & 3: Corner Detection and Blend Point Calculation (with detailed logging) --- 
     const augmentedWaypoints: Vector3[] = [];
     if (filteredWaypoints.length > 0) {
-      augmentedWaypoints.push(filteredWaypoints[0].clone()); // Always add the first point
+      augmentedWaypoints.push(filteredWaypoints[0].clone()); 
     }
 
-    for (let i = 1; i < filteredWaypoints.length - 1; i++) { // Iterate internal points
+    for (let i = 1; i < filteredWaypoints.length - 1; i++) { 
       const pPrev = filteredWaypoints[i-1];
       const pCurr = filteredWaypoints[i];
       const pNext = filteredWaypoints[i+1];
 
       const vIn = new Vector3().subVectors(pCurr, pPrev);
       const vOut = new Vector3().subVectors(pNext, pCurr);
-      // No need to normalize here for angleTo, but normalize if using for scaledVector later with fixed offset
+      const angle = vIn.angleTo(vOut); 
 
-      const angle = vIn.angleTo(vOut); // Radians
-
-      // Blend if angle is sharp enough, but not a near 180-degree reversal (which this simple blend isn\'t for)
-      // Also ensure segments have some length to avoid issues with zero-length segments for offset calculation
       const distToPrev = pCurr.distanceTo(pPrev);
       const distToNext = pCurr.distanceTo(pNext);
 
@@ -120,28 +116,42 @@ export class PathProcessor {
           Math.abs(angle) < (Math.PI - CORNER_ANGLE_THRESHOLD_RADIANS) &&
           distToPrev > POSITION_EPSILON && distToNext > POSITION_EPSILON) { 
         
-        console.log(`PathProcessor: Detected corner at original filtered index ${i}, angle: ${THREE.MathUtils.radToDeg(angle).toFixed(1)} deg`);
+        console.log(`PathProcessor: Corner at idx ${i}, angle: ${THREE.MathUtils.radToDeg(angle).toFixed(1)} deg`);
+        console.log(`PathProcessor: distToPrev=${distToPrev.toFixed(3)}, distToNext=${distToNext.toFixed(3)}`);
         
-        let offset = Math.min(distToPrev, distToNext) * BLEND_OFFSET_FRACTION;
-        offset = Math.max(MIN_BLEND_OFFSET, offset); 
-        // Ensure offset doesn\'t exceed a factor of segment length to prevent B1/B2 crossing midpoint or pPrev/pNext
-        offset = Math.min(offset, distToPrev * MAX_BLEND_OFFSET_FACTOR, distToNext * MAX_BLEND_OFFSET_FACTOR); 
+        let initialOffsetUnclamped = Math.min(distToPrev, distToNext) * BLEND_OFFSET_FRACTION;
+        console.log(`PathProcessor: initialOffsetUnclamped (frac ${BLEND_OFFSET_FRACTION} * shorterSegment) = ${initialOffsetUnclamped.toFixed(3)}`);
 
-        const vInNormalized = vIn.normalize(); // Normalize for scaled vector
-        const vOutNormalized = vOut.normalize(); // Normalize for scaled vector
+        let offset = initialOffsetUnclamped;
+        offset = Math.max(MIN_BLEND_OFFSET, offset);
+        console.log(`PathProcessor: offset_after_min_clamp (min ${MIN_BLEND_OFFSET}) = ${offset.toFixed(3)}`);
 
-        const b1 = new Vector3().copy(pCurr).addScaledVector(vInNormalized, -offset); // Move back along vIn
-        const b2 = new Vector3().copy(pCurr).addScaledVector(vOutNormalized, offset);  // Move forward along vOut
+        const maxClampValuePrev = distToPrev * MAX_BLEND_OFFSET_FACTOR;
+        const maxClampValueNext = distToNext * MAX_BLEND_OFFSET_FACTOR;
+        // The effective max clamp will be Math.min of these if they differ, or just one if segments are equal
+        const effectiveMaxClamp = Math.min(maxClampValuePrev, maxClampValueNext); 
+        console.log(`PathProcessor: maxClampValPrev (segLen * ${MAX_BLEND_OFFSET_FACTOR}) = ${maxClampValuePrev.toFixed(3)}`);
+        console.log(`PathProcessor: maxClampValNext (segLen * ${MAX_BLEND_OFFSET_FACTOR}) = ${maxClampValueNext.toFixed(3)}`);
+        console.log(`PathProcessor: effectiveMaxClamp = ${effectiveMaxClamp.toFixed(3)}`);
+        
+        offset = Math.min(offset, effectiveMaxClamp); // Apply the tighter of the two possible max clamps
+        console.log(`PathProcessor: offset_after_effective_max_clamp = ${offset.toFixed(3)}`);
+
+        const vInNormalized = vIn.clone().normalize(); 
+        const vOutNormalized = vOut.clone().normalize(); 
+
+        const b1 = new Vector3().copy(pCurr).addScaledVector(vInNormalized, -offset); 
+        const b2 = new Vector3().copy(pCurr).addScaledVector(vOutNormalized, offset);  
         
         augmentedWaypoints.push(b1);
         augmentedWaypoints.push(b2);
-        console.log(`PathProcessor: Injected blend points B1, B2 around original P[${i}] at dist: ${offset.toFixed(3)}`);
+        console.log(`PathProcessor: Injected B1, B2. Final offset dist: ${offset.toFixed(3)}`);
       } else {
-        augmentedWaypoints.push(pCurr.clone()); // Not a sharp corner or too short segments, add original point
+        augmentedWaypoints.push(pCurr.clone()); 
       }
     }
 
-    if (filteredWaypoints.length > 1) { // Add last point if it exists and wasn\'t the first one
+    if (filteredWaypoints.length > 1) { 
       augmentedWaypoints.push(filteredWaypoints[filteredWaypoints.length - 1].clone());
     }
     // --- End Step 2 & 3 ---
