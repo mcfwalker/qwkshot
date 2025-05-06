@@ -128,16 +128,16 @@ export function handleOrbitStep(
 
   // Generate Intermediate Keyframes
   const commandsList: CameraCommand[] = [];
-  const anglePerStep = 20; // Degrees per intermediate step - INCREASED FROM 5
+  const anglePerStep = 45; // Degrees per intermediate step - INCREASED FROM 20
   const numSteps = Math.max(2, Math.ceil(Math.abs(angle) / anglePerStep));
-  // Ensure numSteps-1 is not zero if numSteps is 2 (angle <= anglePerStep)
+  // Ensure numSegments is not zero if numSteps is 2 (angle <= anglePerStep)
   const numSegments = Math.max(1, numSteps - 1);
   const angleStep = angle / numSegments; 
   const durationStep = (stepDuration > 0 ? stepDuration : 0.1) / numSegments;
   const angleStepRad = THREE.MathUtils.degToRad(angleStep) * angleSign;
   const quaternionStep = new Quaternion().setFromAxisAngle(rotationAxis, angleStepRad);
 
-  logger.debug(`Orbit: Generating ${numSteps} steps for ${angle} degrees. Step angle: ${angleStep.toFixed(2)} deg`); // Updated log
+  logger.debug(`Orbit: Generating ${numSteps} steps for ${angle} degrees. Target anglePerStep: ${anglePerStep} deg. Actual step angle: ${angleStep.toFixed(2)} deg`); // Updated log
 
   let previousPosition = currentPosition.clone();
   const { spatial } = sceneAnalysis;

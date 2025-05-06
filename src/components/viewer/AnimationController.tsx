@@ -57,9 +57,8 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const animationClockRef = useRef<Clock>(new Clock(false));
   const frameCounterRef = useRef(0);
   
-  // --- Define the target point for lookAt ---
-  // For now, assume a fixed target based on the logs. Make dynamic later if needed.
-  const fixedTargetRef = useRef(new Vector3(0, 1, 0));
+  // Initialize with a default, but update from commands
+  const fixedTargetRef = useRef(new Vector3(0, 1, 0)); 
 
   const prevIsPlaying = usePrevious(isPlaying);
   const prevCommands = usePrevious(commands);
@@ -70,44 +69,46 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     const justStoppedPlaying = !isPlaying && prevIsPlaying;
     const shouldRestart = isPlaying && commandsJustChanged;
 
-    // --- Start or Restart Animation ---
     if (justStartedPlaying || shouldRestart) {
       if (commands.length > 0 && cameraRef.current) {
         console.log(`AnimationController: Processing commands. Reason: ${justStartedPlaying ? 'Start Playing' : 'Commands Changed'}`);
-        // No need to get current orientation anymore for PathProcessor
-        const data = PathProcessor.process(commands); // Pass only commands
+        
+        // --- Update fixedTargetRef from the first command --- 
+        if (commands[0]?.target) {
+          fixedTargetRef.current.copy(commands[0].target);
+          console.log('AnimationController: Updated fixedTargetRef to:', commands[0].target);
+        } else {
+          // Fallback if first command has no target (should not happen with valid commands)
+          fixedTargetRef.current.set(0,1,0); 
+          console.warn('AnimationController: First command missing target, using default (0,1,0) for lookAt.');
+        }
+        // --- End update fixedTargetRef ---
+
+        const data = PathProcessor.process(commands); 
         processedPathDataRef.current = data;
 
-        // TODO: Determine the fixedTarget dynamically based on commands if needed
-        // For now, we use the default (0,1,0)
-        // Example: if (commands[0]?.target) fixedTargetRef.current.copy(commands[0].target);
-
-        animationClockRef.current.stop();
+        animationClockRef.current.stop(); 
         const progressToUse = justStartedPlaying ? currentProgress : 0;
         const initialElapsedTime = (processedPathDataRef.current?.totalDuration || 0) * (progressToUse / 100);
         console.log(`AnimationController: Setting initial time. progressToUse=${progressToUse}, initialElapsedTime=${initialElapsedTime}`);
         const safePlaybackSpeed = playbackSpeed === 0 ? 1 : playbackSpeed;
-        animationClockRef.current.elapsedTime = initialElapsedTime / safePlaybackSpeed;
+        animationClockRef.current.elapsedTime = initialElapsedTime / safePlaybackSpeed; 
         animationClockRef.current.start();
 
       } else {
-        processedPathDataRef.current = null;
+        processedPathDataRef.current = null; 
         if (animationClockRef.current.running) {
             animationClockRef.current.stop();
         }
       }
-    }
-    // --- Stop playing ---
+    } 
     else if (justStoppedPlaying) {
       console.log("AnimationController: Stopping playback.");
       if (animationClockRef.current.running) {
           animationClockRef.current.stop();
       }
     }
-
-  // Dependencies: React ensures this runs if any dependency ref changes.
-  // The effect depends on these props/refs to make decisions.
-  }, [commands, isPlaying, cameraRef, playbackSpeed, currentProgress]);
+  }, [commands, isPlaying, cameraRef, playbackSpeed, currentProgress]); // prevCommands and prevIsPlaying are not needed as direct deps here
 
   useFrame((state, delta) => {
     frameCounterRef.current++;
@@ -131,9 +132,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
             if (commands.length > 0 && cameraRef.current) {
                 const lastCommand = commands[commands.length - 1];
                 cameraRef.current.position.copy(lastCommand.position);
-                cameraRef.current.lookAt(lastCommand.target);
+                cameraRef.current.lookAt(fixedTargetRef.current);
                 if (controlsRef.current) {
-                    controlsRef.current.target.copy(lastCommand.target);
+                    controlsRef.current.target.copy(fixedTargetRef.current);
                     controlsRef.current.update();
                 }
             }
