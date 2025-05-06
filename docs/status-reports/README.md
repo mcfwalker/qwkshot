@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-05-06-1056-FrontendSmoothingP2 - Frontend Animation Smoothing (Phase 1 & 2) Implementation & Tuning
 - M3DV-SR-2025-05-04-1314-InterpreterRefactor - Scene Interpreter Refactor Completion
 - M3DV-SR-2025-05-03-1925-ThumbnailCapture - Thumbnail Capture Implementation & Filename Refinements
 - M3DV-SR-2025-05-03-1341-DialogUX - Dialog UX Improvements & Accessibility Enhancements
