@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { PerspectiveCamera, Clock, Quaternion, Vector3 } from 'three';
+import { PerspectiveCamera, Clock, Quaternion } from 'three';
 // We might need a more specific type for OrbitControls ref if available
 // import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'; 
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
@@ -50,11 +50,9 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 }) => {
   const processedPathDataRef = useRef<ProcessedPathDataV2 | null>(null);
   const animationClockRef = useRef<Clock>(new Clock(false));
+  const tempSlerpQuaternionRef = useRef<Quaternion>(new Quaternion()); // Need this for Slerp
   const frameCounterRef = useRef(0);
   
-  // Ref to store the consistent target for the lookAt test
-  const testLookAtTargetRef = useRef<Vector3>(new Vector3(0, 1, 0)); 
-
   const prevIsPlaying = usePrevious(isPlaying);
   const prevCommands = usePrevious(commands);
 
@@ -80,13 +78,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         const safePlaybackSpeed = playbackSpeed === 0 ? 1 : playbackSpeed;
         animationClockRef.current.elapsedTime = initialElapsedTime / safePlaybackSpeed; 
         animationClockRef.current.start();
-
-        // Store the target from the *first command* for the lookAt test
-        if (commands[0]?.target) {
-          testLookAtTargetRef.current.copy(commands[0].target);
-        } else {
-          testLookAtTargetRef.current.set(0,1,0); // Fallback
-        }
       } else {
         processedPathDataRef.current = null; 
         if (animationClockRef.current.running) {
@@ -121,7 +112,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
             if (commands.length > 0 && cameraRef.current) {
                 const lastCommand = commands[commands.length - 1];
                 cameraRef.current.position.copy(lastCommand.position);
-                cameraRef.current.lookAt(testLookAtTargetRef.current); // Use stored target
                 if (keyframeQuaternions && keyframeQuaternions.length > 0) {
                     cameraRef.current.setRotationFromQuaternion(keyframeQuaternions[keyframeQuaternions.length - 1]);
                 }
@@ -153,7 +143,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
                 controlsRef.current.target.copy(commands[commands.length - 1].target);
                 controlsRef.current.update();
             }
-            cameraRef.current.lookAt(testLookAtTargetRef.current); // Use stored target
             onProgressUpdate(100);
             onComplete();
       }
@@ -204,10 +193,10 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         const qEnd = keyframeQuaternions[currentSegmentIndex + 1]; 
 
         if (qStart && qEnd) {
-            // tempSlerpQuaternionRef.current.copy(qStart).slerp(qEnd, easedT);
-            // cameraRef.current.setRotationFromQuaternion(tempSlerpQuaternionRef.current);
+            tempSlerpQuaternionRef.current.copy(qStart).slerp(qEnd, easedT);
+            cameraRef.current.setRotationFromQuaternion(tempSlerpQuaternionRef.current);
         } else if (qStart) { 
-            // cameraRef.current.setRotationFromQuaternion(qStart);
+            cameraRef.current.setRotationFromQuaternion(qStart);
         }
     } else {
         console.warn("AnimationController: Mismatched keyframeQuaternions or segmentDurations data.");
@@ -234,11 +223,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         processedPathDataRef.current = null;
         onProgressUpdate(100);
         onComplete();
-    }
-
-    // --- Apply LookAt for TEST ---
-    if (cameraRef.current) {
-        cameraRef.current.lookAt(testLookAtTargetRef.current); // Force lookAt stored target
     }
   });
 

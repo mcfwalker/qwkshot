@@ -93,14 +93,13 @@ export class PathProcessor {
       return null;
     }
 
-    // --- Step 1: Extract data and Calculate Quaternions FIRST ---
-    // We process ALL commands to get keyframe orientations before filtering for the position spline
+    // --- Step 1: Extract data and Calculate Quaternions for ALL commands ---
     const waypoints: Vector3[] = [];
     const keyframeQuaternions: Quaternion[] = [];
     const segmentDurations: number[] = [];
     let totalDuration = 0;
 
-    keyframeQuaternions.push(initialCameraOrientation.clone()); // Start with initial orientation
+    keyframeQuaternions.push(initialCameraOrientation.clone()); 
 
     const lookAtMatrix = new Matrix4();
     const upVector = new Vector3(0, 1, 0);
@@ -115,20 +114,18 @@ export class PathProcessor {
       segmentDurations.push(duration); 
       totalDuration += duration;
 
-      // Calculate orientation for this command's target state
+      let currentQuaternion: Quaternion;
       if (pos.distanceToSquared(target) < POSITION_EPSILON * POSITION_EPSILON) {
-          console.warn(`[PathProcessor.processV2] Waypoint ${i} position and target are nearly identical. Using previous orientation.`);
-          const prevQuat = keyframeQuaternions[keyframeQuaternions.length - 1] || initialCameraOrientation;
-          keyframeQuaternions.push(prevQuat.clone());
+          console.warn(`[PathProcessor.processV2] Waypoint ${i} position and target identical. Reusing previous orientation.`);
+          currentQuaternion = keyframeQuaternions[keyframeQuaternions.length - 1] || initialCameraOrientation;
+          keyframeQuaternions.push(currentQuaternion.clone());
       } else {
           lookAtMatrix.lookAt(pos, target, upVector);
-          const quaternion = new Quaternion().setFromRotationMatrix(lookAtMatrix);
-          keyframeQuaternions.push(quaternion);
+          currentQuaternion = new Quaternion().setFromRotationMatrix(lookAtMatrix);
+          keyframeQuaternions.push(currentQuaternion);
       }
     }
-    // keyframeQuaternions now has N+1 elements (initial + one for each command)
-    // segmentDurations has N elements (duration for each command segment)
-
+    
     // Ensure totalDuration is slightly positive if it calculates to zero but commands exist
     if (totalDuration <= 1e-6 && commands.length > 0) {
         totalDuration = 1e-6; 
