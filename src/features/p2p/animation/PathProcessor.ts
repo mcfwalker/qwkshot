@@ -1,10 +1,24 @@
-import { Vector3, CatmullRomCurve3 } from 'three';
+import { Vector3, CatmullRomCurve3, Quaternion, Matrix4 } from 'three';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
 const TARGET_FPS = 60;
+const POSITION_EPSILON = 1e-6;
+// --- Blending constants - Unused in V2, keep for reference for V3 ---
+// const CORNER_ANGLE_THRESHOLD_RADIANS = THREE.MathUtils.degToRad(30);
+// const BLEND_OFFSET_FRACTION = 0.3; 
+// const MIN_BLEND_OFFSET = 0.75; 
+// const MAX_BLEND_OFFSET_FACTOR = 0.45;
+// --- End Constants ---
 
 export interface ProcessedPathDataV1 {
   sampledPositions: Float32Array;
+  totalDuration: number;
+}
+
+export interface ProcessedPathDataV2 {
+  sampledPositions: Float32Array;
+  keyframeQuaternions: Quaternion[];
+  segmentDurations: number[];
   totalDuration: number;
 }
 
@@ -61,4 +75,103 @@ export class PathProcessor {
       totalDuration,
     };
   }
+
+  /**
+   * (V2 - Position Spline + Orientation Keyframes)
+   * Processes commands to generate smoothed position path AND keyframe orientations for Slerp.
+   * Handles orientation-only changes correctly. Does NOT yet do corner blending.
+   * @param commands - The array of CameraCommand waypoints from the backend.
+   * @param initialCameraOrientation - The initial camera orientation.
+   * @returns ProcessedPathDataV2 object or null if input is invalid.
+   */
+  public static processV2(
+    commands: CameraCommand[],
+    initialCameraOrientation: Quaternion,
+  ): ProcessedPathDataV2 | null {
+    if (!commands || commands.length === 0) {
+      console.warn('[PathProcessor.processV2] No commands provided.');
+      return null;
+    }
+
+    // --- Step 1: Extract data and Calculate Quaternions FIRST ---
+    // We process ALL commands to get keyframe orientations before filtering for the position spline
+    const waypoints: Vector3[] = [];
+    const keyframeQuaternions: Quaternion[] = [];
+    const segmentDurations: number[] = [];
+    let totalDuration = 0;
+
+    keyframeQuaternions.push(initialCameraOrientation.clone()); // Start with initial orientation
+
+    const lookAtMatrix = new Matrix4();
+    const upVector = new Vector3(0, 1, 0);
+
+    for (let i = 0; i < commands.length; i++) {
+      const cmd = commands[i];
+      const pos = cmd.position.clone();
+      const target = cmd.target.clone();
+      const duration = cmd.duration;
+
+      waypoints.push(pos);
+      segmentDurations.push(duration); 
+      totalDuration += duration;
+
+      // Calculate orientation for this command's target state
+      if (pos.distanceToSquared(target) < POSITION_EPSILON * POSITION_EPSILON) {
+          console.warn(`[PathProcessor.processV2] Waypoint ${i} position and target are nearly identical. Using previous orientation.`);
+          const prevQuat = keyframeQuaternions[keyframeQuaternions.length - 1] || initialCameraOrientation;
+          keyframeQuaternions.push(prevQuat.clone());
+      } else {
+          lookAtMatrix.lookAt(pos, target, upVector);
+          const quaternion = new Quaternion().setFromRotationMatrix(lookAtMatrix);
+          keyframeQuaternions.push(quaternion);
+      }
+    }
+    // keyframeQuaternions now has N+1 elements (initial + one for each command)
+    // segmentDurations has N elements (duration for each command segment)
+
+    // Ensure totalDuration is slightly positive if it calculates to zero but commands exist
+    if (totalDuration <= 1e-6 && commands.length > 0) {
+        totalDuration = 1e-6; 
+    }
+    
+    // --- Step 2: Generate Position Spline --- 
+    // Use ALL waypoints for the spline initially in V2 (no filtering/blending yet)
+    let positionCurve: CatmullRomCurve3;
+    if (waypoints.length === 0) {
+         console.warn('[PathProcessor.processV2] No waypoints to create spline.');
+         return null; // Or return static data if appropriate
+    } else if (waypoints.length === 1) {
+      positionCurve = new CatmullRomCurve3([waypoints[0].clone(), waypoints[0].clone()], false, 'centripetal');
+    } else {
+      positionCurve = new CatmullRomCurve3(waypoints, false, 'centripetal');
+    }
+
+    // --- Step 3: Pre-sample positions --- 
+    const numSamples = Math.max(2, Math.ceil(TARGET_FPS * totalDuration));
+    const sampledPositions = new Float32Array(numSamples * 3);
+    for (let i = 0; i < numSamples; i++) {
+      const t = (numSamples === 1) ? 0 : i / (numSamples - 1);
+      const point = positionCurve.getPointAt(t);
+      sampledPositions.set([point.x, point.y, point.z], i * 3);
+    }
+
+    // --- Step 4: Return combined data ---
+    return {
+      sampledPositions,
+      keyframeQuaternions, 
+      segmentDurations, 
+      totalDuration,
+    };
+  }
+  
+  // --- V3 with Blending (Placeholder for later) ---
+  /*
+  public static processV3(...) {
+      // 1. Initial filter (like V2, get quaternions, filtered waypoints/durations)
+      // 2. Corner detection + Blend point injection on filtered waypoints -> augmentedWaypoints
+      // 3. Generate spline from augmentedWaypoints
+      // 4. Sample spline
+      // 5. Return sampledPositions, keyframeQuaternions (from step 1), filteredSegmentDurations (from step 1), totalDuration
+  }
+  */
 } 

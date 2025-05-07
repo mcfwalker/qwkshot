@@ -117,36 +117,38 @@ export function handleOrbitStep(
     logger.debug(`Orbit: Interpreting direction '${direction}' as physically counter-clockwise (angleSign: 1).`);
   }
 
-  // Determine effective easing
-  let effectiveEasingName = easingName;
-  if (speed === 'very_fast') effectiveEasingName = 'linear';
-  else if (speed === 'fast') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
-  else if (speed === 'slow') effectiveEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
-  if (effectiveEasingName !== easingName) {
-      logger.debug(`Orbit: Speed '${speed}' selected easing '${effectiveEasingName}' (original: ${easingName})`);
+  // Determine effective easing 
+  let finalEasingName = easingName; // Calculate intended final easing
+  if (speed === 'very_fast') finalEasingName = 'linear';
+  else if (speed === 'fast') finalEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeOutQuad' : easingName;
+  else if (speed === 'slow') finalEasingName = (easingName === DEFAULT_EASING || easingName === 'linear') ? 'easeInOutQuad' : easingName;
+  if (finalEasingName !== easingName) {
+      logger.debug(`Orbit: Speed '${speed}' determined final easing '${finalEasingName}' (original: ${easingName})`);
   }
+  logger.debug(`Orbit: Calculated finalEasingName as '${finalEasingName}', but using 'linear' for steps.`); // Log calculated final ease
 
-  // Generate Intermediate Keyframes
+  // --- Generate Intermediate Keyframes --- 
   const commandsList: CameraCommand[] = [];
-  const anglePerStep = 5; // Degrees per intermediate step
+  const anglePerStep = 10; // Degrees per intermediate step - Changed from 20 back to 10
   const numSteps = Math.max(2, Math.ceil(Math.abs(angle) / anglePerStep));
-  const angleStep = angle / (numSteps - 1);
-  const durationStep = (stepDuration > 0 ? stepDuration : 0.1) / (numSteps - 1);
+  const numSegments = Math.max(1, numSteps - 1);
+  const angleStep = angle / numSegments; 
+  const durationStep = (stepDuration > 0 ? stepDuration : 0.1) / numSegments;
   const angleStepRad = THREE.MathUtils.degToRad(angleStep) * angleSign;
   const quaternionStep = new Quaternion().setFromAxisAngle(rotationAxis, angleStepRad);
 
-  logger.debug(`Orbit: Generating ${numSteps} steps for ${angle} degrees. Step angleRad: ${angleStepRad.toFixed(4)}`);
+  logger.debug(`Orbit: Generating ${numSteps} steps for ${angle} degrees. Target anglePerStep: ${anglePerStep} deg. Actual step angle: ${angleStep.toFixed(2)} deg`);
 
   let previousPosition = currentPosition.clone();
   const { spatial } = sceneAnalysis;
   const objectBounds = spatial?.bounds ? new Box3(spatial.bounds.min, spatial.bounds.max) : null;
 
-  // Add the initial state command (looking at the orbit center)
+  // Add the initial state command 
   commandsList.push({
     position: previousPosition.clone(),
-    target: orbitCenter.clone(),
+    target: orbitCenter.clone(), // Ensure using resolved orbit center
     duration: 0,
-    easing: 'linear' // Use linear for transitions between orbit steps
+    easing: 'linear' // Start step is instantaneous
   });
 
   for (let i = 1; i < numSteps; i++) {
@@ -154,17 +156,16 @@ export function handleOrbitStep(
     radiusVectorStep.applyQuaternion(quaternionStep);
     const newPositionCandidateStep = new Vector3().addVectors(orbitCenter, radiusVectorStep);
     let finalPositionStep = newPositionCandidateStep.clone();
-    let clampedStep = false;
 
     // --- Constraint Checking (Height, Distance, Bounding Box) ---
     const { cameraConstraints } = envAnalysis;
     // a) Height
     if (cameraConstraints) {
       if (finalPositionStep.y < cameraConstraints.minHeight) {
-        finalPositionStep.y = cameraConstraints.minHeight; clampedStep = true;
+        finalPositionStep.y = cameraConstraints.minHeight; 
       }
       if (finalPositionStep.y > cameraConstraints.maxHeight) {
-        finalPositionStep.y = cameraConstraints.maxHeight; clampedStep = true;
+        finalPositionStep.y = cameraConstraints.maxHeight; 
       }
     }
     // b) Distance
@@ -173,12 +174,10 @@ export function handleOrbitStep(
       if (distanceToCenterStep < cameraConstraints.minDistance) {
         const dir = new Vector3().subVectors(finalPositionStep, orbitCenter).normalize();
         finalPositionStep.copy(orbitCenter).addScaledVector(dir, cameraConstraints.minDistance);
-        clampedStep = true;
       }
       if (distanceToCenterStep > cameraConstraints.maxDistance) {
         const dir = new Vector3().subVectors(finalPositionStep, orbitCenter).normalize();
         finalPositionStep.copy(orbitCenter).addScaledVector(dir, cameraConstraints.maxDistance);
-        clampedStep = true;
       }
     }
     // c) Bounding Box
@@ -192,7 +191,6 @@ export function handleOrbitStep(
       );
       if (!clampedPositionStep.equals(newPositionCandidateStep)) {
         finalPositionStep.copy(clampedPositionStep);
-        clampedStep = true;
         logger.warn(`Orbit step ${i}: Clamped position due to raycast.`);
       }
     } else {
@@ -200,27 +198,25 @@ export function handleOrbitStep(
     }
     // --- End Constraints ---
 
+    // FORCE linear easing for all intermediate steps within the orbit
+    const stepEasing = 'linear'; 
+
     commandsList.push({
-      position: finalPositionStep.clone(),
-      target: orbitCenter.clone(),
+      position: finalPositionStep.clone(), 
+      target: orbitCenter.clone(), 
       duration: durationStep,
-      easing: 'linear' // Use linear between orbit steps
+      easing: stepEasing // Always linear
     });
 
     previousPosition = finalPositionStep.clone();
   }
-
-  // Apply the final intended easing to the *last* generated step command
-  if (commandsList.length > 1) {
-      commandsList[commandsList.length - 1].easing = effectiveEasingName;
-  }
-
-  logger.debug(`Generated orbit commands (${commandsList.length} steps):`, commandsList);
+  
+  logger.debug('Generated orbit commands (all steps forced linear easing):', commandsList);
 
   // The final state is the last position calculated and the orbit center
   return {
     commands: commandsList,
-    nextPosition: previousPosition.clone(), // Position after the last step
-    nextTarget: orbitCenter.clone(),      // End looking at the orbit center
+    nextPosition: previousPosition.clone(), 
+    nextTarget: orbitCenter.clone(),      
   };
 } 
