@@ -82,24 +82,28 @@ graph TD
 *   **Web Worker (Future Phase):** For more complex solvers (like Min-Snap), `PathSmoother` logic can be moved into a Web Worker to avoid blocking the main thread.
 *   **Service Worker Cache (Future Phase):** Consider caching previously smoothed paths (keyed by waypoint hash) in a Service Worker for faster re-runs during prompt tweaking.
 
-## 3. Component Roles in New Architecture
+## 3. Component Roles in New Architecture (REVISED)
 
 *   **React UI:** Largely unchanged. Triggers request, receives waypoint data.
 *   **LLM Engine (Adapter):** Unchanged. Focus remains on generating the best possible `MotionPlan`.
-*   **Scene Interpreter:** **Role simplified.** Focuses on waypoint generation based on plan steps, target resolution, and critical constraint enforcement. Does *not* need to handle fine-grained sampling or complex blending logic itself (potential code removal).
-*   **`PathSmoother` (New Frontend Logic):** Likely a new class or integrated logic within/used by `AnimationController`. Responsible for:
-    *   Receiving waypoints from the API.
-    *   Analyzing velocity/angle changes between waypoints (using `vA.angleTo(vB) > threshold` logic, e.g., 20 degrees).
-    *   (Phase 2+) Injecting additional points for corner blending if needed (e.g., using `buildCornerArc` logic or similar).
-    *   Generating the final `CatmullRomCurve3` (or other spline, potentially Min-Snap in Phase 4) for positions.
-    *   Providing methods/data for the `AnimationController` to sample the path and orientation.
-    *   (Future) Potentially running within a Web Worker.
-*   **`AnimationController` (Frontend):** **Role enhanced.** Instead of simple `lerp`, it will:
-    *   Utilize the `PathSmoother`'s output curve/spline.
-    *   Pre-sample the path to a Float32Array outside `useFrame` for performance (e.g., 60fps * duration samples).
-    *   Sample the position curve based on elapsed animation time (using index lookup into pre-sampled array).
-    *   Perform `Quaternion.slerp` for smooth orientation changes between key waypoint orientations.
-    *   Update the Three.js camera in `useFrame`.
+*   **Scene Interpreter:** **Role refined.** Focuses on waypoint generation based on plan steps, target resolution, and critical constraint enforcement. **Lesson:** Handler output format and density are crucial. For primitives involving continuous motion (orbit, pan, tilt), handlers MUST generate sufficient intermediate steps with appropriate durations and target changes for frontend interpolation (LERP or Slerp) to work correctly. For smooth frontend *blending* between primitives, handlers should ideally generate sparser, essential keyframes for continuous movements to allow the frontend blend logic more geometric space.
+*   **`PathProcessor` (New Frontend Logic - Renamed from `PathSmoother`):** Implemented as a class (`src/features/p2p/animation/PathProcessor.ts`). Responsible for:
+    *   Receiving `CameraCommand[]` waypoints and initial camera orientation.
+    *   **Filtering:** Removing consecutive duplicate positional waypoints, accumulating durations.
+    *   **Orientation Keyframes:** Calculating `lookAt` quaternions for each unique filtered waypoint based on its position and target.
+    *   **(Phase 2+) Corner Detection & Blending:** Analyzing angles between filtered segments, detecting sharp corners, injecting blend points (`B1`, `B2`) into the waypoint list to create an `augmentedWaypoints` list.
+    *   Generating the final `CatmullRomCurve3` for positions using `augmentedWaypoints`.
+    *   Providing `ProcessedPathData` containing sampled positions (from the augmented spline), the original filtered segment durations (for easing sync), total duration, and the calculated keyframe quaternions (for Slerp).
+*   **`AnimationController` (Frontend):** **Role significantly changed.**
+    *   Receives `CameraCommand[]`, manages clock/playback state.
+    *   Calls `PathProcessor.process()` with commands and current orientation.
+    *   Stores `ProcessedPathData`.
+    *   **`useFrame` Loop:**
+        *   Samples position from `ProcessedPathData.sampledPositions` based on elapsed time / total duration.
+        *   Calculates the current logical segment index based on `elapsedTime` and `ProcessedPathData.segmentDurations`.
+        *   Performs `Quaternion.slerp()` between the corresponding `keyframeQuaternions` from `ProcessedPathData` for the current segment, applying segment-specific easing to the interpolation factor.
+        *   Updates the Three.js camera position and orientation.
+    *   **(Lesson):** Using a dynamic `lookAt` instead of Slerp based on processed quaternions breaks primitives like pan/tilt. Slerp using quaternions derived from the original commands' targets is essential for correct orientation.
 
 ## 4. API Contracts / Schemas
 
@@ -119,71 +123,78 @@ graph TD
     ```
 *   **Frontend Internal:** New interfaces might be needed between `PathSmoother` and `AnimationController` to pass curve data or sampling functions/arrays.
 
-## 5. Phased Rollout Plan
+## 5. Phased Rollout Plan (REVISED based on Attempt 1)
 
 ### Phase 0: Planning & Setup
-*   [X] Define Hybrid Architecture (Backend Waypoints, Frontend Smoothing). *(Completed)*
-*   [X] Outline Phased Implementation Strategy. *(Completed)*
-*   [ ] Create dedicated feature branch (`feature/frontend-animation-smoothing`). *(Pending)*
+*   [X] Define Hybrid Architecture.
+*   [X] Outline Phased Implementation Strategy.
+*   [ ] Create dedicated feature branch (`feature/frontend-smoothing-v2`). *(Pending)*
 *   *Goal:* Clear plan, defined architecture, new branch created.
 
-### Phase 1: Basic Frontend Smoothing (Catmull-Rom / Slerp)
-*   **Size:** Medium (M)
-*   **Value:** 80% of visible jerk gone.
-*   **Risk:** High-speed orbits/pans might still stutter slightly.
-*   **Tasks:**
-    *   [ ] Modify `AnimationController` (`useFrame` loop).
-    *   [ ] Implement `PathSmoother` logic (or integrate into `AnimationController`) to create `THREE.CatmullRomCurve3` from received waypoints (use 'centripetal').
-    *   [ ] Implement orientation calculation (e.g., using `lookAt`) at each waypoint to create Quaternions.
-    *   [ ] Implement `THREE.Quaternion.slerp` between waypoint orientations.
-    *   [ ] Implement pre-sampling of the position curve and orientation (e.g., to Float32Arrays) outside `useFrame`.
-    *   [ ] Update `useFrame` to sample pre-calculated position/orientation arrays based on time.
-    *   [ ] Basic visual testing: Orbits, pans, tilts should appear significantly smoother *within* the segment.
-*   *Goal:* Implement fundamental spline-based interpolation on the frontend.
-
-### Phase 2: Frontend Transition Blending
+### Phase 1: Foundational Smoothing (Position Spline + Orientation Slerp)
 *   **Size:** Large (L)
-*   **Value:** Eliminates velocity spikes/jerks at segment joins.
-*   **Risk:** Potential for algorithmic edge cases in corner detection/injection.
+*   **Value:** Smoother intra-segment motion, correct orientation handling for all primitives.
+*   **Risk:** Transitions between segments will still be abrupt (C0 continuity). Performance impact of `PathProcessor`.
+*   **Tasks (Attempt 2):**
+    *   [ ] Implement `PathProcessor` class.
+        *   [ ] Basic filtering (duplicate positions).
+        *   [ ] Generate `CatmullRomCurve3` from filtered waypoints.
+        *   [ ] Pre-sample positions (`sampledPositions`).
+        *   [ ] Calculate `keyframeQuaternions` from filtered waypoints/targets.
+        *   [ ] Return `ProcessedPathData { sampledPositions, keyframeQuaternions, segmentDurations, totalDuration }`.
+    *   [ ] Refactor `AnimationController`:
+        *   [ ] Integrate `PathProcessor`.
+        *   [ ] Implement robust clock management (handling start/stop/resume/speed).
+        *   [ ] Update `useFrame` to use `sampledPositions`.
+        *   [ ] Update `useFrame` to use `Quaternion.slerp` between `keyframeQuaternions` based on original `segmentDurations` and easing.
+        *   [ ] **Broad Testing:** Verify ALL core primitives (pan, tilt, pedestal, dolly, orbit, zoom) function correctly. Verify basic sequences.
+    *   [ ] Basic visual testing: Orbits, pans, tilts should appear significantly smoother *within* the segment.
+*   *Goal:* Stable animation system with smooth intra-segment motion via splines/Slerp, compatible with all primitives.
+
+### Phase 2: Frontend Transition Blending (Corner Injection)
+*   **Size:** Large (L)
+*   **Value:** Smooths transitions *between* different motion segments.
+*   **Risk:** Blend algorithm tuning (corner detection threshold, offset calculation, clamping) needed to achieve desired visual radius without artifacts ("dip"). Geometric limitations from short segments can cap blend size.
 *   **Tasks:**
-    *   [ ] Enhance `PathSmoother`: Implement logic to analyze consecutive waypoints.
-    *   [ ] Calculate approximate entry/exit velocities/tangents.
-    *   [ ] Implement angle check (e.g., `angle > 20 degrees`) to detect sharp corners.
-    *   [ ] If sharp corner detected (and `allowCornerBlending` isn't false): Implement logic to inject intermediate blend points using a suitable method (e.g., spherical arc helper `buildCornerArc`, clothoid, Bézier).
-    *   [ ] Feed the *augmented* waypoint list into the spline generation (Phase 1).
-    *   [ ] Test cases with sharp transitions (zoom-orbit, truck-reverse, etc.). Add debug overlay showing detected corners.
+    *   [ ] Enhance `PathProcessor`:
+        *   [ ] Implement corner detection logic (angle check between filtered segments).
+        *   [ ] Implement blend point (`B1`, `B2`) calculation (e.g., based on offset fraction, min/max clamps).
+        *   [ ] Augment waypoint list passed to `CatmullRomCurve3` by replacing corner points with `B1, B2`.
+    *   [ ] Test cases with sharp transitions (dolly-orbit, pan-tilt, etc.).
+    *   [ ] Tune blend constants (`CORNER_ANGLE_THRESHOLD_RADIANS`, `BLEND_OFFSET_FRACTION`, `MIN_BLEND_OFFSET`, `MAX_BLEND_OFFSET_FACTOR`) iteratively based on visual feedback to minimize artifacts like the "dip".
 *   *Goal:* Eliminate or significantly reduce visual jerks/hitches *between* different motion segments.
 
-### **BETA GATE:** Proposed Pause Point
+### **BETA GATE:** Proposed Pause Point (After Phase 2 Tuning)
 *   **Action:** Merge completed Phases 1 & 2 to `stable`/`main`. Deploy to staging/beta.
-*   **Goal:** Gather user feedback on animation quality. Decide if Phase 3/4 needed.
+*   **Goal:** Gather user feedback on overall animation quality and transition smoothness.
 
-### Phase 3: Backend Simplification (Optional - Post-Beta)
-*   **Size:** Small (S)
-*   **Tasks:** Review `Scene Interpreter`, remove dense sampling/blending logic, verify essential waypoints remain.
-*   *Goal:* Optimize backend, reduce API payload.
+### Phase 3: Backend Handler Optimization (Conditional)
+*   **Size:** Small (S) to Medium (M) - Depends on number of handlers needing adjustment.
+*   **Condition:** Only if Phase 2 frontend blending is insufficient for certain transitions due to dense backend waypoints or very short segments limiting blend radius.
+*   **Tasks:** Review relevant Scene Interpreter handlers (`orbit`, `pan`, `tilt`?), modify logic to generate fewer, more essential keyframes (e.g., increase `anglePerStep`).
+*   *Goal:* Optimize backend waypoints to better support frontend blending where necessary.
 
-### Phase 4: Min-Snap Solver (Optional - Post-Beta)
+### Phase 4: Min-Snap Solver (Optional - Future)
 *   **Size:** Extra Large (XL)
 *   **Value:** Film-quality smoothness, handles ~100 waypoints.
 *   **Risk:** Web Worker integration, bundle size.
 *   **Tasks:** Research/select library (e.g., `minsnap-trajectories`), integrate into `PathSmoother` (likely in Web Worker), replace spline sampling, address performance/build.
 *   *Goal:* Achieve C²/C³ continuity if necessary.
 
-## 6. Testing Strategy
-*   **Phase 1:** Visual comparison before/after on existing prompts. No regressions.
-*   **Phase 2:** Specific sharp transition prompts. Visual verification of blending. Edge case testing.
-*   **Phase 3:** Full regression suite. API payload size verification.
-*   **Phase 4:** Visual comparison vs Phase 2. Performance testing.
-*   **General:** Add headless Jest tests asserting max jerk/angular velocity step using finite differencing on sampled path data (catches many smoothing bugs automatically).
+## 6. Testing Strategy (REVISED)
+*   **Phase 1:** **CRITICAL:** Test *all* individual primitives thoroughly after initial spline/Slerp implementation. Test simple 2-step sequences. Verify no regressions from `main` branch functionality. Focus on correct execution and intra-segment smoothness.
+*   **Phase 2:** Test sharp transition prompts (dolly-orbit, etc.). Visually verify blend curve radius and smoothness. Iterate on blend constant tuning. Test for artifacts ("dip"). **CRITICAL:** Re-verify all individual primitives after blending logic is added.
+*   **Phase 3:** If implemented, verify transitions involving modified backend handlers are improved. Full regression test.
+*   **General:** Add headless tests asserting max jerk/angular velocity step (as originally planned). Ensure tests cover both individual primitives and key transition sequences.
 
-## 7. Open Questions & Risks
-*   Performance impact of frontend calculations (mitigated by pre-sampling, Web Worker)?
-*   Complexity/robustness of corner-blending logic?
-*   Best blend algorithm (Dubins vs. Bézier vs. spherical arc vs. others)?
-*   Need for additional frontend math libraries?
-*   Latency/build impact of WASM-based Min-Snap solver?
-*   Time synchronization between sampling and durations.
+## 7. Open Questions & Risks (REVISED)
+*   Performance impact of `PathProcessor` (filtering, corner detection, spline generation)? (Mitigated by pre-calculation outside `useFrame`).
+*   Robustness & Tuning: Achieving desired blend radius without artifacts ("dip") via constant tuning (`BLEND_OFFSET_FRACTION`, `MIN_BLEND_OFFSET`, `MAX_BLEND_OFFSET_FACTOR`) might be difficult due to geometric constraints (short segments). `MAX_BLEND_OFFSET_FACTOR` might need careful adjustment.
+*   **Backend Handler Dependency:** Visual quality of frontend blending is sensitive to the density and spacing of waypoints provided by backend handlers. May require backend adjustments (Phase 3) for optimal results across all transitions.
+*   **Orientation-Only Primitives:** Ensure `PathProcessor` filtering and orientation keyframe generation correctly handles primitives like pan/tilt where position doesn't change but target does.
+*   Best blend algorithm? (Current plan uses simple offset points; others like Bezier/arcs are more complex).
+*   Need for additional math libraries?
+*   Web Worker for PathProcessor? (Still relevant for Phase 4 or if Phase 2 calculations become too heavy).
 *   **Caching Strategy:** Should smoothed samples be cached client-side (e.g., Service Worker based on waypoint hash) to speed up re-runs, or recomputed each time?
 *   **Mobile Fallback:** If complex solvers (WASM) aren't available/performant on mobile, what's the fallback (linear lerp + slerp)?
 

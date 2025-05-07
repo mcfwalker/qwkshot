@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-05-07-0955-SmoothingAttempt1Postmortem - Frontend Smoothing Attempt 1 Post-Mortem & Plan V2
 - M3DV-SR-2025-05-04-1314-InterpreterRefactor - Scene Interpreter Refactor Completion
 - M3DV-SR-2025-05-03-1925-ThumbnailCapture - Thumbnail Capture Implementation & Filename Refinements
 - M3DV-SR-2025-05-03-1341-DialogUX - Dialog UX Improvements & Accessibility Enhancements
