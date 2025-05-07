@@ -45,7 +45,6 @@ export function handlePedestalStep(
 
   let direction: string | null = null;
   let effectiveDistance: number | null = null;
-  let isDestinationMove = false;
 
   const destinationTargetName = typeof rawDestinationTargetName === 'string' ? rawDestinationTargetName : null;
 
@@ -69,7 +68,6 @@ export function handlePedestalStep(
         effectiveDistance = Math.abs(signedDistance);
       }
       direction = signedDistance >= 0 ? 'up' : 'down';
-      isDestinationMove = true;
       logger.debug(`Pedestal: Calculated destination move: direction='${direction}', distance=${effectiveDistance.toFixed(2)}`);
     } else {
       logger.warn(`Pedestal: Could not resolve destination target '${destinationTargetName}'. Falling back.`);
@@ -138,12 +136,10 @@ export function handlePedestalStep(
   const cameraUp = new Vector3(0, 1, 0);
   const moveVector = cameraUp.multiplyScalar(effectiveDistance * (direction === 'up' ? 1 : -1));
 
-  // Calculate candidate position AND target
+  // Calculate candidate position 
   const newPositionCandidate = new Vector3().addVectors(currentPosition, moveVector);
-  const newTargetCandidate = new Vector3().addVectors(currentTarget, moveVector);
 
   let finalPosition = newPositionCandidate.clone();
-  let finalTarget = newTargetCandidate.clone();
 
   // --- Constraint Checking (Apply primarily to Position) ---
   const { cameraConstraints } = envAnalysis;
@@ -161,18 +157,19 @@ export function handlePedestalStep(
     }
   }
 
-  // b) Distance constraints (relative to NEW target candidate)
+  // b) Distance constraints (relative to the ORIGINAL target)
   if (cameraConstraints) {
-    const distanceToTarget = finalPosition.distanceTo(newTargetCandidate);
+    // Use currentTarget for distance check
+    const distanceToTarget = finalPosition.distanceTo(currentTarget); 
     if (distanceToTarget < cameraConstraints.minDistance) {
-       const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
-       finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
-       logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance}) relative to shifted target`);
+       const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+       finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.minDistance);
+       logger.warn(`Pedestal: Clamped position to minDistance (${cameraConstraints.minDistance}) relative to fixed target`);
     }
     if (distanceToTarget > cameraConstraints.maxDistance) {
-       const directionFromTarget = new Vector3().subVectors(finalPosition, newTargetCandidate).normalize();
-       finalPosition.copy(newTargetCandidate).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
-       logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance}) relative to shifted target`);
+       const directionFromTarget = new Vector3().subVectors(finalPosition, currentTarget).normalize();
+       finalPosition.copy(currentTarget).addScaledVector(directionFromTarget, cameraConstraints.maxDistance);
+       logger.warn(`Pedestal: Clamped position to maxDistance (${cameraConstraints.maxDistance}) relative to fixed target`);
     }
   }
 
@@ -195,9 +192,10 @@ export function handlePedestalStep(
   }
   // --- End Constraint Checking ---
 
-  // Recalculate final target based on actual position movement
+  // --- Recalculate final target based on ACTUAL position movement --- 
   const actualMoveVector = new Vector3().subVectors(finalPosition, currentPosition);
-  finalTarget = new Vector3().addVectors(currentTarget, actualMoveVector);
+  const finalTarget = new Vector3().addVectors(currentTarget, actualMoveVector);
+  // --- End Recalculate final target ---
 
   // Determine effective easing based on speed
   let effectiveEasingName = easingName;
@@ -212,13 +210,13 @@ export function handlePedestalStep(
   const commandsList: CameraCommand[] = [];
   commandsList.push({
     position: currentPosition.clone(),
-    target: currentTarget.clone(),
+    target: currentTarget.clone(), // Start with original target
     duration: 0,
-    easing: effectiveEasingName
+    easing: effectiveEasingName 
   });
   commandsList.push({
     position: finalPosition.clone(),
-    target: finalTarget.clone(),
+    target: finalTarget.clone(), // Use NEW target that moved with position
     duration: stepDuration > 0 ? stepDuration : 0.1,
     easing: effectiveEasingName
   });
@@ -228,6 +226,6 @@ export function handlePedestalStep(
   return {
     commands: commandsList,
     nextPosition: finalPosition.clone(),
-    nextTarget: finalTarget.clone(),
+    nextTarget: finalTarget.clone(), // Return the NEW target as the next target
   };
 } 
