@@ -196,10 +196,12 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     }
   });
 
-  // Render CameraControls
-  // Experiment: Use a fraction of duration for smoothTime for potentially better easing feel
-  const smoothTimeFactor = 0.4; // Adjust this factor as needed
-  const calculatedSmoothTime = Math.max(0.1, duration * smoothTimeFactor); // Ensure a minimum smoothTime
+  // Experiment: Use a fraction of duration for smoothTime and factor in playbackSpeed
+  const smoothTimeFactor = 0.4; 
+  // Ensure playbackSpeed is not zero to avoid division by zero
+  const safePlaybackSpeed = Math.max(0.01, playbackSpeed); 
+  const calculatedSmoothTime = Math.max(0.1, (duration * smoothTimeFactor) / safePlaybackSpeed); // Divide by speed
   
+  // Pass the calculated smoothTime, adjusted by playbackSpeed
   return <CameraControls ref={cameraControlsRef} smoothTime={calculatedSmoothTime} enabled={!isLocked} />;
 };
