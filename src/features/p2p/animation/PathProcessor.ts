@@ -4,79 +4,22 @@ import { CameraCommand } from '@/types/p2p/scene-interpreter';
 
 const TARGET_FPS = 60;
 const POSITION_EPSILON = 1e-6;
-// --- Blending Constants (Now Used in V2) --- 
+// --- Blending Constants --- 
 const CORNER_ANGLE_THRESHOLD_RADIANS = THREE.MathUtils.degToRad(30); 
-const BLEND_OFFSET_FRACTION = 0.3; // Start with 0.3 again
-const MIN_BLEND_OFFSET = 0.75; // Last value tested
-const MAX_BLEND_OFFSET_FACTOR = 0.45; // Limit max
+const BLEND_OFFSET_FRACTION = 0.3; 
+const MIN_BLEND_OFFSET = 0.75; 
+const MAX_BLEND_OFFSET_FACTOR = 0.45; 
 // --- End Constants ---
-
-export interface ProcessedPathDataV1 {
-  sampledPositions: Float32Array;
-  totalDuration: number;
-}
 
 export interface ProcessedPathDataV2 {
   sampledPositions: Float32Array;
-  keyframeQuaternions: Quaternion[];
-  segmentDurations: number[];
+  keyframeQuaternions: Quaternion[]; 
+  segmentDurations: number[]; 
   totalDuration: number;
+  allTargets: Vector3[];
 }
 
 export class PathProcessor {
-  /**
-   * (V1 - Position Spline Only)
-   * Processes an array of CameraCommands to generate a smoothed position path.
-   * Does not handle orientation, filtering, or blending yet.
-   * @param commands - The array of CameraCommand waypoints from the backend.
-   * @returns ProcessedPathDataV1 object or null if input is invalid.
-   */
-  public static processV1(
-    commands: CameraCommand[],
-  ): ProcessedPathDataV1 | null {
-    if (!commands || commands.length === 0) {
-      console.warn('[PathProcessor.processV1] No commands provided.');
-      return null;
-    }
-
-    const waypoints: Vector3[] = commands.map(cmd => cmd.position.clone());
-    let totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0);
-
-    // Ensure totalDuration is slightly positive if it calculates to zero but commands exist
-    // This helps avoid division by zero later if all command durations were 0
-    if (totalDuration <= 1e-6 && commands.length > 0) {
-        totalDuration = 1e-6; 
-    }
-
-    if (waypoints.length === 0) {
-      console.warn('[PathProcessor.processV1] No waypoints extracted.');
-      return null;
-    }
-
-    let positionCurve: CatmullRomCurve3;
-    if (waypoints.length === 1) {
-      // Handle static path: CatmullRomCurve3 needs at least 2 points
-      positionCurve = new CatmullRomCurve3([waypoints[0].clone(), waypoints[0].clone()], false, 'centripetal');
-    } else {
-      positionCurve = new CatmullRomCurve3(waypoints, false, 'centripetal');
-    }
-
-    // Pre-sample positions
-    const numSamples = Math.max(2, Math.ceil(TARGET_FPS * totalDuration));
-    const sampledPositions = new Float32Array(numSamples * 3);
-
-    for (let i = 0; i < numSamples; i++) {
-      const t = (numSamples === 1) ? 0 : i / (numSamples - 1);
-      const point = positionCurve.getPointAt(t);
-      sampledPositions.set([point.x, point.y, point.z], i * 3);
-    }
-
-    return {
-      sampledPositions,
-      totalDuration,
-    };
-  }
-
   /**
    * (V2 - Blending + Slerp Support)
    * Processes commands, calculates orientations, filters points, blends corners,
@@ -86,10 +29,7 @@ export class PathProcessor {
     commands: CameraCommand[],
     initialCameraOrientation: Quaternion,
   ): ProcessedPathDataV2 | null {
-    if (!commands || commands.length === 0) {
-      console.warn('[PathProcessor.processV2] No commands provided.');
-      return null;
-    }
+    if (!commands || commands.length === 0) { return null; }
 
     // --- Step 1: Extract Initial Data & Calculate Quaternions for ALL commands ---
     const allWaypoints: Vector3[] = [];
@@ -113,7 +53,6 @@ export class PathProcessor {
       segmentDurations.push(duration); 
       totalDuration += duration;
 
-      // REVERTED: Calculate orientation for EVERY command's state
       let currentQuaternion: Quaternion;
       if (pos.distanceToSquared(target) < POSITION_EPSILON * POSITION_EPSILON) {
           console.warn(`[PathProcessor.processV2] Waypoint ${i} pos/target identical. Reusing last quat.`);
@@ -125,55 +64,113 @@ export class PathProcessor {
           keyframeQuaternions.push(currentQuaternion); 
       }
     }
-    // keyframeQuaternions now has N+1 elements 
-    // segmentDurations has N elements
     if (totalDuration <= 1e-6 && commands.length > 0) { totalDuration = 1e-6; }
 
-    // --- Step 2: Filter Duplicate *Positional* Waypoints (Input for Blending/Spline) ---
+    // --- Step 2: Filter Duplicate Positional Waypoints ---
     const filteredWaypoints: Vector3[] = [];
-    // Optional: Could store filteredIndices map here if needed later
-    if (allWaypoints.length > 0) {
-        filteredWaypoints.push(allWaypoints[0].clone());
-    }
+    if (allWaypoints.length > 0) { filteredWaypoints.push(allWaypoints[0].clone()); }
     for (let i = 1; i < allWaypoints.length; i++) {
         if (allWaypoints[i].distanceToSquared(filteredWaypoints[filteredWaypoints.length - 1]) > POSITION_EPSILON * POSITION_EPSILON) {
             filteredWaypoints.push(allWaypoints[i].clone());
         }
     }
 
-    // --- Step 3 & 4: Corner Detection & Blend Point Injection -> TEMPORARILY DISABLED ---
-    console.log('[PathProcessor.processV2] Corner blending DISABLED for testing.');
-    let augmentedWaypoints: Vector3[] = filteredWaypoints; // Use filtered points directly
-    // --- End Temp Disable ---
+    console.log("[PathProcessor.processV2] Filtered Waypoints (count="+filteredWaypoints.length+"):", 
+        filteredWaypoints.slice(0, 3).map(p => p.toArray().map(n=>n.toFixed(2)).join(',')), 
+        filteredWaypoints.length > 3 ? '...' : '');
 
-    // --- Fallback if filteredWaypoints has < 2 points ---
-    if (augmentedWaypoints.length < 2) { // Check augmentedWaypoints (which is filteredWaypoints here)
-        console.warn("[PathProcessor.processV2] Path has < 2 points after filtering. Fallback needed.");
-        augmentedWaypoints = allWaypoints.length > 1 ? allWaypoints : 
-                             (allWaypoints.length === 1 ? [allWaypoints[0].clone(), allWaypoints[0].clone()] : [new Vector3(), new Vector3()]);
+    // --- Step 3 & 4: Corner Detection & Blend Point Injection (ENABLED) --- 
+    let augmentedWaypoints: Vector3[] = []; 
+    if (filteredWaypoints.length < 3) {
+      console.log('[PathProcessor.processV2] Less than 3 unique points, skipping corner blending.');
+      augmentedWaypoints = filteredWaypoints; 
+    } else {
+      augmentedWaypoints.push(filteredWaypoints[0].clone()); 
+      for (let i = 1; i < filteredWaypoints.length - 1; i++) { 
+        const pPrev = filteredWaypoints[i-1];
+        const pCurr = filteredWaypoints[i];
+        const pNext = filteredWaypoints[i+1];
+
+        console.log(`[PathProcessor.processV2] Checking corner at index ${i}`);
+        console.log(`  P_Prev: ${pPrev.toArray().map(n => n.toFixed(3)).join(', ')}`);
+        console.log(`  P_Curr: ${pCurr.toArray().map(n => n.toFixed(3)).join(', ')}`);
+        console.log(`  P_Next: ${pNext.toArray().map(n => n.toFixed(3)).join(', ')}`);
+
+        const vIn = new Vector3().subVectors(pCurr, pPrev);
+        const vOut = new Vector3().subVectors(pNext, pCurr);
+        const angle = vIn.angleTo(vOut); 
+        console.log(`  Angle (rad): ${angle.toFixed(3)}`);
+        
+        const distToPrev = pCurr.distanceTo(pPrev);
+        console.log(`  distToPrev: ${distToPrev.toFixed(3)}`);
+        const distToNext = pCurr.distanceTo(pNext);
+        console.log(`  distToNext: ${distToNext.toFixed(3)}`);
+
+        const angleThreshold = CORNER_ANGLE_THRESHOLD_RADIANS;
+        const isSharpEnough = Math.abs(angle) > angleThreshold;
+        const isNotReversal = Math.abs(angle) < (Math.PI - 0.1);
+        const hasPrevLength = distToPrev > POSITION_EPSILON;
+        const hasNextLength = distToNext > POSITION_EPSILON;
+
+        console.log(`  Checks: isSharp=${isSharpEnough}, isNotReversal=${isNotReversal}, hasPrevLen=${hasPrevLength}, hasNextLen=${hasNextLength}`);
+
+        if (isSharpEnough && isNotReversal && hasPrevLength && hasNextLength) {
+          console.log(`  >>> Corner DETECTED at index ${i}, proceeding with blend calculation.`); // Confirm entry
+          
+          let offset = Math.min(distToPrev, distToNext) * BLEND_OFFSET_FRACTION;
+          offset = Math.max(MIN_BLEND_OFFSET, offset); 
+          offset = Math.min(offset, distToPrev * MAX_BLEND_OFFSET_FACTOR, distToNext * MAX_BLEND_OFFSET_FACTOR); 
+          console.log(`    blend offset = ${offset.toFixed(3)}`);
+          const vInNormalized = vIn.normalize(); 
+          const vOutNormalized = vOut.normalize(); 
+          const b1 = new Vector3().copy(pCurr).addScaledVector(vInNormalized, -offset); 
+          const b2 = new Vector3().copy(pCurr).addScaledVector(vOutNormalized, offset);  
+          augmentedWaypoints.push(b1);
+          augmentedWaypoints.push(b2);
+        } else {
+          console.log(`  --- Corner NOT detected or invalid segment length at index ${i}. Skipping blend.`);
+          augmentedWaypoints.push(pCurr.clone()); 
+        }
+      }
+      augmentedWaypoints.push(filteredWaypoints[filteredWaypoints.length - 1].clone()); 
+    }
+
+    console.log("[PathProcessor.processV2] Augmented Waypoints (count="+augmentedWaypoints.length+"):", 
+        augmentedWaypoints.slice(0, 5).map(p => p.toArray().map(n=>n.toFixed(2)).join(',')), 
+        augmentedWaypoints.length > 5 ? '...' : '');
+
+    // --- Fallback if augmentation failed ---
+    if (augmentedWaypoints.length < 2) {
+        console.warn("[PathProcessor.processV2] Augmented path has < 2 points. Using filtered path.");
+        augmentedWaypoints = filteredWaypoints.length > 1 ? filteredWaypoints : 
+                             (filteredWaypoints.length === 1 ? [filteredWaypoints[0].clone(), filteredWaypoints[0].clone()] : [new Vector3(), new Vector3()]);
         if(augmentedWaypoints.length < 2) augmentedWaypoints = [new Vector3(), new Vector3()];
     }
 
-    // --- Step 5: Generate Position Spline (Using filtered points due to disable above) ---
+    // --- Step 5: Generate Position Spline (Using augmentedWaypoints) ---
     const positionCurve = new CatmullRomCurve3(augmentedWaypoints, false, 'centripetal');
 
-    // --- Step 6: Pre-sample positions ---
+    // --- Step 6: Pre-sample positions --- 
     const numSamples = Math.max(2, Math.ceil(TARGET_FPS * totalDuration));
     const sampledPositions = new Float32Array(numSamples * 3);
     for (let i = 0; i < numSamples; i++) {
       const t = (numSamples === 1) ? 0 : i / (numSamples - 1);
-      // Clamp t to prevent potential curve errors at exact endpoints with some versions
       const clampedT = Math.max(0, Math.min(1, t)); 
       const point = positionCurve.getPointAt(clampedT);
       sampledPositions.set([point.x, point.y, point.z], i * 3);
     }
+    console.log("[PathProcessor.processV2] Sampled Positions (count="+numSamples+") First 3:", 
+        Array.from(sampledPositions.slice(0, 9)).map(n=>n.toFixed(2)).join(','));
+    console.log("[PathProcessor.processV2] Sampled Positions Last 3:", 
+        Array.from(sampledPositions.slice(-9)).map(n=>n.toFixed(2)).join(','));
 
     // --- Step 7: Return combined data ---
     return {
-      sampledPositions,
-      keyframeQuaternions,
-      segmentDurations,
-      totalDuration,
+      sampledPositions,       
+      keyframeQuaternions,   
+      segmentDurations,      
+      totalDuration,         
+      allTargets,
     };
   }
   

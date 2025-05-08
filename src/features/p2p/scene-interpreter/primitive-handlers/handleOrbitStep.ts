@@ -129,7 +129,7 @@ export function handleOrbitStep(
 
   // --- Generate Intermediate Keyframes --- 
   const commandsList: CameraCommand[] = [];
-  const anglePerStep = 10; // Degrees per intermediate step - Changed from 20 back to 10
+  const anglePerStep = 45; // Degrees per intermediate step - INCREASED from 10
   const numSteps = Math.max(2, Math.ceil(Math.abs(angle) / anglePerStep));
   const numSegments = Math.max(1, numSteps - 1);
   const angleStep = angle / numSegments; 

@@ -50,7 +50,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 }) => {
   const processedPathDataRef = useRef<ProcessedPathDataV2 | null>(null);
   const animationClockRef = useRef<Clock>(new Clock(false));
-  const tempSlerpQuaternionRef = useRef<Quaternion>(new Quaternion()); // Need this for Slerp
+  const tempSlerpQuaternionRef = useRef<Quaternion>(new Quaternion());
   const frameCounterRef = useRef(0);
   
   const prevIsPlaying = usePrevious(isPlaying);
@@ -99,19 +99,24 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
       return; 
     }
 
-    const {
-      sampledPositions,
-      keyframeQuaternions,
-      segmentDurations,
-      totalDuration,
-    } = processedPathDataRef.current;
+    const data = processedPathDataRef.current;
+    if (!data) return; 
+    const { sampledPositions, keyframeQuaternions, segmentDurations, totalDuration } = data;
+    if (!sampledPositions || !keyframeQuaternions || !segmentDurations) return;
 
-    if (totalDuration <= 1e-6) {
+    const safePlaybackSpeed = playbackSpeed === 0 ? 1 : playbackSpeed;
+    const elapsedTime = animationClockRef.current.getElapsedTime() * safePlaybackSpeed;
+    const pathProgress = Math.min(1.0, elapsedTime / totalDuration); 
+
+    console.log(`[AnimCtrl] Frame: time=${elapsedTime.toFixed(3)}/${totalDuration.toFixed(3)}, progress=${pathProgress.toFixed(3)}`);
+
+    if (totalDuration <= 1e-6 || elapsedTime >= totalDuration) {
        if (animationClockRef.current.running) {
             animationClockRef.current.stop(); 
-            if (commands.length > 0 && cameraRef.current) {
+            if (commands.length > 0 && cameraRef.current && sampledPositions.length > 0) {
                 const lastCommand = commands[commands.length - 1];
-                cameraRef.current.position.copy(lastCommand.position);
+                const lastSampleIndex = (sampledPositions.length / 3) - 1;
+                cameraRef.current.position.fromArray(sampledPositions, lastSampleIndex * 3); 
                 if (keyframeQuaternions && keyframeQuaternions.length > 0) {
                     cameraRef.current.setRotationFromQuaternion(keyframeQuaternions[keyframeQuaternions.length - 1]);
                 }
@@ -126,72 +131,55 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
        return;
     }
     
-    const safePlaybackSpeed = playbackSpeed === 0 ? 1 : playbackSpeed;
-    const elapsedTime = animationClockRef.current.getElapsedTime() * safePlaybackSpeed;
-
-    if (elapsedTime >= totalDuration) {
-      if (animationClockRef.current.running) {
-            animationClockRef.current.stop(); 
-            const finalSampleIndex = (sampledPositions.length / 3) - 1;
-            if (finalSampleIndex >= 0) {
-                cameraRef.current.position.fromArray(sampledPositions, finalSampleIndex * 3);
-            }
-            if (keyframeQuaternions && keyframeQuaternions.length > 0) {
-                cameraRef.current.setRotationFromQuaternion(keyframeQuaternions[keyframeQuaternions.length - 1]);
-            }
-            if (controlsRef.current && commands.length > 0) { 
-                controlsRef.current.target.copy(commands[commands.length - 1].target);
-                controlsRef.current.update();
-            }
-            onProgressUpdate(100);
-            onComplete();
-      }
-      return;
-    }
-
     const numSamples = sampledPositions.length / 3;
-    const pathProgress = Math.min(1.0, elapsedTime / totalDuration);
     const sampleIndexFloat = pathProgress * (numSamples - 1);
     const currentSampleIndex = Math.max(0, Math.min(numSamples - 1, Math.floor(sampleIndexFloat + 0.5) )); 
     if (numSamples > 0) {
          cameraRef.current.position.fromArray(sampledPositions, currentSampleIndex * 3);
     }
-    
+
     let accumulatedDuration = 0;
     let currentSegmentIndex = 0;
     if (segmentDurations && keyframeQuaternions && keyframeQuaternions.length === segmentDurations.length + 1) {
         for (let i = 0; i < segmentDurations.length; i++) {
-          if (elapsedTime < accumulatedDuration + segmentDurations[i] || i === segmentDurations.length - 1) {
+          const segmentEndTime = accumulatedDuration + segmentDurations[i];
+          if ((elapsedTime >= accumulatedDuration && elapsedTime < segmentEndTime) || 
+              (segmentDurations[i] <= 1e-6 && elapsedTime >= segmentEndTime) ||
+              i === segmentDurations.length - 1) 
+          { 
             currentSegmentIndex = i;
             break;
           }
           accumulatedDuration += segmentDurations[i];
         }
+        currentSegmentIndex = Math.min(currentSegmentIndex, commands.length - 1);
+        currentSegmentIndex = Math.max(0, currentSegmentIndex); 
 
-        const segmentStartTime = accumulatedDuration;
+        let segmentStartTime = 0;
+        for(let k=0; k < currentSegmentIndex; k++) {
+            segmentStartTime += segmentDurations[k] ?? 0;
+        }
+
         const currentSegmentDuration = segmentDurations[currentSegmentIndex] ?? 0;
         const timeInCurrentSegment = elapsedTime - segmentStartTime;
         
         let tSegment = 0;
         if (currentSegmentDuration > 1e-6) {
-          tSegment = Math.max(0, Math.min(1, timeInCurrentSegment / currentSegmentDuration));
-        } else if (timeInCurrentSegment >= 0) {
-          tSegment = 1.0;
+          tSegment = Math.max(0, Math.min(1, timeInCurrentSegment / (currentSegmentDuration + 1e-9)));
+        } else {
+          tSegment = 1.0; 
         }
 
-        const commandForEasing = commands[currentSegmentIndex];
+        const commandForEasing = commands[currentSegmentIndex]; 
         let easedT = tSegment;
         if (commandForEasing?.easing && commandForEasing.easing in easingFunctions) {
-            const easingFunction = easingFunctions[commandForEasing.easing as EasingFunctionName];
-            easedT = easingFunction(tSegment);
+            easedT = easingFunctions[commandForEasing.easing](tSegment);
         } else if (DEFAULT_EASING in easingFunctions) {
-            const easingFunction = easingFunctions[DEFAULT_EASING];
-            easedT = easingFunction(tSegment);
+            easedT = easingFunctions[DEFAULT_EASING](tSegment);
         }
-
+        
         const qStart = keyframeQuaternions[currentSegmentIndex]; 
         const qEnd = keyframeQuaternions[currentSegmentIndex + 1]; 
-
         if (qStart && qEnd) {
             tempSlerpQuaternionRef.current.copy(qStart).slerp(qEnd, easedT);
             cameraRef.current.setRotationFromQuaternion(tempSlerpQuaternionRef.current);
@@ -207,12 +195,12 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     }
 
     if (frameCounterRef.current % 3 === 0) { 
-        onProgressUpdate(Math.min(100, pathProgress * 100));
+        onProgressUpdate(Math.min(100, (elapsedTime / totalDuration) * 100));
     }
     
-    if (pathProgress >= 1.0) {
+    if (elapsedTime >= totalDuration) {
         const finalCommand = commands[commands.length - 1];
-        cameraRef.current.position.copy(finalCommand.position);
+        cameraRef.current.position.fromArray(sampledPositions, (sampledPositions.length / 3 - 1) * 3);
         if (keyframeQuaternions && keyframeQuaternions.length > 0) {
             cameraRef.current.setRotationFromQuaternion(keyframeQuaternions[keyframeQuaternions.length - 1]);
         }
