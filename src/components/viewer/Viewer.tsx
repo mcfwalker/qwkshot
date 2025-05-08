@@ -19,7 +19,7 @@ import { ModelSelectorTabs } from './ModelSelectorTabs';
 import { TextureLibraryModal } from './TextureLibraryModal';
 import { FloorTexture } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { ControlInstruction } from '@/types/p2p/camera-controls';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
 import * as TabsPrimitive from "@radix-ui/react-tabs";
@@ -211,7 +211,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   // --- Lifted Animation State ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); // Animation progress 0-100
-  const [commands, setCommands] = useState<CameraCommand[]>([]);
+  const [instructions, setInstructions] = useState<ControlInstruction[]>([]);
   const [duration, setDuration] = useState(10); // Default/initial duration
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
@@ -414,7 +414,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
     // 3. Reset Viewer State
     setLock(false); // Call the action from useViewerStore
-    setCommands([]);
+    setInstructions([]);
     setIsPlaying(false);
     setProgress(0);
     setDuration(10); // Reset to default duration
@@ -434,7 +434,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     setShowClearConfirm(false);
     setActiveLeftPanelTab('model'); // Switch back to model tab
     router.push('/viewer');
-  }, [onModelSelect, setModelId, setLock, setCommands, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]);
+  }, [onModelSelect, setModelId, setLock, setInstructions, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]);
 
   // Handler to REMOVE the texture
   const handleRemoveTexture = useCallback(() => {
@@ -905,15 +905,17 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
           {/* --- Animation Controller (Inside Canvas) --- */}
           <AnimationController 
-            commands={commands}
+            instructions={instructions}
             isPlaying={isPlaying}
+            isLocked={isLocked}
             playbackSpeed={playbackSpeed}
             cameraRef={cameraRef}
             controlsRef={controlsRef}
-            onProgressUpdate={setProgress} // Pass setProgress directly
+            onProgressUpdate={setProgress}
             onComplete={() => { setIsPlaying(false); setProgress(0); }}
-            currentProgress={progress} // Pass current progress for pause/resume
+            currentProgress={progress}
             isRecording={isRecording}
+            duration={duration}
           />
 
           {/* --- Render CameraMover inside Canvas --- */}
@@ -996,33 +998,28 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       {/* Camera Animation System */}
       <div className="absolute top-[96px] right-4 z-10"> {/* Changed from top-16 to top-[96px] */}
         <CameraAnimationSystem
-          // PASS modelId as prop
           modelId={currentModelId}
           userVerticalAdjustment={userVerticalAdjustment}
-          // Pass down relevant state
           isPlaying={isPlaying}
           progress={progress}
           duration={duration} 
           playbackSpeed={playbackSpeed}
           fov={fov}
-          // Pass down relevant handlers/callbacks
           onPlayPause={isPlaying ? () => { setIsPlaying(false); setProgress(0); } : () => { setIsPlaying(true); setProgress(0); }}
           onStop={() => { setIsPlaying(false); setProgress(0); }}
           onProgressChange={setProgress}
           onSpeedChange={setPlaybackSpeed}
           onDurationChange={setDuration}
-          onGeneratePath={(commands, duration) => {
-            setCommands(commands);
+          onGeneratePath={(instructions, duration) => {
+            setInstructions(instructions);
             setDuration(duration);
             setProgress(0);
             setIsPlaying(false);
           }}
-          // Pass down refs needed by CameraAnimationSystem (e.g., for lock, download)
           modelRef={modelRef}
           cameraRef={cameraRef}
           controlsRef={controlsRef}
           canvasRef={canvasRef}
-          // Other props
           disabled={!modelRef.current}
           isModelLoaded={!!modelUrl}
           isRecording={isRecording}

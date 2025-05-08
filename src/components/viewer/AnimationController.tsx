@@ -5,7 +5,9 @@ import { useFrame } from '@react-three/fiber';
 import { Vector3, PerspectiveCamera } from 'three';
 // We might need a more specific type for OrbitControls ref if available
 // import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'; 
-import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { CameraControls } from '@react-three/drei';
+// import { CameraCommand } from '@/types/p2p/scene-interpreter'; // OLD
+import { ControlInstruction } from '@/types/p2p/camera-controls'; // NEW
 
 // Import easing functions (assuming a shared utility path)
 // Adjust path if necessary
@@ -17,171 +19,131 @@ import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easin
 
 
 interface AnimationControllerProps {
-  commands: CameraCommand[];
+  // commands: CameraCommand[]; // OLD
+  instructions: ControlInstruction[]; // NEW
   isPlaying: boolean;
+  isLocked: boolean;
   isRecording: boolean;
   playbackSpeed: number;
   cameraRef: React.RefObject<PerspectiveCamera>;
-  // Use 'any' for now, replace with specific OrbitControls type if available and needed
-  controlsRef: React.RefObject<any>; 
+  controlsRef: React.RefObject<any>;
   onProgressUpdate: (progress: number) => void;
   onComplete: () => void;
-  // Progress state from parent, needed for pause/resume
-  currentProgress: number; 
+  currentProgress: number;
+  duration: number;
 }
 
 export const AnimationController: React.FC<AnimationControllerProps> = ({
-  commands,
+  instructions, // Renamed from commands
   isPlaying,
+  isLocked,
   isRecording,
-  playbackSpeed, 
+  playbackSpeed,
   cameraRef,
   controlsRef,
   onProgressUpdate,
   onComplete,
-  currentProgress, // Receive current progress from parent
+  currentProgress,
+  duration,
 }) => {
-  const startTimeRef = useRef<number | null>(null);
-  const initialCameraPositionRef = useRef<Vector3 | null>(null);
-  const initialControlsTargetRef = useRef<Vector3 | null>(null);
-  const frameCounterRef = useRef(0); // For throttling UI updates
+  const cameraControlsRef = useRef<CameraControls | null>(null);
 
-  useFrame((state, delta) => {
-    frameCounterRef.current++;
-    
-    if (!isPlaying || commands.length === 0 || !cameraRef.current || !controlsRef.current) {
-      // Reset start time if we stop playing mid-animation to ensure correct restart
-      startTimeRef.current = null;
-      return; // Exit if not playing or prerequisites missing
-    }
+  // Effect to handle instruction execution
+  useEffect(() => {
+    const controls = cameraControlsRef.current;
+    let isCancelled = false;
 
-    const totalDuration = commands.reduce((sum, cmd) => sum + cmd.duration, 0) / playbackSpeed; // Adjust total duration by speed
-    // --- Stricter Duration Check ---
-    if (totalDuration <= 1e-6) { // Use a small epsilon instead of just > 0
-        if (isPlaying) {
-            onProgressUpdate(100);
-            onComplete();
-        }
+    const executeInstructions = async () => {
+      // Ensure controls are available before starting
+      if (!controls || instructions.length === 0) {
+        console.log('[AnimationController] No controls or instructions, completing.');
+        onComplete(); // Call onComplete even if no instructions
         return;
-    } 
+      }
+      
+      console.log('[AnimationController] Starting execution (v2 logic)... ', instructions);
+      onProgressUpdate(0);
 
-    // Initialize start time and initial state on the first frame of playback *or* after scrubbing
-    if (startTimeRef.current === null) {
-        // --- Jump to Start Position Immediately ---
-        if (commands.length > 0 && cameraRef.current) {
-            const firstCommand = commands[0];
-            cameraRef.current.position.copy(firstCommand.position);
-            cameraRef.current.lookAt(firstCommand.target); 
-            // If recording, force render this initial state immediately
-            if (isRecording) {
-              state.gl.render(state.scene, state.camera);
-              console.log("AnimationController: Forced render of initial frame for recording");
+      try {
+        for (let i = 0; i < instructions.length; i++) {
+          // Check cancellation flag BEFORE the async operation
+          if (isCancelled) {
+            console.log('[AnimationController] Execution cancelled before starting instruction', i + 1);
+            break;
+          }
+
+          const instruction = instructions[i];
+          const { method, args } = instruction;
+
+          console.log(`[AnimationController] Executing instruction ${i + 1}: ${method}`, args);
+          
+          if (typeof controls[method as keyof CameraControls] === 'function') {
+            const deserializedArgs = args.map(arg => {
+              if (arg && typeof arg === 'object' && 'x' in arg && 'y' in arg && 'z' in arg && Object.keys(arg).length === 3) {
+                return new Vector3(arg.x, arg.y, arg.z);
+              }
+              return arg;
+            });
+            
+            // Await the camera-controls method
+            await (controls[method as keyof CameraControls] as (...args: any[]) => Promise<void>)(...deserializedArgs);
+            
+            // Check cancellation flag AFTER the async operation completes
+            if (isCancelled) {
+              console.log('[AnimationController] Execution cancelled after completing instruction', i + 1);
+              break;
             }
+
+            // Update progress only if not cancelled
+            console.log(`[AnimationController] Completed instruction ${i + 1}: ${method}`);
+            onProgressUpdate(((i + 1) / instructions.length) * 100);
+          } else {
+            console.warn(`[AnimationController] Invalid method '${method}' called on CameraControls.`);
+            // If an invalid method is encountered, should we cancel?
+            // For now, continue to the next instruction.
+          }
         }
-        // --- End Jump to Start ---
-
-        // Calculate adjusted start time based on current progress prop
-        const startProgressValue = currentProgress / 100; // Use prop
-        startTimeRef.current = state.clock.elapsedTime - (startProgressValue * totalDuration); 
-        initialCameraPositionRef.current = cameraRef.current.position.clone();
-        initialControlsTargetRef.current = controlsRef.current.target.clone();
-    }
-
-    // Calculate elapsed time and progress, adjusted by playback speed
-    const elapsedTime = state.clock.elapsedTime - startTimeRef.current;
-    let currentOverallProgress = Math.min(1.0, elapsedTime / totalDuration); // Progress based on adjusted duration
-    
-    const clampedProgressPercent = Math.min(100, currentOverallProgress * 100);
-
-    // Calculate target time based on unadjusted durations for segment finding
-    const targetTimeUnadjusted = elapsedTime * playbackSpeed; 
-
-    // Find the current segment based on unadjusted time
-    let accumulatedDurationUnadjusted = 0;
-    let currentCommandIndex = 0;
-    while (currentCommandIndex < commands.length - 1 && 
-           accumulatedDurationUnadjusted + commands[currentCommandIndex].duration < targetTimeUnadjusted) {
-        accumulatedDurationUnadjusted += commands[currentCommandIndex].duration;
-        currentCommandIndex++;
-    }
-    
-    const command = commands[currentCommandIndex];
-    if (!command) { 
-        onComplete(); // Trigger completion cleanup
-        return;
-    }
-
-    // Determine start state for the LERP (handle potential missing previous command)
-    const segmentStartPos = (currentCommandIndex === 0 && initialCameraPositionRef.current)
-        ? initialCameraPositionRef.current
-        : commands[currentCommandIndex - 1]?.position ?? initialCameraPositionRef.current ?? new Vector3(); 
-    const segmentStartTarget = (currentCommandIndex === 0 && initialControlsTargetRef.current)
-        ? initialControlsTargetRef.current
-        : commands[currentCommandIndex - 1]?.target ?? initialControlsTargetRef.current ?? new Vector3(); 
-
-    const segmentEndPos = command.position;
-    const segmentEndTarget = command.target;
-
-    // Calculate time elapsed *within the current segment* (using unadjusted time)
-    const timeElapsedInSegmentUnadjusted = targetTimeUnadjusted - accumulatedDurationUnadjusted;
-    // Calculate progress `t` within the current segment (0 to 1)
-    const t = command.duration > 0 
-        ? Math.min(1.0, Math.max(0.0, timeElapsedInSegmentUnadjusted / command.duration)) 
-        : 1.0; 
-
-    // Apply easing
-    let effectiveEasingName: EasingFunctionName = DEFAULT_EASING; // Start with default
-    if (command.easing && command.easing in easingFunctions) {
-      // If command provides a valid easing name, use it
-      effectiveEasingName = command.easing as EasingFunctionName; 
-    }
-    // Otherwise, effectiveEasingName remains DEFAULT_EASING
-    
-    // Look up the function using the guaranteed valid name
-    const easingFunction = easingFunctions[effectiveEasingName]; 
-    const easedT = easingFunction(t);
-
-    // Interpolate position and target
-    const currentPosition = new Vector3().lerpVectors(segmentStartPos, segmentEndPos, easedT);
-    const currentTarget = new Vector3().lerpVectors(segmentStartTarget, segmentEndTarget, easedT);
-
-    // --- Update camera directly --- 
-    cameraRef.current.position.copy(currentPosition);
-    cameraRef.current.lookAt(currentTarget);
-    // cameraRef.current.updateMatrixWorld(true); // Maybe needed?
-
-    // --- Force render to canvas if recording ---
-    if (isRecording) {
-      state.gl.render(state.scene, state.camera);
-    }
-    // --- End force render ---
-
-    // Update shared progress state (for UI slider etc.) - throttled
-    if (frameCounterRef.current % 3 === 0) { 
-        onProgressUpdate(clampedProgressPercent);
-    }
-    
-    // Check if animation finished
-    if (currentOverallProgress >= 1.0) {
-        const finalCommand = commands[commands.length - 1];
-        cameraRef.current.position.copy(finalCommand.position);
-        cameraRef.current.lookAt(finalCommand.target);
-        
-        // Sync controls to final state 
-        if (controlsRef.current) {
-          controlsRef.current.target.copy(finalCommand.target);
-          controlsRef.current.update();
+      } catch (error) {
+        console.error('[AnimationController] Error during instruction execution:', error);
+        // Consider calling onComplete or notifying parent? For now, just log.
+      } finally {
+        // Call onComplete only if the loop finished naturally (wasn't cancelled)
+        if (!isCancelled) {
+          console.log('[AnimationController] Execution loop finished normally. Calling onComplete.');
+          onComplete();
+        } else {
+          console.log('[AnimationController] Execution loop cancelled or errored. Not calling onComplete from finally.');
         }
+      }
+    };
 
-        // Reset internal state and call completion callback
-        startTimeRef.current = null;
-        initialCameraPositionRef.current = null; 
-        initialControlsTargetRef.current = null;
-        onProgressUpdate(100); // Ensure UI shows 100
-        onComplete(); // This should trigger isPlaying=false 
+    // Trigger execution only if playing (Lock should NOT prevent playback)
+    if (isPlaying) {
+      console.log('[AnimationController] useEffect triggered: isPlaying=true. Starting execution.');
+      executeInstructions();
+    } else {
+      console.log(`[AnimationController] useEffect triggered but isPlaying=false.`);
+    }
+
+    // Cleanup function: This runs when dependencies change OR component unmounts.
+    return () => {
+      console.log('[AnimationController] Cleanup effect running. Setting isCancelled=true.');
+      isCancelled = true;
+      // Explicitly stop any ongoing transitions when the effect cleans up
+      // This helps prevent transitions continuing after state changes (like pausing)
+      // controls?.stop(); // Consider enabling this if pause needs immediate stop
+    };
+  }, [isPlaying, instructions, cameraControlsRef, onComplete, onProgressUpdate]);
+
+  // useFrame only needed for controls.update()
+  useFrame((state, delta) => {
+    // Update CameraControls
+    if (cameraControlsRef.current) {
+      cameraControlsRef.current.update(delta);
     }
   });
 
-  // This component doesn't render anything itself
-  return null;
+  // Render CameraControls, passing down duration as smoothTime
+  // Also disable user interaction if the scene is locked.
+  return <CameraControls ref={cameraControlsRef} smoothTime={duration} enabled={!isLocked} />;
 };

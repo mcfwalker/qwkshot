@@ -17,11 +17,11 @@ import { PromptCompilerFactory } from '@/features/p2p/prompt-compiler/PromptComp
 import { PromptCompilerConfig } from '@/types/p2p/prompt-compiler';
 import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
 import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analyzer/EnvironmentalAnalyzerFactory';
-import { CameraCommand } from '@/types/p2p/scene-interpreter';
 import { ModelMetadata } from '@/types/p2p/metadata-manager';
 import { EnvironmentalAnalysis, EnvironmentalAnalyzerConfig } from '@/types/p2p/environmental-analyzer';
 import { SceneAnalysis, SerializedSceneAnalysis } from '@/types/p2p/scene-analyzer';
 import { deserializeSceneAnalysis } from '@/features/p2p/pipeline/serializationUtils';
+import { ControlInstruction } from '@/types/p2p/camera-controls';
 
 // --- NEW IMPORTS ---
 import { OpenAIAssistantAdapter } from '@/lib/motion-planning/providers/openai-assistant';
@@ -64,9 +64,24 @@ const promptCompilerFactory = new PromptCompilerFactory(logger);
 const sceneAnalyzerFactory = new SceneAnalyzerFactory(logger);
 const environmentalAnalyzerFactory = new EnvironmentalAnalyzerFactory(logger);
 
+// --- ADD Serialization Helper --- 
+function serializeInstructions(instructions: ControlInstruction[]): any[] {
+  return instructions.map(instruction => ({
+    ...instruction,
+    args: instruction.args.map(arg => {
+      if (arg instanceof Vector3) {
+        return { x: arg.x, y: arg.y, z: arg.z };
+      }
+      // TODO: Add checks for other THREE types if they appear in args (Quaternion, Euler?)
+      return arg; // Keep non-Vector3 args as they are
+    })
+  }));
+}
+// --- END Serialization Helper ---
+
 export async function POST(request: Request) {
   try { // Outer try for the whole request
-    logger.info('Starting camera path generation request (Assistants API Refactor)'); // Updated log message
+    logger.info('Starting camera path generation request (v3 ControlInstruction)'); // Updated log message
 
     // --- Initialize Components (Keep existing, some might be simplified/removed later) --- 
     // await ensureLLMSystemInitialized(); // Old LLM init might not be needed
@@ -317,32 +332,25 @@ export async function POST(request: Request) {
       logger.info(`Motion Plan received from Assistant Adapter with ${motionPlan.steps.length} steps.`);
 
       // --- >>> NEW: Interpret the Motion Plan <<< ---
-      logger.info('Interpreting the generated Motion Plan...');
+      logger.info('Interpreting the generated Motion Plan (v3 for ControlInstructions)...');
       try {
         // Ensure necessary context is available
         if (!sceneAnalysis || !environmentalAnalysis || !currentCameraState) {
           throw new Error('Interpreter context (SceneAnalysis, EnvironmentalAnalysis, or CameraState) is missing.');
         }
 
-        const cameraCommands: CameraCommand[] = interpreter.interpretPath(
+        const controlInstructions: ControlInstruction[] = interpreter.interpretPath(
           motionPlan,
           sceneAnalysis,
           environmentalAnalysis,
           { position: currentCameraState.position, target: currentCameraState.target }
         );
 
-        logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
+        logger.info(`Motion Plan interpreted successfully. Returning ${controlInstructions.length} ControlInstructions.`);
         
-        // --- ADDED: Serialize Vector3 before sending --- 
-        const serializableCommands = cameraCommands.map(cmd => ({
-            position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
-            target: { x: cmd.target.x, y: cmd.target.y, z: cmd.target.z },
-            duration: cmd.duration,
-            easing: cmd.easing
-        }));
-        // --- END ADDED ---
-        
-        return NextResponse.json(serializableCommands); // Return the serialized commands
+        // --- ADDED: Serialize ControlInstruction args --- 
+        const serializableInstructions = serializeInstructions(controlInstructions);
+        return NextResponse.json(serializableInstructions); // Return the serialized instructions
 
       } catch (interpreterError: any) { // Catch block for interpreter errors
         logger.error('Error during Scene Interpreter execution:', interpreterError);

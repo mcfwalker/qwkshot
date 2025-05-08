@@ -6,10 +6,10 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Play, Pause, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { ControlInstruction } from '@/types/p2p/camera-controls';
 
 interface PlaybackPanelProps {
-  commands: CameraCommand[];
+  instructions: ControlInstruction[];
   isPlaying: boolean;
   isRecording: boolean;
   playbackSpeed: number;
@@ -17,14 +17,11 @@ interface PlaybackPanelProps {
   progress: number; // <-- Add progress prop
   takeCount: number;
   modelName: string | null;
-  // isConfirmingClear: boolean; // Removed
   isGenerating: boolean; // Still needed to disable controls during generation
   onPlayPause: () => void;
   onDownload: () => void;
   onSpeedChange: (values: number[]) => void;
-  // onProgressChange: (values: number[]) => void; // Removed - slider updates speed, not progress here
   onCreateNewShot: () => void;
-  // onClearScene: () => void; // Removed
 }
 
 // Keep speed options if needed for slider logic, though direct values are used now
@@ -40,7 +37,7 @@ const SPEED_OPTIONS = [
 ];
 
 export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
-  commands,
+  instructions,
   isPlaying,
   isRecording,
   playbackSpeed,
@@ -54,9 +51,9 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   onSpeedChange,
   onCreateNewShot,
 }) => {
-  const hasCommands = commands.length > 0;
+  const hasInstructions = instructions.length > 0;
   // Calculate display duration based on playback speed
-  const displayDuration = hasCommands ? (duration / playbackSpeed) : 0;
+  const displayDuration = hasInstructions ? (duration / playbackSpeed) : 0;
 
   return (
     // Main container - Revert padding to p-0
@@ -71,7 +68,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         {/* Left Section (Take Count) */}
         <div className="flex items-center px-4 border-r border-[#353535] flex-shrink-0">
           <span className="text-sm font-medium text-[#CFD0D0]">
-            TAKE {hasCommands ? takeCount : 0}
+            TAKE {hasInstructions ? takeCount : 0}
           </span>
         </div>
         {/* Right Section (Model Name / Placeholder) */}
@@ -79,9 +76,9 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           <span className={cn(
             "text-sm font-medium block",
             "overflow-hidden whitespace-nowrap text-ellipsis",
-            hasCommands ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
+            hasInstructions ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
           )}>
-            {hasCommands ? (modelName || 'Untitled Shot') : 'No animation loaded'}
+            {hasInstructions ? (modelName || 'Untitled Shot') : 'No animation loaded'}
           </span>
         </div>
       </div>
@@ -96,7 +93,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             "flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed", // Updated to exact 10px border radius
             "relative overflow-hidden" // Add relative positioning and overflow hidden
           )}
-          disabled={!hasCommands || isGenerating || isRecording}
+          disabled={!hasInstructions || isGenerating || isRecording}
         >
           {/* Progress Bar Div */}
           <div 
@@ -113,7 +110,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           variant="primary" // Use primary variant
           size="lg" // Use larger size
           className="flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed" // Updated to exact 10px border radius
-          disabled={!hasCommands || isPlaying || isRecording || isGenerating}
+          disabled={!hasInstructions || isPlaying || isRecording || isGenerating}
         >
           {isRecording ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -141,7 +138,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
             max={2}
             step={0.25}
             className="viewer-slider h-2 disabled:cursor-not-allowed" // Added disabled cursor
-            disabled={!hasCommands || isPlaying || isRecording || isGenerating}
+            disabled={!hasInstructions || isPlaying || isRecording || isGenerating}
           />
           {/* Tick Marks Container - remove pt-1 */}
           <div className="flex justify-between px-1">

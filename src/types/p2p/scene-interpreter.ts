@@ -12,6 +12,7 @@ import { EasingFunctionName } from '@/lib/easing';
 import { SceneAnalysis } from './scene-analyzer';
 import { EnvironmentalAnalysis } from './environmental-analyzer';
 import { MotionPlan } from '@/lib/motion-planning/types';
+import { ControlInstruction } from './camera-controls';
 
 /**
  * Configuration for the Scene Interpreter
@@ -25,13 +26,16 @@ export interface SceneInterpreterConfig extends P2PConfig {
 
 /**
  * Camera command for Three.js
+ * DEPRECATED in favor of ControlInstruction for v3 frontend
  */
+/*
 export interface CameraCommand {
   position: Vector3;
   target: Vector3;
   duration: number;
   easing?: EasingFunctionName;
 }
+*/
 
 /**
  * Main Scene Interpreter interface
@@ -50,29 +54,29 @@ export interface SceneInterpreter {
     sceneAnalysis: SceneAnalysis, 
     envAnalysis: EnvironmentalAnalysis,
     initialCameraState: { position: Vector3; target: Vector3 }
-  ): CameraCommand[];
+  ): ControlInstruction[];
 
   /**
-   * Execute a single camera command
+   * Execute a single camera command (Placeholder, likely unused in v3)
    */
   executeCommand(
     camera: Camera,
-    command: CameraCommand
+    command: ControlInstruction
   ): Promise<void>;
 
   /**
-   * Execute a sequence of camera commands
+   * Execute a sequence of camera commands (Placeholder, likely unused in v3)
    */
   executeCommands(
     camera: Camera,
-    commands: CameraCommand[]
+    commands: ControlInstruction[]
   ): Promise<void>;
 
   /**
-   * Validate camera commands against constraints like bounding box
+   * Validate camera commands against constraints (Logic needs update for ControlInstruction)
    */
   validateCommands(
-    commands: CameraCommand[], 
+    commands: ControlInstruction[],
     objectBounds: Box3
   ): ValidationResult;
 

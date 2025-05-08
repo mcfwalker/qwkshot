@@ -20,7 +20,7 @@ import { LockButton } from './LockButton';
 import { useViewerStore } from '@/store/viewerStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { ControlInstruction } from '@/types/p2p/camera-controls';
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
 import { SerializedVector3 } from '@/types/p2p/shared';
@@ -59,7 +59,7 @@ interface CameraAnimationSystemProps {
   onProgressChange: (progress: number) => void;
   onSpeedChange: (speed: number) => void;
   onDurationChange: (duration: number) => void;
-  onGeneratePath: (commands: CameraCommand[], duration: number) => void;
+  onGeneratePath: (instructions: ControlInstruction[], duration: number) => void;
   modelRef: React.RefObject<Object3D | null>;
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
@@ -198,7 +198,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 }) => {
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [commands, setCommands] = useState<CameraCommand[]>([]);
+  const [instructions, setInstructions] = useState<ControlInstruction[]>([]);
   const [inputDuration, setInputDuration] = useState(duration.toString());
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [generatePathState, setGeneratePathState] = useState<GeneratePathState>('initial');
@@ -346,7 +346,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     if (resetCounter > 0) { // Only run after initial mount
       console.log("CameraAnimationSystem: Resetting local state due to trigger");
       setInstruction('');
-      setCommands([]); // Also clear local commands if used for anything
+      setInstructions([]);
       setGeneratePathState('initial');
       setTakeCount(0);
       setActiveTab('shotCaller');
@@ -475,7 +475,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
             });
             // Reset state without throwing a blocking error
             setGeneratePathState('initial'); 
-            setCommands([]);
+            setInstructions([]);
             setIsGenerating(false); // Ensure loading state stops
             return; // Stop further processing for this attempt
         } else {
@@ -485,76 +485,47 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         // --- MODIFIED ERROR HANDLING --- END
       }
 
-      // Process the response - expecting CameraCommand[]
-      const receivedCommands: any[] = await pathResponse.json(); 
+      // Process the response - expecting ControlInstruction[]
+      const receivedInstructions: any[] = await pathResponse.json(); 
       
-      // Validate and parse commands
-      if (!Array.isArray(receivedCommands)) {
-        throw new Error('Invalid command data received from API');
+      // Validate and parse instructions
+      if (!Array.isArray(receivedInstructions)) {
+        throw new Error('Invalid instruction data received from API (not an array)');
       }
       
-      if (receivedCommands.length === 0) {
+      if (receivedInstructions.length === 0) {
         // Handle empty path case - maybe show a specific message?
-        toast.info('Generated path has no commands.');
-        setCommands([]); // Set empty commands
+        toast.info('Generated path has no instructions.');
+        setInstructions([]);
         setGeneratePathState('initial'); // Reset state?
         // Maybe don't automatically start animation?
         // onAnimationStop(); 
         return; // Stop further processing
       }
       
-      // Parse commands and convert to Vector3 instances
-      const newCommands: CameraCommand[] = receivedCommands.map((cmd, index) => {
-        try {
-          // --- MODIFIED VALIDATION ---
-          // Ensure position/target exist and are objects (even if empty initially)
-          if (!cmd || typeof cmd !== 'object' || 
-              !cmd.position || typeof cmd.position !== 'object' || 
-              !cmd.target || typeof cmd.target !== 'object' || 
-              typeof cmd.duration !== 'number' || cmd.duration < 0) { // Allow duration 0, reject negative
-              throw new Error(`Command ${index} missing required fields, is not an object, or has invalid duration.`);
-          }
-          // --- END MODIFIED VALIDATION ---
-          
-          // --- ADDED: Reconstruct Vector3 --- 
-          // Check if position/target have x, y, z before creating Vector3
-          if (typeof cmd.position.x !== 'number' || typeof cmd.position.y !== 'number' || typeof cmd.position.z !== 'number' ||
-              typeof cmd.target.x !== 'number' || typeof cmd.target.y !== 'number' || typeof cmd.target.z !== 'number') {
-             throw new Error(`Command ${index} position or target object is missing x, y, or z properties.`); 
-          }
-          const positionVec = new Vector3(cmd.position.x, cmd.position.y, cmd.position.z);
-          const targetVec = new Vector3(cmd.target.x, cmd.target.y, cmd.target.z);
-          // --- END ADDED ---
-
-          const command: CameraCommand = {
-            position: positionVec, // Use reconstructed Vector3
-            target: targetVec,     // Use reconstructed Vector3
-            duration: cmd.duration,
-            easing: cmd.easing || 'linear' // Use easing from command or default to linear
-          };
-          return command;
-        } catch (err) {
-          console.error(`Error parsing command ${index}:`, cmd, err);
-          // Handle unknown error type
-          const errorMsg = err instanceof Error ? err.message : 'Unknown error during command parsing';
-          throw new Error(`Error processing command ${index}: ${errorMsg}`); // Re-throw to stop processing
+      // Parse instructions and convert to ControlInstruction instances
+      const validInstructions: ControlInstruction[] = receivedInstructions.map((instr, index) => {
+        if (!instr || typeof instr !== 'object' || typeof instr.method !== 'string' || !Array.isArray(instr.args)) {
+          throw new Error(`Instruction ${index} has invalid structure.`);
         }
+        // NOTE: We are NOT deserializing Vector3 here anymore. 
+        // AnimationController will handle basic {x,y,z} object deserialization within args.
+        return instr as ControlInstruction;
       });
 
-      // Set the new commands state
-      setCommands(newCommands);
+      // Set the new instructions state
+      setInstructions(validInstructions);
 
-      // Calculate total duration from commands
-      const totalDuration = newCommands.reduce((sum, cmd) => sum + cmd.duration, 0);
+      // Calculate total duration - Rely on user input duration as ControlInstruction doesn't have intrinsic duration.
+      const totalDuration = parseFloat(inputDuration);
       onDurationChange(totalDuration);
-      setInputDuration(totalDuration.toFixed(1)); // Update input field too
-      onProgressChange(0); // Use callback to reset parent state
+      setInputDuration(totalDuration.toFixed(1));
+      onProgressChange(0);
       setGeneratePathState('ready');
       
-      onGeneratePath(newCommands, totalDuration);
+      onGeneratePath(validInstructions, totalDuration);
       toast.success('Camera path generated successfully');
-      
-      console.log('🔍 Camera path generation successful, commands:', newCommands.length);
+      console.log('🔍 Camera path generation successful, instructions:', validInstructions.length);
       
       // Switch to playback tab on success
       setActiveTab('playback'); 
@@ -618,7 +589,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       console.error('Error generating camera path:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate camera path');
       setGeneratePathState('initial');
-      setCommands([]); // Clear commands on error
+      setInstructions([]); // Clear instructions on error
     } finally {
       setIsGenerating(false);
     }
@@ -703,8 +674,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
   const handleAnimationStart = () => {
     console.log('Animation starting...', {
-      keyframesCount: commands.length,
-      totalDuration: commands.reduce((sum, kf) => sum + kf.duration, 0),
+      instructionCount: instructions.length,
+      totalDuration: duration,
       hasCamera: !!cameraRef.current,
       hasControls: !!controlsRef.current
     });
@@ -974,7 +945,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
 
     // Reset all states
     onProgressChange(0); // Inform parent to reset progress
-    setCommands([]);
+    setInstructions([]);
     setInstruction('');
     setGeneratePathState('initial');
     setTakeCount(0);
@@ -1024,7 +995,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   const handleCreateNewShot = () => {
     // Reset relevant state, but keep the instruction
     // setInstruction(''); // Keep the previous instruction
-    setCommands([]);
+    setInstructions([]);
     onProgressChange(0); // Use callback to reset parent progress
     setGeneratePathState('initial');
     // Unlock if currently locked
@@ -1097,7 +1068,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 )}
                 {activeTab === 'playback' && (
                   <PlaybackPanel 
-                    commands={commands}
+                    instructions={instructions}
                     isPlaying={isPlaying}
                     isRecording={isRecording}
                     playbackSpeed={playbackSpeed}
