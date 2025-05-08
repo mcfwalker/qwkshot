@@ -59,7 +59,11 @@ interface CameraAnimationSystemProps {
   onProgressChange: (progress: number) => void;
   onSpeedChange: (speed: number) => void;
   onDurationChange: (duration: number) => void;
-  onGeneratePath: (instructions: ControlInstruction[], duration: number) => void;
+  onGeneratePath: (
+    instructions: ControlInstruction[],
+    duration: number,
+    initialState: { position: Vector3; target: Vector3 }
+  ) => void;
   modelRef: React.RefObject<Object3D | null>;
   cameraRef: React.RefObject<PerspectiveCamera>;
   controlsRef: React.RefObject<any>;
@@ -390,6 +394,23 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     setGeneratePathState('generating');
     setMessageIndex(0); // Reset message index
     
+    // <<< CAPTURE INITIAL STATE HERE >>>
+    let initialState: { position: Vector3; target: Vector3 };
+    try {
+      initialState = { // Ensure refs are accessed within try block
+        position: cameraRef.current.position.clone(),
+        target: controlsRef.current.target.clone()
+      };
+      console.log(`[CameraAnimationSystem] Captured initial state: Pos=${initialState.position.toArray().map(v=>v.toFixed(2)).join(',')} Target=${initialState.target.toArray().map(v=>v.toFixed(2)).join(',')}`);
+    } catch (e) {
+        console.error('Failed to capture initial camera state:', e);
+        toast.error('Could not read current camera state.');
+        setIsGenerating(false);
+        setGeneratePathState('initial');
+        return;
+    }
+    // <<< END CAPTURE >>>
+
     try {
       // Get the model ID from the URL
       const pathParts = window.location.pathname.split('/');
@@ -523,7 +544,8 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       onProgressChange(0);
       setGeneratePathState('ready');
       
-      onGeneratePath(validInstructions, totalDuration);
+      // Pass instructions, duration, AND initial state upwards
+      onGeneratePath(validInstructions, totalDuration, initialState);
       toast.success('Camera path generated successfully');
       console.log('🔍 Camera path generation successful, instructions:', validInstructions.length);
       

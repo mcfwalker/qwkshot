@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Vector3, PerspectiveCamera } from 'three';
 // We might need a more specific type for OrbitControls ref if available
@@ -31,6 +31,7 @@ interface AnimationControllerProps {
   onComplete: () => void;
   currentProgress: number;
   duration: number;
+  initialState: { position: Vector3; target: Vector3 } | null;
 }
 
 export const AnimationController: React.FC<AnimationControllerProps> = ({
@@ -45,38 +46,98 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   onComplete,
   currentProgress,
   duration,
+  initialState,
 }) => {
   const cameraControlsRef = useRef<CameraControls | null>(null);
+  const currentInstructionIndexRef = useRef<number>(0);
+  const isCancelledRef = useRef<boolean>(false);
+  const runAnimationRef = useRef<() => Promise<void>>(async () => {});
+  const cancelAnimationRef = useRef<() => void>(() => {});
+  const isInitialStateSavedRef = useRef<boolean>(false);
 
-  // Effect to handle instruction execution
+  // === Effect 1: Set and Save Initial State ===
+  // Runs when controls are ready or initial state prop changes
   useEffect(() => {
     const controls = cameraControlsRef.current;
-    let isCancelled = false;
+    console.log('[AC InitEffect] Running. Controls available:', !!controls, 'Initial state:', !!initialState);
+    
+    // Reset the flag whenever initialState changes, forcing re-save
+    isInitialStateSavedRef.current = false;
+    
+    if (controls && initialState) {
+      let didSave = false; // Local flag for async operation
+      const setupAndSave = async () => {
+        console.log('[AC InitEffect] Controls and initialState exist. Setting and saving...');
+        try {
+          controls.stop();
+          await controls.setLookAt(
+            initialState.position.x, initialState.position.y, initialState.position.z,
+            initialState.target.x, initialState.target.y, initialState.target.z,
+            false // Instant snap
+          );
+          controls.setOrbitPoint(initialState.target.x, initialState.target.y, initialState.target.z);
+          controls.saveState(); // Save this state for reset()
+          isInitialStateSavedRef.current = true; // Mark as saved
+          didSave = true;
+          console.log('[AC InitEffect] Initial state SET and SAVED.');
+        } catch (error) {
+          console.error('[AC InitEffect] Error setting/saving initial state:', error);
+          isInitialStateSavedRef.current = false; // Ensure flag is false on error
+        }
+      };
+      setupAndSave(); // Execute the async setup
+    } else {
+      // If no controls or initialState, ensure flag is false
+      isInitialStateSavedRef.current = false;
+      console.log('[AC InitEffect] No controls or initialState, cannot save state.');
+    }
 
-    const executeInstructions = async () => {
-      // Ensure controls are available before starting
-      if (!controls || instructions.length === 0) {
-        console.log('[AnimationController] No controls or instructions, completing.');
-        onComplete(); // Call onComplete even if no instructions
+    // No cleanup needed here, saving state doesn't require cleanup
+  }, [cameraControlsRef.current, initialState]); // Depend on controls ref *value* and initialState
+
+  // === Effect 2: Define Animation Logic ===
+  useEffect(() => {
+    const controls = cameraControlsRef.current;
+    console.log('[AC LogicDef Effect] Defining run/cancel logic.');
+
+    runAnimationRef.current = async () => {
+      if (!controls) { console.warn('[AC Run] No controls.'); onComplete(); return; }
+      if (instructions.length === 0) { console.log('[AC Run] No instructions.'); onComplete(); return; }
+      
+      // Check if initial state was successfully saved before running
+      if (!isInitialStateSavedRef.current) {
+        console.warn('[AC Run] Initial state not saved yet. Aborting run.');
+        onComplete(); // Mark as complete if we can't run
         return;
       }
-      
-      console.log('[AnimationController] Starting execution (v2 logic)... ', instructions);
+
+      // <<< RESET USING LIBRARY METHOD >>>
+      console.log('[AC Run] Resetting controls via reset()...');
+      try {
+        controls.stop();
+        await controls.reset(false); // Reset to saved state, instantly
+        console.log('[AC Run] Controls reset complete.');
+      } catch(resetError) {
+        console.error('[AC Run] Error resetting controls via reset():', resetError);
+        onComplete();
+        return;
+      }
+      // <<< END RESET >>>
+
+      // Reset loop state
+      currentInstructionIndexRef.current = 0;
+      isCancelledRef.current = false;
       onProgressUpdate(0);
+      console.log('[AC Run] Starting instruction loop...');
 
       try {
         for (let i = 0; i < instructions.length; i++) {
-          // Check cancellation flag BEFORE the async operation
-          if (isCancelled) {
-            console.log('[AnimationController] Execution cancelled before starting instruction', i + 1);
-            break;
-          }
-
+          if (isCancelledRef.current) { console.log('[AC Run] Cancelled before instruction', i); break; }
+          currentInstructionIndexRef.current = i;
           const instruction = instructions[i];
           const { method, args } = instruction;
+          console.log(`[AC Run] Executing ${i}: ${method}`);
 
-          console.log(`[AnimationController] Executing instruction ${i + 1}: ${method}`, args);
-          
           if (typeof controls[method as keyof CameraControls] === 'function') {
             const deserializedArgs = args.map(arg => {
               if (arg && typeof arg === 'object' && 'x' in arg && 'y' in arg && 'z' in arg && Object.keys(arg).length === 3) {
@@ -84,56 +145,48 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
               }
               return arg;
             });
-            
-            // Await the camera-controls method
-            await (controls[method as keyof CameraControls] as (...args: any[]) => Promise<void>)(...deserializedArgs);
-            
-            // Check cancellation flag AFTER the async operation completes
-            if (isCancelled) {
-              console.log('[AnimationController] Execution cancelled after completing instruction', i + 1);
-              break;
-            }
 
-            // Update progress only if not cancelled
-            console.log(`[AnimationController] Completed instruction ${i + 1}: ${method}`);
+            await (controls[method as keyof CameraControls] as (...args: any[]) => Promise<void>)(...deserializedArgs);
+            if (isCancelledRef.current) { console.log('[AC Run] Cancelled after instruction', i); break; }
+            console.log(`[AC Run] Completed ${i}: ${method}`);
             onProgressUpdate(((i + 1) / instructions.length) * 100);
           } else {
-            console.warn(`[AnimationController] Invalid method '${method}' called on CameraControls.`);
-            // If an invalid method is encountered, should we cancel?
-            // For now, continue to the next instruction.
+            console.warn(`[AC Run] Invalid method '${method}' at index ${i}. Skipping.`);
           }
         }
       } catch (error) {
-        console.error('[AnimationController] Error during instruction execution:', error);
-        // Consider calling onComplete or notifying parent? For now, just log.
+        console.error('[AC Run] Error during loop:', error);
+        isCancelledRef.current = true;
       } finally {
-        // Call onComplete only if the loop finished naturally (wasn't cancelled)
-        if (!isCancelled) {
-          console.log('[AnimationController] Execution loop finished normally. Calling onComplete.');
+        if (!isCancelledRef.current) {
+          console.log('[AC Run] Sequence finished normally.');
           onComplete();
         } else {
-          console.log('[AnimationController] Execution loop cancelled or errored. Not calling onComplete from finally.');
+          console.log('[AC Run] Sequence cancelled or errored.');
         }
       }
+    }; // End runAnimationRef definition
+
+    cancelAnimationRef.current = () => {
+      console.log('[AC Cancel] Setting cancel flag and stopping controls.');
+      isCancelledRef.current = true;
+      controls?.stop();
     };
 
-    // Trigger execution only if playing (Lock should NOT prevent playback)
+  }, [instructions, cameraControlsRef, onComplete, onProgressUpdate, initialState]); // Keep dependencies for redefining logic
+
+  // === Effect 3: Trigger Animation ===
+  useEffect(() => {
+    console.log('[AC Trigger] Running. isPlaying:', isPlaying);
     if (isPlaying) {
-      console.log('[AnimationController] useEffect triggered: isPlaying=true. Starting execution.');
-      executeInstructions();
+      if (isLocked) { console.log('[AC Trigger] isPlaying=true, isLocked=true. Playback proceeds.'); }
+      console.log('[AC Trigger] isPlaying=true. Calling runAnimationRef.current().');
+      runAnimationRef.current();
     } else {
-      console.log(`[AnimationController] useEffect triggered but isPlaying=false.`);
+      console.log('[AC Trigger] isPlaying=false. Calling cancelAnimationRef.current().');
+      cancelAnimationRef.current();
     }
-
-    // Cleanup function: This runs when dependencies change OR component unmounts.
-    return () => {
-      console.log('[AnimationController] Cleanup effect running. Setting isCancelled=true.');
-      isCancelled = true;
-      // Explicitly stop any ongoing transitions when the effect cleans up
-      // This helps prevent transitions continuing after state changes (like pausing)
-      // controls?.stop(); // Consider enabling this if pause needs immediate stop
-    };
-  }, [isPlaying, instructions, cameraControlsRef, onComplete, onProgressUpdate]);
+  }, [isPlaying, isLocked]); // Only depends on play/lock state
 
   // useFrame only needed for controls.update()
   useFrame((state, delta) => {
@@ -143,7 +196,10 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     }
   });
 
-  // Render CameraControls, passing down duration as smoothTime
-  // Also disable user interaction if the scene is locked.
-  return <CameraControls ref={cameraControlsRef} smoothTime={duration} enabled={!isLocked} />;
+  // Render CameraControls
+  // Experiment: Use a fraction of duration for smoothTime for potentially better easing feel
+  const smoothTimeFactor = 0.4; // Adjust this factor as needed
+  const calculatedSmoothTime = Math.max(0.1, duration * smoothTimeFactor); // Ensure a minimum smoothTime
+  
+  return <CameraControls ref={cameraControlsRef} smoothTime={calculatedSmoothTime} enabled={!isLocked} />;
 };

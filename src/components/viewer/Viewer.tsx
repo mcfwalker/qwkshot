@@ -215,6 +215,8 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [duration, setDuration] = useState(10); // Default/initial duration
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
+  // Add state to store the initial camera state for the current animation
+  const [initialAnimationState, setInitialAnimationState] = useState<{ position: Vector3; target: Vector3 } | null>(null);
   // --- End Lifted State ---
 
   // ADD state for the current model ID within Viewer
@@ -434,6 +436,8 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     setShowClearConfirm(false);
     setActiveLeftPanelTab('model'); // Switch back to model tab
     router.push('/viewer');
+
+    setInitialAnimationState(null); // Reset initial state on clear
   }, [onModelSelect, setModelId, setLock, setInstructions, setIsPlaying, setProgress, setDuration, setPlaybackSpeed, setFov, setUserVerticalAdjustment, setFloorTexture, setGridVisible, setResetCounter, router, setActiveLeftPanelTab]);
 
   // Handler to REMOVE the texture
@@ -916,6 +920,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             currentProgress={progress}
             isRecording={isRecording}
             duration={duration}
+            initialState={initialAnimationState}
           />
 
           {/* --- Render CameraMover inside Canvas --- */}
@@ -1010,9 +1015,10 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           onProgressChange={setProgress}
           onSpeedChange={setPlaybackSpeed}
           onDurationChange={setDuration}
-          onGeneratePath={(instructions, duration) => {
+          onGeneratePath={(instructions, duration, initialState) => {
             setInstructions(instructions);
             setDuration(duration);
+            setInitialAnimationState(initialState);
             setProgress(0);
             setIsPlaying(false);
           }}
