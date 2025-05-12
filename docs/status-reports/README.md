@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-05-12-0817-P2P - Camera Targeting & Controls Integration Refinements
 - M3DV-SR-2025-05-11-1953-P2P - Camera Controls - Orbit & Targeting Debug
 - M3DV-SR-2025-05-08-0942-P2P - Camera Controls Integration - Phase 1 (Dolly)
 - M3DV-SR-2025-05-07-1849-SmoothingAttempt2Postmortem - Frontend Smoothing Attempt 2 Post-Mortem & Plan V3

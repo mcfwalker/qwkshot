@@ -1,6 +1,6 @@
 # Camera Controls Integration Plan (Attempt 3)
 
-**Status:** Proposed
+**Status:** In Progress
 
 ## 1. Goals
 - Implement smooth, cinematic camera animations based on natural language input.
@@ -103,31 +103,35 @@ interface ControlInstruction {
 ## 5. Phased Rollout Plan (Attempt 3)
 
 ### Phase 0: Setup & Basic Integration
-*   [ ] Create new feature branch (`feature/frontend-smoothing-v3`).
-*   [ ] Install/confirm `@react-three/drei` dependency.
-*   [ ] Basic setup of `<CameraControls />` in `AnimationController.tsx`. Get a `ref` working. Ensure basic user interaction works.
-*   [ ] Define `ControlInstruction` type.
-*   *Goal:* Basic library component integrated, ready for programmatic control.
+*   [x] Create new feature branch (`feature/frontend-smoothing-v3`).
+*   [x] Install/confirm `@react-three/drei` dependency.
+*   [x] Basic setup of `<CameraControls />` in `AnimationController.tsx`. Get a `ref` working. Ensure basic user interaction works.
+*   [x] Define `ControlInstruction` type.
+*   *Goal:* Basic library component integrated, ready for programmatic control. **(COMPLETED)**
 
 ### Phase 1: Refactor One Primitive End-to-End (e.g., Dolly)
+*   **Status:** In Progress (Dolly, Orbit primitives refactored)
 *   **Size:** Medium (M)
 *   **Value:** Validates the core architecture and API mapping.
 *   **Tasks:**
-    *   [ ] Refactor `handleDollyStep.ts`: Calculate target distance, output `[{ method: 'dollyTo', args: [distance, true] }]`.
-    *   [ ] Update `SceneInterpreterImpl` and API route to handle/return `ControlInstruction[]`.
-    *   [ ] Update `AnimationController` to receive `ControlInstruction[]` and execute the `dollyTo` method on the `camera-controls` ref.
-    *   [ ] Test "dolly" command thoroughly. Is it smooth? Does it respect distance?
-*   *Goal:* Demonstrate end-to-end functionality for a single primitive using the new architecture.
+    *   [x] Refactor `handleDollyStep.ts`: Calculate target distance, output `[{ method: 'dollyTo', args: [distance, true] }]`.
+    *   [x] Refactor `handleOrbitStep.ts` (and related like `handleFlyOrbitStep`): Output `ControlInstruction[]` targeting `truck`, `dolly`, `rotateTo`, `setOrbitPoint` etc.
+    *   [x] Update `SceneInterpreterImpl` and API route to handle/return `ControlInstruction[]`.
+    *   [x] Update `AnimationController` to receive `ControlInstruction[]` and execute methods on the `camera-controls` ref.
+    *   [x] Test "dolly" and "orbit" commands thoroughly.
+*   *Goal:* Demonstrate end-to-end functionality for initial primitives using the new architecture.
 
-### Phase 2: Refactor Remaining Primitives
+### Phase 2: Refactor Remaining Primitives (ACTIVE)
+*   **Status:** Active / Next Up
 *   **Size:** Large (L)
 *   **Value:** Enables all core motion types with built-in smoothing.
 *   **Tasks:**
-    *   [ ] Incrementally refactor other handlers (`handleOrbitStep`, `handlePanStep`, `handleTiltStep`, `handlePedestalStep`, `handleTruckStep`, `handleZoomStep`, `handleMoveToStep`) to output corresponding `ControlInstruction[]` (e.g., `rotateTo`, `truck`, `zoomTo`, `moveTo`, `setPosition`, `setTarget`). Map parameters carefully.
+    *   [ ] Incrementally refactor other handlers (`handlePanStep`, `handleTiltStep`, `handlePedestalStep`, `handleTruckStep`, `handleZoomStep`, `handleMoveToStep`, `handleFocusOnStep`) to output corresponding `ControlInstruction[]` (e.g., `truck`, `forward`, `zoomTo`, `moveTo`, `setPosition`, `setTarget`, `fitToBox`). Map parameters carefully.
     *   [ ] Test each primitive individually after refactoring. Ensure smoothness and correctness.
 *   *Goal:* All supported motion primitives work correctly via `camera-controls`.
 
 ### Phase 3: Sequence Testing & Tuning
+*   **Status:** Pending
 *   **Size:** Medium (M)
 *   **Value:** Validates transition smoothness - the primary goal.
 *   **Tasks:**
@@ -137,22 +141,26 @@ interface ControlInstruction {
     *   [ ] Re-evaluate constraint handling – does it need to happen in handlers before generating instructions, or can `camera-controls` boundaries suffice?
 *   *Goal:* Smooth, visually pleasing transitions between sequential primitives.
 
+### Addressed/Completed during Phase 1/2:
+*   [x] **Initial Camera Focus on Model Load:** Ensured the camera correctly targets the model's visual center (`[0,1,0]` for now) when a model is first loaded and `<CameraControls />` initializes (handled in `AnimationController.tsx`).
+*   [x] **"Reset Camera" Button Functionality:** Updated the existing "Reset Camera" button in the UI to work correctly with the `cameraControlsRef.current` API (using `setPosition`/`setTarget` to a predefined default view in `AnimationController.tsx`).
+
 ### Phase 4: Address Remaining Features/Polish (Post-MVP)
+*   **Status:** Pending
 *   [ ] Re-evaluate need for explicit "blend hints" (`easeHint`, `allowCornerBlending`) in `CameraCommand` - `camera-controls` might handle this implicitly or have its own parameters.
-*   [ ] Consider advanced `camera-controls` features (boundaries, fitToBox, etc.).
+*   [ ] Consider advanced `camera-controls` features (boundaries, fitToBox, etc., beyond primitive mapping).
 *   [ ] Address UI polish (fading grid, etc.).
 
-### Phase 5: Post-MVP Refinements & Deferred Items (NEW)
+### Phase 5: Post-MVP Refinements & Deferred Items
+*   **Status:** Pending
 *   **Goal:** Address items deferred during earlier phases and further refine the camera control experience.
 *   **Tasks:**
     *   [ ] **Precise Duration Control:** Investigate methods to achieve more exact animation durations, or finalize UX for qualitative duration inputs (e.g., "fast", "slow") if precise timing remains elusive with `camera-controls` transitions.
     *   [ ] **Enhanced Progress Reporting:** Implement more granular progress updates *during* camera-controls transitions, if feasible (e.g., by listening to library events or estimating progress based on state changes).
     *   [ ] **Advanced Easing Control:** Explore if/how `camera-controls` allows for custom easing profiles or further tuning beyond the default SmoothDamp behavior influenced by `smoothTime`.
-    *   [ ] **Initial Camera Focus on Model Load:** Ensure the camera correctly frames the model (respecting normalization and adjusted center) when a model is first loaded and `<CameraControls />` initializes.
-    *   [ ] **"Reset Camera" Button Functionality:** Update the existing "Reset Camera" button in the UI to work correctly with the `cameraControlsRef.current` API (e.g., using its `reset()` method to revert to its saved default state, or using `setLookAt()` to a predefined default view).
 
 ## 6. Testing Strategy
-*   **Phase 1:** Verify refactored Dolly works smoothly end-to-end. No regressions for *other* (un-refactored) primitives yet.
+*   **Phase 1:** Verify refactored Dolly and Orbit work smoothly end-to-end.
 *   **Phase 2:** Test *each* primitive thoroughly immediately after its handler is refactored.
 *   **Phase 3:** Focus on testing diverse *sequences* and visually evaluating transition quality. Test edge cases (zero duration, immediate transitions).
 *   **General:** Maintain broad testing of all primitives throughout.
