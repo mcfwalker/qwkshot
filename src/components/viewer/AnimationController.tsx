@@ -33,6 +33,7 @@ interface AnimationControllerProps {
   duration: number;
   initialState: { position: Vector3; target: Vector3 } | null;
   triggerReset?: number; // ADDED: Prop to trigger a reset to default view
+  isModelLoaded: boolean; // <<< ADD isModelLoaded prop
 }
 
 export const AnimationController: React.FC<AnimationControllerProps> = ({
@@ -49,6 +50,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   duration,
   initialState,
   triggerReset, // ADDED: Destructure triggerReset
+  isModelLoaded, // <<< Destructure isModelLoaded
 }) => {
   const cameraControlsRef = useRef<CameraControls | null>(null);
   const currentInstructionIndexRef = useRef<number>(0);
@@ -57,6 +59,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const cancelAnimationRef = useRef<() => void>(() => {});
   const isInitialStateSavedRef = useRef<boolean>(false);
   const prevTriggerResetRef = useRef<number | undefined>(triggerReset);
+  const prevIsModelLoadedRef = useRef<boolean>(false);
 
   // === Effect 1: Set and Save Initial State ===
   // Runs when controls are ready or initial state prop changes
@@ -230,6 +233,33 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     prevTriggerResetRef.current = triggerReset;
 
   }, [triggerReset, cameraControlsRef.current]);
+
+  // === NEW Effect 5: Handle Initial Load Camera Set ===
+  useEffect(() => {
+    const controls = cameraControlsRef.current;
+    // Trigger only when isModelLoaded goes from false to true
+    if (isModelLoaded && !prevIsModelLoadedRef.current && controls) {
+      console.log('[AC InitialLoadEffect] Model loaded. Setting initial camera view via CameraControls...');
+      const initialPosition = new Vector3(0, 1.5, 6);
+      const initialTarget = new Vector3(0, 1, 0); // Use the same target as reset
+
+      const setInitialView = async () => {
+        try {
+          controls.stop();
+          await controls.setPosition(initialPosition.x, initialPosition.y, initialPosition.z, false);
+          await controls.setTarget(initialTarget.x, initialTarget.y, initialTarget.z, false);
+          console.log('[AC InitialLoadEffect] Initial view set successfully.');
+          // Maybe save state here too if needed for reset consistency?
+          // controls.saveState();
+        } catch (error) {
+          console.error('[AC InitialLoadEffect] Error setting initial view:', error);
+        }
+      };
+      setInitialView();
+    }
+    // Update previous value ref for edge detection
+    prevIsModelLoadedRef.current = isModelLoaded;
+  }, [isModelLoaded, cameraControlsRef.current]); // Depend on load state and controls ref value
 
   // useFrame only needed for controls.update()
   useFrame((state, delta) => {

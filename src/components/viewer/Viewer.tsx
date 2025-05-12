@@ -3,11 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
-// Commented out unused imports (keeping for reference)
-// import CameraControls from './CameraControls';
-// import FloorControls from './FloorControls';
-import CameraTelemetry from './CameraTelemetry';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, Scene, Box3Helper, Box3 } from 'three';
 import { CameraAnimationSystem } from './CameraAnimationSystem';
 import Floor, { FloorType } from './Floor';
 import { SceneControls } from './SceneControls';
@@ -18,7 +14,6 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ModelSelectorTabs } from './ModelSelectorTabs';
 import { TextureLibraryModal } from './TextureLibraryModal';
 import { FloorTexture } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
 import { ControlInstruction } from '@/types/p2p/camera-controls';
 import { AnimationController } from './AnimationController';
 import { usePathname, useRouter } from 'next/navigation';
@@ -30,12 +25,16 @@ import { BottomToolbar } from './BottomToolbar';
 import React from 'react';
 import { ClearSceneConfirmPortal } from './ClearSceneConfirmPortal';
 import { supabase } from '@/lib/supabase';
-import { updateThumbnailUrlAction, uploadThumbnailAction } from '@/app/actions/thumbnail';
+import { uploadThumbnailAction } from '@/app/actions/thumbnail';
 import { playSound, Sounds } from '@/lib/soundUtils';
 import { ThumbnailPreviewModal } from './ThumbnailPreviewModal';
 
 // Model component - simplified to load GLTF/GLB without client normalization
-function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
+function Model({ url, modelRef, onLoad }: { 
+  url: string; 
+  modelRef: React.RefObject<Object3D | null>;
+  onLoad?: () => void;
+}) {
   const { scene: originalScene } = useGLTF(url); // Load the scene (now pre-normalized)
 
   // Clone the scene to avoid modifying the cache and allow direct manipulation if needed
@@ -52,10 +51,12 @@ function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Objec
     if (clonedScene) {
        modelRef.current = clonedScene;
        console.log("Viewer.tsx <Model>: Assigned cloned scene to modelRef.");
+       // Call onLoad callback when model is ready
+       onLoad?.();
     }
     // Cleanup ref when component unmounts or URL changes
     return () => { modelRef.current = null; };
-  }, [clonedScene, modelRef]); // Depend on the cloned scene
+  }, [clonedScene, modelRef, onLoad]); // Added onLoad to dependencies
 
   // Render the cloned scene directly
   // The parent <group> in Viewer will handle userVerticalAdjustment
@@ -139,88 +140,28 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [floorType, setFloorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
-  const [isRecordingComplete, setIsRecordingComplete] = useState(false);
-  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isDownloadComplete, setIsDownloadComplete] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [isPathGenerated, setIsPathGenerated] = useState(false);
-  const [isAnimationPaused, setIsAnimationPaused] = useState(false);
-  const [animationProgress, setAnimationProgress] = useState(0);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
-  const [isModelError, setIsModelError] = useState(false);
-  const [isModelLoading, setIsModelLoading] = useState(true);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isInitializationError, setIsInitializationError] = useState(false);
-  const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
-  const [isMetadataError, setIsMetadataError] = useState(false);
-  const [isMetadataLoading, setIsMetadataLoading] = useState(true);
-  const [isSceneAnalyzed, setIsSceneAnalyzed] = useState(false);
-  const [isSceneError, setIsSceneError] = useState(false);
-  const [isSceneAnalyzing, setIsSceneAnalyzing] = useState(true);
-  const [isEnvironmentLoaded, setIsEnvironmentLoaded] = useState(false);
-  const [isEnvironmentError, setIsEnvironmentError] = useState(false);
-  const [isEnvironmentLoading, setIsEnvironmentLoading] = useState(true);
-  const [isLightingSetup, setIsLightingSetup] = useState(false);
-  const [isLightingError, setIsLightingError] = useState(false);
-  const [isLightingLoading, setIsLightingLoading] = useState(true);
-  const [isCameraSetup, setIsCameraSetup] = useState(false);
-  const [isCameraError, setIsCameraError] = useState(false);
-  const [isCameraLoading, setIsCameraLoading] = useState(true);
-  const [isControlsSetup, setIsControlsSetup] = useState(false);
-  const [isControlsError, setIsControlsError] = useState(false);
-  const [isControlsLoading, setIsControlsLoading] = useState(true);
-  const [isRendererSetup, setIsRendererSetup] = useState(false);
-  const [isRendererError, setIsRendererError] = useState(false);
-  const [isRendererLoading, setIsRendererLoading] = useState(true);
-  const [isAnimationSetup, setIsAnimationSetup] = useState(false);
-  const [isAnimationError, setIsAnimationError] = useState(false);
-  const [isAnimationLoading, setIsAnimationLoading] = useState(true);
-  const [isRecordingSetup, setIsRecordingSetup] = useState(false);
-  const [isRecordingError, setIsRecordingError] = useState(false);
-  const [isRecordingLoading, setIsRecordingLoading] = useState(true);
-  const [isDownloadSetup, setIsDownloadSetup] = useState(false);
-  const [isDownloadError, setIsDownloadError] = useState(false);
-  const [isDownloadLoading, setIsDownloadLoading] = useState(true);
-  const [isPathSetup, setIsPathSetup] = useState(false);
-  const [isPathError, setIsPathError] = useState(false);
-  const [isPathLoading, setIsPathLoading] = useState(true);
-  const [isUISetup, setIsUISetup] = useState(false);
-  const [isUIError, setIsUIError] = useState(false);
-  const [isUILoading, setIsUILoading] = useState(true);
-  const [isSystemSetup, setIsSystemSetup] = useState(false);
-  const [isSystemError, setIsSystemError] = useState(false);
-  const [isSystemLoading, setIsSystemLoading] = useState(true);
-  const [isReady, setIsReady] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [showTextureModal, setShowTextureModal] = useState(false);
-  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-
-  // --- State for Toolbar Toggles ---
-  // const [showBoundingBox, setShowBoundingBox] = useState(true); 
-  // const [isBoundingBoxLoading, setIsBoundingBoxLoading] = useState(false);
-  const [showReticle, setShowReticle] = useState(true);       
-  const [isReticleLoading, setIsReticleLoading] = useState(false);
-
-  // --- Lifted Animation State ---
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0); // Animation progress 0-100
+  const [isRecording, setIsRecording] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [instructions, setInstructions] = useState<ControlInstruction[]>([]);
-  const [duration, setDuration] = useState(10); // Default/initial duration
+  const [duration, setDuration] = useState(10);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
+  const [resetCounter, setResetCounter] = useState(0);
   const [initialAnimationState, setInitialAnimationState] = useState<{ position: Vector3; target: Vector3 } | null>(null);
-  const [cameraResetTrigger, setCameraResetTrigger] = useState<number>(0); // NEW state for triggering AnimationController reset
-  // --- End Lifted State ---
-
-  // ADD state for the current model ID within Viewer
+  const [cameraResetTrigger, setCameraResetTrigger] = useState<number>(0);
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
+  const [showTextureModal, setShowTextureModal] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showReticle, setShowReticle] = useState(true);
+  const [isReticleLoading, setIsReticleLoading] = useState(false);
+  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
+  const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
+  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
+  const [isSavingThumbnail, setIsSavingThumbnail] = useState(false);
+  const [isThumbnailSaved, setIsThumbnailSaved] = useState(false);
+  const [modelName, setModelName] = useState<string>('model');
+  const [modelCenter, setModelCenter] = useState<Vector3>(new Vector3(0, 1, 0));
 
   const router = useRouter();
   const modelRef = useRef<Object3D | null>(null);
@@ -419,7 +360,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
     // 5. Feedback & Reset Confirmation State
     toast.success("Stage Reset Successfully");
-    setIsConfirmingReset(false);
     setShowClearConfirm(false);
     setActiveLeftPanelTab('model'); // Switch back to model tab
     router.push('/viewer');
@@ -460,182 +400,85 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       setTimeout(() => setIsReticleLoading(false), 1000); // Reduce timeout to 1000ms
   }, [showReticle, isReticleLoading]); 
 
-  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
-  const [showThumbnailPreview, setShowThumbnailPreview] = useState(false);
-  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
-  const [isSavingThumbnail, setIsSavingThumbnail] = useState(false);
-  const [isThumbnailSaved, setIsThumbnailSaved] = useState(false);
-
   // Handler for capturing thumbnail
   const handleCaptureThumbnail = useCallback(async () => {
-    if (!modelRef.current || !currentModelId || !canvasRef.current) {
-      toast.error('Cannot capture thumbnail: Model or canvas not available');
-      return;
-    }
-    
-    if (isLocked || isPlaying) {
-      toast.error('Cannot capture thumbnail while scene is locked or playing animation');
-      return;
-    }
+    if (!canvasRef.current || !currentModelId) return;
 
-    // Directly fetch the model name to ensure it's up-to-date
-    if (currentModelId) {
-      try {
-        const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/models?id=eq.${currentModelId}&select=name`;
-        console.log('Capture thumbnail: Fetching model name from:', apiUrl);
-        
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0 && data[0].name) {
-            console.log('Capture thumbnail: Setting model name to:', data[0].name);
-            setModelName(data[0].name);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching model name during capture:', error);
-        // Continue with capture even if name fetch fails
-      }
-    }
-
-    // Show the modal immediately with loading state
-    setIsCapturingThumbnail(true);
-    setCapturedThumbnail(null);
-    setShowThumbnailPreview(true);
-    setIsThumbnailSaved(false);
-    
     try {
-      // Play camera shutter sound
-      await playSound(Sounds.CAMERA_SHUTTER, 0.8);
-      
-      // Create a copy of canvas DOM element with rendering
-      const captureCanvas = document.createElement('canvas');
-      const captureContext = captureCanvas.getContext('2d');
-      
-      if (!captureContext) {
-        throw new Error('Could not create capture context');
-      }
-      
-      // Match dimensions of original canvas
+      setIsCapturingThumbnail(true);
       const canvas = canvasRef.current;
-      captureCanvas.width = canvas.width;
-      captureCanvas.height = canvas.height;
-      
-      // For debugging purposes
-      console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
-      
-      // Force a render by requesting an animation frame and waiting
-      await new Promise(resolve => {
-        requestAnimationFrame(() => {
-          try {
-            // Draw the existing canvas to our capture canvas
-            captureContext.drawImage(canvas, 0, 0);
-            resolve(true);
-          } catch (e) {
-            console.error('Error during capture:', e);
-            resolve(false);
-          }
-        });
-      });
-      
-      // Create a square crop
-      const size = Math.min(captureCanvas.width, captureCanvas.height);
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = size;
-      tempCanvas.height = size;
-      const ctx = tempCanvas.getContext('2d');
-      
-      if (!ctx) {
-        throw new Error('Could not get 2D context for temporary canvas');
-      }
-      
-      // Draw a clean dark background
-      ctx.fillStyle = '#222222'; // Slightly darker than black for better contrast
-      ctx.fillRect(0, 0, size, size);
-      
-      // Calculate the position to crop from (center of original canvas)
-      const sourceX = (captureCanvas.width - size) / 2;
-      const sourceY = (captureCanvas.height - size) / 2;
-      
-      // Draw the cropped region to the temp canvas
-      ctx.drawImage(
-        captureCanvas,
-        sourceX, sourceY, size, size, // Source rectangle
-        0, 0, size, size // Destination rectangle
-      );
-      
-      // Convert the canvas to a base64 data URL
-      const base64Image = tempCanvas.toDataURL('image/png');
-      
-      // Store the thumbnail to show in modal
-      setCapturedThumbnail(base64Image);
-      
+      const thumbnail = canvas.toDataURL('image/png');
+      setCapturedThumbnail(thumbnail);
+      setShowThumbnailPreview(true);
     } catch (error) {
       console.error('Error capturing thumbnail:', error);
-      toast.error('Failed to capture thumbnail', { 
-        description: error instanceof Error ? error.message : 'Unknown error' 
-      });
-      // Close modal on error
-      setShowThumbnailPreview(false);
+      toast.error('Failed to capture thumbnail');
     } finally {
       setIsCapturingThumbnail(false);
     }
-  }, [modelRef, currentModelId, canvasRef, isLocked, isPlaying]);
+  }, [currentModelId]);
   
-  const [modelName, setModelName] = useState<string>('model');
-  
-  // Effect to fetch model name when currentModelId changes
+  // Effect to fetch model name AND CENTER when currentModelId changes
   useEffect(() => {
+    // Log the ID *outside* the async function to see its value when the effect triggers
+    console.log('[Effect Trigger] currentModelId:', currentModelId);
+
     if (currentModelId) {
-      const fetchModelName = async () => {
-        console.log('Starting to fetch model name for ID:', currentModelId);
+      const fetchModelData = async () => {
+        // Log the ID *inside* the async function right before the query
+        console.log('[Query Start] Fetching data for currentModelId:', currentModelId);
         try {
-          // Use a direct fetch request instead of the Supabase client
-          // This bypasses potential client configuration issues
-          const apiUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/models?id=eq.${currentModelId}&select=name`;
-          console.log('Fetching from URL:', apiUrl);
-          
-          // Use fetch API directly with proper headers
-          const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          // Log auth status right before the query
+          const session = await supabase.auth.getSession();
+          console.log('Auth session state before fetch:', session?.data?.session);
+          const user = session?.data?.session?.user;
+          console.log('User role before fetch:', user?.role);
+
+          // Fetch name and metadata using maybeSingle()
+          const { data, error } = await supabase
+            .from('models')
+            .select('name, metadata')
+            .eq('id', currentModelId)
+            .maybeSingle(); // Use maybeSingle() instead of single()
+
+          if (error) {
+             console.error('Fetch query failed:', error); // Log if the query itself errors
+             throw error;
           }
-          
-          const data = await response.json();
-          console.log('Received data for model name:', data);
-          if (data && data.length > 0 && data[0].name) {
-            console.log('Setting model name to:', data[0].name);
-            setModelName(data[0].name || 'model');
+
+          if (data) {
+            // This block now runs only if data is not null (0 rows case handled)
+            console.log('Received data (name & metadata):', data);
+            setModelName(data.name || 'model');
+
+            // Extract and set model center
+            const centerData = data.metadata?.geometry?.center;
+            if (centerData && typeof centerData.x === 'number' && typeof centerData.y === 'number' && typeof centerData.z === 'number') {
+              console.log('Setting model center to:', centerData);
+              setModelCenter(new Vector3(centerData.x, centerData.y, centerData.z));
+            } else {
+              console.warn('Model center data not found or invalid in metadata, using default [0, 1, 0].');
+              setModelCenter(new Vector3(0, 1, 0));
+            }
           } else {
-            console.log('Model name not found in response:', data);
+            // This block runs if maybeSingle() returned null (0 rows)
+            console.warn(`Model data not found for ID: ${currentModelId}. Using default center.`);
             setModelName('model');
+            setModelCenter(new Vector3(0, 1, 0));
           }
         } catch (err) {
-          console.error('Error fetching model name:', err);
-          // Use a default name instead of failing
+          console.error('Error during model data fetch process:', err);
           setModelName('model');
+          setModelCenter(new Vector3(0, 1, 0));
         }
       };
-      
-      fetchModelName();
+
+      fetchModelData();
+    } else {
+      // Handle case where currentModelId is null/falsy initially
+      console.log('[Effect Trigger] currentModelId is null or falsy. Resetting state.');
+      setModelName('model');
+      setModelCenter(new Vector3(0, 1, 0));
     }
   }, [currentModelId]);
   
@@ -829,33 +672,48 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     toast.success('Thumbnail downloaded');
   }, [capturedThumbnail, modelName, currentModelId]);
 
+  const handleModelLoad = useCallback(() => {
+    setIsModelLoaded(true);
+    setActiveLeftPanelTab('camera');
+    setShowReticle(true);
+    setIsReticleLoading(true);
+    setTimeout(() => setIsReticleLoading(false), 1000);
+  }, []);
+
+  // Update the handleModelError function to remove references to deleted state
+  const handleModelError = useCallback((error: Error) => {
+    console.error('Error loading model:', error);
+    toast.error('Failed to load model');
+    setIsModelLoaded(false);
+  }, []);
+
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
-      {/* Reticle Overlay - Conditionally HIDE via className */}
-      <div className={cn(!showReticle && "hidden")}> 
+      {/* Reticle Overlay - Conditionally render based on showReticle */}
+      {showReticle && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
           <CenterReticle />
-      </div>
+        </div>
+      )}
 
       <Canvas
         className="w-full h-full min-h-screen"
         ref={canvasRef}
         shadows
-        camera={{ position: [5, 5, 5], fov }}
-        onCreated={({ scene }) => { sceneRef.current = scene; }} // Capture scene reference
+        onCreated={({ scene }) => { sceneRef.current = scene; }}
       >
         <Suspense fallback={null}>
           {/* Camera setup */}
           <PerspectiveCamera
             makeDefault
-            position={[5, 5, 5]}
+            position={[0, 1.5, 6]}
             fov={fov}
             ref={cameraRef}
           />
 
           {/* Controls */}
-          {(() => { // Immediately invoked function expression for logging
+          {(() => {
             const controlsEnabled = !isPlaying && !isLocked;
-            console.log(`Viewer Render: Setting OrbitControls enabled=${controlsEnabled} (isPlaying=${isPlaying}, isLocked=${isLocked})`);
             return (
               <OrbitControls
                 ref={controlsRef}
@@ -867,7 +725,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
                   RIGHT: MOUSE.PAN
                 }}
                 enabled={controlsEnabled}
-                target={[0, 1, 0]} // Target the approximate center of the normalized (height=2) model
+                target={modelCenter.toArray()}
               />
             );
           })()}
@@ -875,26 +733,17 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           {/* Floor */}
           <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />
 
-          {/* Model - Now wrapped in a group for user adjustment */} 
-          <group position-y={userVerticalAdjustment}> 
+          {/* Model */}
+          <group position-y={userVerticalAdjustment}>
             {modelUrl ? (
-              <Model url={modelUrl} modelRef={modelRef} />
-            ) : (
-              /*{
-                Fallback cube - Commented out
-                <mesh castShadow receiveShadow ref={modelRef} position={[0, 0, 0]}>
-                  <boxGeometry args={[1, 1, 1]} />
-                  <meshStandardMaterial color="white" />
-                </mesh>
-              }*/
-              null // Render nothing if no modelUrl
-            )}
+              <Model url={modelUrl} modelRef={modelRef} onLoad={handleModelLoad} />
+            ) : null}
           </group>
-          
-          {/* Environment for realistic lighting */}
+
+          {/* Environment */}
           <Environment preset="city" />
 
-          {/* --- Animation Controller (Inside Canvas) --- */}
+          {/* --- Animation Controller --- */}
           <AnimationController 
             instructions={instructions}
             isPlaying={isPlaying}
@@ -909,9 +758,10 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             duration={duration}
             initialState={initialAnimationState}
             triggerReset={cameraResetTrigger}
+            isModelLoaded={isModelLoaded}
           />
 
-          {/* --- Render CameraMover inside Canvas --- */}
+          {/* --- Camera Mover --- */}
           <CameraMover 
             movementDirection={movementDirection}
             cameraRef={cameraRef}
