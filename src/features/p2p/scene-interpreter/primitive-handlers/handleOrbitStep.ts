@@ -73,27 +73,26 @@ export function handleOrbitStep(
 
   // --- Logic for 'up' or 'down' direction (Polar Angle Orbit) ---
   if (direction === 'up' || direction === 'down') {
-    logger.debug(`Orbit (v3): Handling '${direction}' as polar angle change.`);
-    const polarAngleSign = (direction === 'up') ? 1.0 : -1.0; // 'up' increases polar angle (towards zenith/sky for camera-controls)
-    const polarAngleDeltaRad = THREE.MathUtils.degToRad(angleDegrees) * polarAngleSign;
+    logger.debug(`Orbit (v3): Simplified test for '${direction}' - setOrbitPoint & setTarget.`);
     const instructions: ControlInstruction[] = [];
-    // 1. Set the orbit point instantly (good practice)
-    instructions.push({
-      method: 'setOrbitPoint',
-      args: [orbitCenter.x, orbitCenter.y, orbitCenter.z]
-    });
-    // 2. Rotate by polar angle delta
-    instructions.push({
-      method: 'rotate',
-      args: [0, polarAngleDeltaRad, true] // azimuthDelta = 0, polarDelta, enableTransition
-    });
-    logger.debug('Generated polar orbit instructions (v3):', instructions);
-    // For relative rotations, predicting exact nextPosition is hard without controls instance.
-    // Return currentPosition for now, nextTarget is the orbitCenter.
+    if (orbitCenter) {
+      instructions.push({
+        method: 'setOrbitPoint',
+        args: [orbitCenter.x, orbitCenter.y, orbitCenter.z]
+      });
+      instructions.push({
+        method: 'setTarget', 
+        args: [orbitCenter.x, orbitCenter.y, orbitCenter.z, true] // Smoothly target the orbit point
+      });
+    } else {
+      logger.error('Orbit (v3) polar test: orbitCenter is null. Skipping instructions.');
+    }
+
+    logger.debug('Generated simplified polar orbit test instructions (v3):', instructions);
     return {
       instructions,
-      nextPosition: currentPosition.clone(), // Position prediction is difficult here
-      nextTarget: orbitCenter.clone(),
+      nextPosition: currentPosition.clone(),
+      nextTarget: orbitCenter ? orbitCenter.clone() : currentTarget.clone(),
     };
   }
 

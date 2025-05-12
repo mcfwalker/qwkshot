@@ -26,12 +26,13 @@ interface AnimationControllerProps {
   isRecording: boolean;
   playbackSpeed: number;
   cameraRef: React.RefObject<PerspectiveCamera>;
-  controlsRef: React.RefObject<any>;
+  controlsRef: React.RefObject<any>; 
   onProgressUpdate: (progress: number) => void;
   onComplete: () => void;
-  currentProgress: number;
+  currentProgress: number; 
   duration: number;
   initialState: { position: Vector3; target: Vector3 } | null;
+  triggerReset?: number; // ADDED: Prop to trigger a reset to default view
 }
 
 export const AnimationController: React.FC<AnimationControllerProps> = ({
@@ -39,7 +40,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   isPlaying,
   isLocked,
   isRecording,
-  playbackSpeed,
+  playbackSpeed, 
   cameraRef,
   controlsRef,
   onProgressUpdate,
@@ -47,6 +48,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   currentProgress,
   duration,
   initialState,
+  triggerReset, // ADDED: Destructure triggerReset
 }) => {
   const cameraControlsRef = useRef<CameraControls | null>(null);
   const currentInstructionIndexRef = useRef<number>(0);
@@ -54,6 +56,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const runAnimationRef = useRef<() => Promise<void>>(async () => {});
   const cancelAnimationRef = useRef<() => void>(() => {});
   const isInitialStateSavedRef = useRef<boolean>(false);
+  const prevTriggerResetRef = useRef<number | undefined>(triggerReset);
 
   // === Effect 1: Set and Save Initial State ===
   // Runs when controls are ready or initial state prop changes
@@ -83,7 +86,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         } catch (error) {
           console.error('[AC InitEffect] Error setting/saving initial state:', error);
           isInitialStateSavedRef.current = false; // Ensure flag is false on error
-        }
+            }
       };
       setupAndSave(); // Execute the async setup
     } else {
@@ -121,7 +124,7 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
         console.error('[AC Run] Error resetting controls via reset():', resetError);
         onComplete();
         return;
-      }
+    }
       // <<< END RESET >>>
 
       // Reset loop state
@@ -188,12 +191,52 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     }
   }, [isPlaying, isLocked]); // Only depends on play/lock state
 
+  // === Effect 4: Handle Manual Reset Trigger ===
+  useEffect(() => {
+    const controls = cameraControlsRef.current;
+    const shouldTrigger = triggerReset !== undefined && triggerReset !== prevTriggerResetRef.current;
+    
+    if (shouldTrigger && controls) {
+      console.log('[AC ResetEffect] Reset triggered! (Test: setPosition & setTarget)');
+      
+      const defaultPosition = new Vector3(0, 1.5, 6); 
+      const defaultTarget = new Vector3(0, 1, 0);   
+
+      const performReset = async () => {
+        try {
+          console.log('[AC ResetEffect] Stopping controls and setting view via setPosition/setTarget...');
+          controls.stop();
+          // Test 1: setPosition then setTarget
+          await controls.setPosition(defaultPosition.x, defaultPosition.y, defaultPosition.z, false); // false for instant
+          await controls.setTarget(defaultTarget.x, defaultTarget.y, defaultTarget.z, false);   // false for instant
+          
+          // Test 2 (Alternative - comment above and uncomment below if Test 1 fails to center reticle):
+          // await controls.setPosition(defaultPosition.x, defaultPosition.y, defaultPosition.z, false);
+          // controls.setOrbitPoint(defaultTarget.x, defaultTarget.y, defaultTarget.z); 
+          // await controls.setTarget(defaultTarget.x, defaultTarget.y, defaultTarget.z, false); // Still might need setTarget after orbit point
+
+          // controls.saveState(); // Still commented out for this test
+          console.log('[AC ResetEffect] Camera view set. Reticle should be at Y=1.');
+          console.log('[AC ResetEffect] Controls Position after set:', controls.getPosition(new Vector3()).toArray());
+          console.log('[AC ResetEffect] Controls Target after set (focal point):', controls.getTarget(new Vector3()).toArray());
+
+        } catch (error) {
+          console.error('[AC ResetEffect] Error during camera reset:', error);
+        }
+      };
+
+      performReset();
+    }
+    prevTriggerResetRef.current = triggerReset;
+
+  }, [triggerReset, cameraControlsRef.current]);
+
   // useFrame only needed for controls.update()
   useFrame((state, delta) => {
     // Update CameraControls
     if (cameraControlsRef.current) {
       cameraControlsRef.current.update(delta);
-    }
+        }
   });
 
   // Experiment: Use a fraction of duration for smoothTime and factor in playbackSpeed

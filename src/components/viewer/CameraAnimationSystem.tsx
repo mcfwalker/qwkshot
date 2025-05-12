@@ -410,7 +410,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
         return;
     }
     // <<< END CAPTURE >>>
-
+    
     try {
       // Get the model ID from the URL
       const pathParts = window.location.pathname.split('/');
@@ -528,7 +528,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       const validInstructions: ControlInstruction[] = receivedInstructions.map((instr, index) => {
         if (!instr || typeof instr !== 'object' || typeof instr.method !== 'string' || !Array.isArray(instr.args)) {
           throw new Error(`Instruction ${index} has invalid structure.`);
-        }
+          }
         // NOTE: We are NOT deserializing Vector3 here anymore. 
         // AnimationController will handle basic {x,y,z} object deserialization within args.
         return instr as ControlInstruction;

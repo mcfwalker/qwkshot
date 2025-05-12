@@ -215,8 +215,8 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [duration, setDuration] = useState(10); // Default/initial duration
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [resetCounter, setResetCounter] = useState(0); // State to trigger child reset
-  // Add state to store the initial camera state for the current animation
   const [initialAnimationState, setInitialAnimationState] = useState<{ position: Vector3; target: Vector3 } | null>(null);
+  const [cameraResetTrigger, setCameraResetTrigger] = useState<number>(0); // NEW state for triggering AnimationController reset
   // --- End Lifted State ---
 
   // ADD state for the current model ID within Viewer
@@ -300,23 +300,10 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       toast.error('Cannot reset camera while locked or playing animation.');
       return;
     }
-    if (cameraRef.current && controlsRef.current) {
-      // Define hardcoded initial state
-      // Adjust target to be approx center of normalized model (Y=1)
-      // Adjust position to be relative to new target (e.g., higher and back)
-      const initialPosition = new Vector3(0, 2, 5); // Example: Above and in front
-      const initialTarget = new Vector3(0, 1, 0); // Target center of normalized model
-
-      cameraRef.current.position.copy(initialPosition);
-      controlsRef.current.target.copy(initialTarget);
-      // controlsRef.current.update(); // Let R3F handle update
-      setMovementDirection({ up: false, down: false, left: false, right: false });
-      toast.info('Camera position reset');
-    } else {
-      toast.error('Camera references not available for reset.');
-    }
-  }, [isLocked, isPlaying]); // Removed defaultCameraState dependency
-  // --- END Camera Movement Handlers ---
+    console.log('[Viewer] handleCameraReset: Triggering camera reset via counter.');
+    setCameraResetTrigger(prev => prev + 1); // Increment counter to trigger effect in AnimationController
+    toast.info('Camera reset requested.');
+  }, [isLocked, isPlaying]);
 
   // --- Keyboard Controls Effect (Updated Dependencies) ---
   useEffect(() => {
@@ -921,6 +908,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             isRecording={isRecording}
             duration={duration}
             initialState={initialAnimationState}
+            triggerReset={cameraResetTrigger}
           />
 
           {/* --- Render CameraMover inside Canvas --- */}
