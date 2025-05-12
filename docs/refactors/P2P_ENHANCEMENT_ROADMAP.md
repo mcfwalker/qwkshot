@@ -22,6 +22,8 @@ This document outlines the proposed sequence for implementing major enhancements
 
 5.  **Pattern Layer Implementation**
     *   **Task:** Implement the Pattern Meta Layer as defined in `PATTERN_META_LAYER_REQUIREMENTS.md`. Includes Pattern KB, Assistant function calling (`compose_pattern`), backend Composer module, and API route integration. Leverages sequential and parallel execution capabilities.
+    *   **Assistant Interaction Note for `compose_pattern` (Stashed from System Instructions V.2025-05-11-1837):**
+        *   "When the user's prompt implies one of those **high-level patterns** (e.g. "zig-zag", "fly-by", "spiral", "reveal", "arc move", "cut to view"), you MUST call the function: `compose_pattern({ pattern: <patternName>, ...parameters })` and then ingest the returned primitives. Do **not** inline pattern expansions manually."
     *   **Goal:** Enable the system to handle complex, named motion sequences (e.g., "zigzag", "fly_by", "spiral_down") by composing primitives.
 
 6.  **Points of Interest (User-Defined Targets)**

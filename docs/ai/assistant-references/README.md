@@ -32,6 +32,7 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 ## Current Instruction Version
 *(Latest file represents the instructions configured in the OpenAI Assistant)*
 
+*   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-05-11-1900.txt` - Removed compose_pattern section for current phase; kept orbit up/down guidance.
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-05-11-1837.txt` - Added guidance for 'orbit up/down'.
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-29-0658.txt` - 
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1737.txt` - Refined Step 3 to emphasize extracting ALL required parameters.
