@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, Scene, Box3Helper, Box3 } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, Scene } from 'three';
 import { CameraAnimationSystem } from './CameraAnimationSystem';
 import Floor, { FloorType } from './Floor';
 import { SceneControls } from './SceneControls';
@@ -91,15 +91,13 @@ function CameraMover({
   const moveSpeed = 5.0; // Adjust speed as needed (units per second)
 
   // Vectors for calculation (reused to avoid allocations)
-  const cameraRight = useMemo(() => new Vector3(), []);
-  const cameraUp = useMemo(() => new Vector3(), []);
   const moveVector = useMemo(() => new Vector3(), []);
 
   // Define World Axes
   const worldAxisX = useMemo(() => new Vector3(1, 0, 0), []);
   const worldAxisY = useMemo(() => new Vector3(0, 1, 0), []);
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (isLocked || isPlaying) return; // Don't move if locked or animating
     moveVector.set(0, 0, 0); // Reset moveVector for this frame
 
@@ -137,7 +135,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
   const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>(modelUrl ? 'camera' : 'model');
-  const [floorType, setFloorType] = useState<FloorType>('grid');
+  const [floorType] = useState<FloorType>('grid');
   const [floorTexture, setFloorTexture] = useState<string | null>(null);
   const [gridVisible, setGridVisible] = useState<boolean>(true);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
@@ -171,7 +169,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const { isLocked, setModelId, setLock } = useViewerStore();
   const pathname = usePathname();
 
-  const [boundingBoxHelper, setBoundingBoxHelper] = useState<Box3Helper | null>(null);
   const sceneRef = useRef<Scene | null>(null);
 
   // State for tracking active camera movement directions
@@ -324,15 +321,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const performStageReset = useCallback(() => {
     console.log("PERFORMING STAGE RESET");
 
-    // Use a functional update to ensure we have the latest helper state
-    setBoundingBoxHelper(currentHelper => {
-      if (currentHelper && sceneRef.current) {
-        console.log("Reset: Explicitly removing bounding box helper (functional update).");
-        sceneRef.current.remove(currentHelper);
-      }
-      return null; // Always set state to null after attempting removal
-    });
-    
     // 1. Clear Model (Trigger callback passed from parent/page)
     onModelSelect(''); // Pass empty string instead of null
     setModelId(null); // Clear model ID in store
@@ -680,13 +668,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     setTimeout(() => setIsReticleLoading(false), 1000);
   }, []);
 
-  // Update the handleModelError function to remove references to deleted state
-  const handleModelError = useCallback((error: Error) => {
-    console.error('Error loading model:', error);
-    toast.error('Failed to load model');
-    setIsModelLoaded(false);
-  }, []);
-
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
       {/* Reticle Overlay - Conditionally render based on showReticle */}
@@ -749,16 +730,12 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             isPlaying={isPlaying}
             isLocked={isLocked}
             playbackSpeed={playbackSpeed}
-            cameraRef={cameraRef}
-            controlsRef={controlsRef}
             onProgressUpdate={setProgress}
             onComplete={() => { setIsPlaying(false); setProgress(0); }}
-            currentProgress={progress}
-            isRecording={isRecording}
             duration={duration}
             initialState={initialAnimationState}
-            triggerReset={cameraResetTrigger}
             isModelLoaded={isModelLoaded}
+            triggerReset={cameraResetTrigger}
           />
 
           {/* --- Camera Mover --- */}

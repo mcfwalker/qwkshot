@@ -1,17 +1,13 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Vector3, PerspectiveCamera } from 'three';
+import { Vector3 } from 'three';
 // We might need a more specific type for OrbitControls ref if available
 // import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'; 
 import { CameraControls } from '@react-three/drei';
 // import { CameraCommand } from '@/types/p2p/scene-interpreter'; // OLD
 import { ControlInstruction } from '@/types/p2p/camera-controls'; // NEW
-
-// Import easing functions (assuming a shared utility path)
-// Adjust path if necessary
-import { easingFunctions, EasingFunctionName, DEFAULT_EASING } from '@/lib/easing'; 
 
 // Remove placeholder easing functions
 // const easingFunctions: Record<string, (t: number) => number> = { ... };
@@ -23,13 +19,13 @@ interface AnimationControllerProps {
   instructions: ControlInstruction[]; // NEW
   isPlaying: boolean;
   isLocked: boolean;
-  isRecording: boolean;
+  // isRecording: boolean; // Removed unused prop
   playbackSpeed: number;
-  cameraRef: React.RefObject<PerspectiveCamera>;
-  controlsRef: React.RefObject<any>; 
+  // cameraRef: React.RefObject<PerspectiveCamera>; // Removed unused prop
+  // controlsRef: React.RefObject<any>; // Removed unused prop
   onProgressUpdate: (progress: number) => void;
   onComplete: () => void;
-  currentProgress: number; 
+  // currentProgress: number; // Removed unused prop
   duration: number;
   initialState: { position: Vector3; target: Vector3 } | null;
   triggerReset?: number; // ADDED: Prop to trigger a reset to default view
@@ -40,13 +36,13 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   instructions, // Renamed from commands
   isPlaying,
   isLocked,
-  isRecording,
+  // isRecording, // Removed from destructuring
   playbackSpeed, 
-  cameraRef,
-  controlsRef,
+  // cameraRef, // Removed from destructuring
+  // controlsRef, // Removed from destructuring
   onProgressUpdate,
   onComplete,
-  currentProgress,
+  // currentProgress, // Removed from destructuring
   duration,
   initialState,
   triggerReset, // ADDED: Destructure triggerReset
@@ -71,7 +67,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
     isInitialStateSavedRef.current = false;
     
     if (controls && initialState) {
-      let didSave = false; // Local flag for async operation
       const setupAndSave = async () => {
         console.log('[AC InitEffect] Controls and initialState exist. Setting and saving...');
         try {
@@ -84,12 +79,11 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
           controls.setOrbitPoint(initialState.target.x, initialState.target.y, initialState.target.z);
           controls.saveState(); // Save this state for reset()
           isInitialStateSavedRef.current = true; // Mark as saved
-          didSave = true;
           console.log('[AC InitEffect] Initial state SET and SAVED.');
         } catch (error) {
           console.error('[AC InitEffect] Error setting/saving initial state:', error);
           isInitialStateSavedRef.current = false; // Ensure flag is false on error
-            }
+        }
       };
       setupAndSave(); // Execute the async setup
     } else {
@@ -262,11 +256,11 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   }, [isModelLoaded, cameraControlsRef.current]); // Depend on load state and controls ref value
 
   // useFrame only needed for controls.update()
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     // Update CameraControls
     if (cameraControlsRef.current) {
       cameraControlsRef.current.update(delta);
-        }
+    }
   });
 
   // Experiment: Use a fraction of duration for smoothTime and factor in playbackSpeed
