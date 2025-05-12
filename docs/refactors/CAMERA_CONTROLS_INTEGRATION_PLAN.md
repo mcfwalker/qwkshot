@@ -142,6 +142,15 @@ interface ControlInstruction {
 *   [ ] Consider advanced `camera-controls` features (boundaries, fitToBox, etc.).
 *   [ ] Address UI polish (fading grid, etc.).
 
+### Phase 5: Post-MVP Refinements & Deferred Items (NEW)
+*   **Goal:** Address items deferred during earlier phases and further refine the camera control experience.
+*   **Tasks:**
+    *   [ ] **Precise Duration Control:** Investigate methods to achieve more exact animation durations, or finalize UX for qualitative duration inputs (e.g., "fast", "slow") if precise timing remains elusive with `camera-controls` transitions.
+    *   [ ] **Enhanced Progress Reporting:** Implement more granular progress updates *during* camera-controls transitions, if feasible (e.g., by listening to library events or estimating progress based on state changes).
+    *   [ ] **Advanced Easing Control:** Explore if/how `camera-controls` allows for custom easing profiles or further tuning beyond the default SmoothDamp behavior influenced by `smoothTime`.
+    *   [ ] **Initial Camera Focus on Model Load:** Ensure the camera correctly frames the model (respecting normalization and adjusted center) when a model is first loaded and `<CameraControls />` initializes.
+    *   [ ] **"Reset Camera" Button Functionality:** Update the existing "Reset Camera" button in the UI to work correctly with the `cameraControlsRef.current` API (e.g., using its `reset()` method to revert to its saved default state, or using `setLookAt()` to a predefined default view).
+
 ## 6. Testing Strategy
 *   **Phase 1:** Verify refactored Dolly works smoothly end-to-end. No regressions for *other* (un-refactored) primitives yet.
 *   **Phase 2:** Test *each* primitive thoroughly immediately after its handler is refactored.

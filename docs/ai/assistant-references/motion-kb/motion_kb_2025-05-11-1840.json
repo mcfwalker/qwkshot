@@ -1,0 +1,542 @@
+[
+  {
+    "name": "static",
+    "description": "Holds the camera at its current position and target for a specified duration.",
+    "parameters": [
+      {
+        "name": "duration_ratio",
+        "type": "number",
+        "description": "Proportion of total animation time (0.0-1.0) to hold static. Interpreter calculates actual seconds.",
+        "required": true 
+      }
+    ],
+    "examples": [
+      "Hold position",
+      "Pause briefly",
+      "Stay still for a moment"
+    ]
+  },
+  {
+    "name": "zoom",
+    "description": "Moves the camera viewpoint closer to (zoom in) or further from (zoom out) a target point along the camera's line of sight, typically by changing focal length or moving the camera position towards/away from the target.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["in", "out"],
+        "description": "Whether to zoom 'in' (closer) or 'out' (further).",
+        "required": true
+      },
+      {
+        "name": "factor_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative zoom intensity. Required if factor_override is not provided. Interpreter maps this to a context-aware numeric factor.",
+        "required": false 
+      },
+      {
+        "name": "factor_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric zoom factor (e.g., 0.5 for halfway, 2.0 for double distance). If provided, overrides factor_descriptor. Interpreter uses this value directly.",
+        "required": false
+      },
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Reference point for zooming (e.g., 'object_center', 'current_target', 'object_top_center', 'feature_A'). Default: 'current_target'. Interpreter resolves.",
+        "required": false,
+        "default": "current_target"
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast", "very_fast"],
+        "description": "Qualitative speed hint for easing/duration.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Zoom in close",
+      "Slowly zoom out halfway",
+      "Push in fast towards the object center",
+      "Get closer to the detail"
+    ]
+  },
+  {
+    "name": "orbit",
+    "description": "Rotates the camera position around a central axis or target point while generally keeping the target point in view. Direction 'up'/'down' adjusts polar angle.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["clockwise", "counter-clockwise", "left", "right", "up", "down"],
+        "description": "Direction of rotation. 'left'/'right'/'clockwise'/'ccw' are typically azimuthal. 'up'/'down' typically adjust polar angle (camera aims higher/lower relative to orbit plane).",
+        "required": true
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Total angle in degrees to rotate.",
+        "required": true
+      },
+      {
+        "name": "axis",
+        "type": "string",
+        "enum": ["x", "y", "z", "camera_up", "custom"],
+        "description": "Primary axis of rotation relative to the scene world ('x', 'y', 'z') or camera ('camera_up'). Default: 'y' (world vertical). Interpreter handles axis definition.",
+        "required": false,
+        "default": "y"
+      },
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Reference point to orbit around (e.g., 'object_center', 'object_bottom_center', 'feature_B'). Default: 'object_center'. Interpreter resolves.",
+        "required": false,
+        "default": "object_center"
+      },
+       {
+        "name": "radius_factor",
+        "type": "number",
+        "description": "Optional multiplier for the orbit radius during the motion (e.g., 1.0 = constant radius, 0.5 = move halfway closer, 2.0 = double distance while orbiting). Default 1.0",
+        "required": false,
+        "default": 1.0
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Orbit 90 degrees clockwise around the model",
+      "Slowly circle the object completely",
+      "Pan around the model to the left 180 degrees",
+      "Swing around the target while moving away",
+      "Orbit up 30 degrees"
+    ]
+  },
+  {
+    "name": "pan",
+    "description": "Rotates the camera's view horizontally (left or right) around the camera's own vertical axis, without changing the camera's position. Like turning your head left/right.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["left", "right"],
+        "description": "Direction to turn the camera.",
+        "required": true
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Angle in degrees to rotate the view.",
+        "required": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Pan left 45 degrees",
+      "Look to the right",
+      "Slowly turn the view leftwards"
+    ]
+  },
+  {
+    "name": "tilt",
+    "description": "Rotates the camera's view vertically (up or down) around the camera's own horizontal axis, without changing the camera's position. Like nodding your head up/down.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["up", "down"],
+        "description": "Direction to tilt the camera.",
+        "required": true
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Angle in degrees to rotate the view.",
+        "required": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Tilt up 20 degrees",
+      "Look down slowly",
+      "Angle the camera upwards slightly",
+      "Look up 30 degrees"
+    ]
+  },
+  {
+    "name": "dolly",
+    "description": "Moves the camera's physical position forward or backward along its current line-of-sight vector, without changing the camera's orientation (aim direction). Like walking forwards/backwards.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["forward", "backward", "in", "out"],
+        "description": "Direction to move the camera's position. 'in'/'out' can be aliases.",
+        "required": true
+      },
+      {
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
+      },
+      {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_front_center', 'feature_X') specifying the destination plane/level for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast", "very_fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
+      }
+    ],
+    "examples": [
+      "Dolly forward 5 units",
+      "Move the camera backward slowly",
+      "Push the camera in",
+      "Pull back 10 units",
+      "Dolly in close",
+      "Move back a bit",
+      "Go very close",
+      "Pull back far"
+    ]
+  },
+  {
+    "name": "truck",
+    "description": "Moves the camera's physical position horizontally (left or right) perpendicular to its current line-of-sight vector, without changing the camera's orientation. Like side-stepping.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["left", "right"],
+        "description": "Direction to move the camera sideways.",
+        "required": true
+      },
+      {
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
+      },
+      {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_left_center') specifying the destination plane for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
+      }
+    ],
+    "examples": [
+      "Truck left 3 units",
+      "Slide the camera to the right",
+      "Move sideways left slowly",
+      "Truck right a bit",
+      "Move left slightly",
+      "Slide significantly to the right"
+    ]
+  },
+  {
+    "name": "pedestal",
+    "description": "Moves the camera's physical position vertically (up or down) perpendicular to its current line-of-sight vector, without changing the camera's orientation. Like raising/lowering on a tripod.",
+    "parameters": [
+      {
+        "name": "direction",
+        "type": "string",
+        "enum": ["up", "down"],
+        "description": "Direction to move the camera vertically.",
+        "required": true
+      },
+      {
+        "name": "distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance. Required if distance_override AND destination_target are not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance in scene units. If provided, overrides distance_descriptor. Note: destination_target overrides both.",
+        "required": false
+      },
+      {
+        "name": "destination_target",
+        "type": "string",
+        "description": "Optional: A target name (e.g., 'object_top_center') specifying the destination level for the movement. If provided, overrides 'distance'. Interpreter calculates required distance.",
+        "required": false
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing function type hint.",
+        "required": false,
+        "default": "easeInOut"
+      },
+      {
+        "name": "target_distance_descriptor",
+        "type": "string",
+        "enum": ["tiny", "small", "medium", "large", "huge"],
+        "description": "Canonical descriptor representing the desired qualitative distance to the target. Required if target_distance_override is not provided. Interpreter maps this to a context-aware numeric distance.",
+        "required": false
+      },
+      {
+        "name": "target_distance_override",
+        "type": "number",
+        "description": "Optional: Explicit numeric distance to the target. If provided, overrides target_distance_descriptor. Interpreter determines units.",
+        "required": false
+      }
+    ],
+    "examples": [
+      "Pedestal up 2 units",
+      "Lower the camera viewpoint",
+      "Raise camera height quickly",
+      "Move up a bit",
+      "Pedestal down slightly",
+      "Go up significantly"
+    ]
+  },
+  {
+    "name": "rotate",
+    "description": "Rotate the camera around a specified axis (yaw, pitch, or roll).",
+    "parameters": [
+      {
+        "name": "axis",
+        "type": "string",
+        "enum": ["yaw", "pitch", "roll"],
+        "description": "Which axis to rotate around. Yaw = pan, pitch = tilt, roll = bank.",
+        "required": false,
+        "default": "yaw"
+      },
+      {
+        "name": "angle",
+        "type": "number",
+        "description": "Degrees to rotate (+ is right/up/clockwise by right-hand rule).",
+        "required": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["slow", "medium", "fast", "very_fast"],
+        "description": "Qualitative speed hint.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut", "easeInQuad", "easeOutQuad", "easeInOutQuad"],
+        "description": "Easing function to apply.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Roll left 30°",
+      "Rotate yaw right 45 degrees",
+      "Pitch down slightly"
+    ]
+  },
+  {
+    "name": "move_to",
+    "description": "Move (or cut) the camera to a named point of interest in the scene.",
+    "parameters": [
+      {
+        "name": "target",
+        "type": "string",
+        "description": "ID of the saved point of interest (e.g. 'war_hammer', 'object_top_center').",
+        "required": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["instant", "slow", "medium", "fast"],
+        "description": "'instant' = cut, others = smooth move.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing for non-instant moves.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Move to war_hammer instantly",
+      "Go to object_left_hand smoothly"
+    ]
+  },
+  {
+    "name": "focus_on",
+    "description": "Adjusts the camera's target point or orientation to center on a specified feature or object, potentially with a slight camera position adjustment for better framing. Does not usually involve large positional movement.",
+    "parameters": [
+      {
+        "name": "target",
+        "type": "string",
+        "description": "The new point of interest to look at (e.g., 'object_center', 'object_right_center', 'feature_C', 'specific_point'). Interpreter resolves.",
+        "required": true
+      },
+      {
+        "name": "adjust_framing",
+        "type": "boolean",
+        "description": "Hint to the Interpreter to make minor position adjustments (dolly/truck/pedestal) to achieve good composition. Default: true.",
+        "required": false,
+        "default": true
+      },
+      {
+        "name": "speed",
+        "type": "string",
+        "enum": ["instant", "slow", "medium", "fast"],
+        "description": "How quickly to shift focus. 'instant' implies a cut.",
+        "required": false,
+        "default": "medium"
+      },
+      {
+        "name": "easing",
+        "type": "string",
+        "enum": ["linear", "easeIn", "easeOut", "easeInOut"],
+        "description": "Easing for non-instant focus shifts.",
+        "required": false,
+        "default": "easeInOut"
+      }
+    ],
+    "examples": [
+      "Focus on the engine",
+      "Look at feature C",
+      "Center the view on the object",
+      "Shift attention to the wheel"
+    ]
+  }
+] 

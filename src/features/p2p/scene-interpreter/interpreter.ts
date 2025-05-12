@@ -239,20 +239,10 @@ export class SceneInterpreterImpl implements SceneInterpreter {
           break;
         }
         case 'orbit': {
-          this.logger.warn(`Step type '${step.type}' handler not yet refactored for ControlInstruction. Skipping command generation for this step.`);
-          // We need to call the original handler to get the predicted next state for subsequent steps,
-          // but we will ignore the CameraCommand[] it produces.
-          try {
-            let genericResult: { nextPosition: Vector3, nextTarget: Vector3 }; // Define a generic type for the part we need
-            genericResult = handleOrbitStep(step, currentPosition, currentTarget, stepDuration, sceneAnalysis, envAnalysis, this.logger);
-            nextPositionStep = genericResult.nextPosition;
-            nextTargetStep = genericResult.nextTarget;
-          } catch (e) {
-            this.logger.error(`Error calling unrefactored handler for '${step.type}': ${e instanceof Error ? e.message : e}. Keeping previous state.`);
-            nextPositionStep = currentPosition.clone();
-            nextTargetStep = currentTarget.clone();
-          }
-          stepInstructions = []; // No instructions generated for unrefactored steps
+          const result = handleOrbitStep(step, currentPosition, currentTarget, stepDuration, sceneAnalysis, envAnalysis, this.logger);
+          stepInstructions = result.instructions;
+          nextPositionStep = result.nextPosition;
+          nextTargetStep = result.nextTarget;
           break;
         }
         case 'pan': {

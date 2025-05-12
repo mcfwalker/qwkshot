@@ -135,8 +135,9 @@ export async function POST(request: Request) {
     let environmentalAnalysis: EnvironmentalAnalysis;
     let sceneAnalysis: SceneAnalysis | null = null;
     let currentCameraState: { position: Vector3; target: Vector3; fov: number };
+    let savedUserVerticalAdjustment = 0; // Initialize default
 
-    // --- Fetch & Analyze Context Data (Keep as is) --- 
+    // --- Fetch & Analyze Context Data (Keep as is, but note where userVerticalAdjustment is fetched) --- 
     logger.info(`Fetching context data for modelId: ${modelId}`);
     try { 
         modelMetadata = await metadataManager.getModelMetadata(modelId);
@@ -152,6 +153,10 @@ export async function POST(request: Request) {
             throw new Error('Stored environmental metadata is incomplete (missing camera position/target).');
         }
         logger.info('Environmental Metadata Fetched and Validated Successfully');
+
+        // <<< CAPTURE savedUserVerticalAdjustment >>>
+        savedUserVerticalAdjustment = fetchedEnvironmentalMetadata.userVerticalAdjustment ?? 0;
+        logger.info(`Using savedUserVerticalAdjustment from EnvironmentalMetadata: ${savedUserVerticalAdjustment}`);
 
         // --- DESERIALIZATION STEP (Keep as is) --- 
         logger.info('Attempting to deserialize stored SceneAnalysis...');
@@ -266,14 +271,17 @@ export async function POST(request: Request) {
         ); 
         if (!environmentalAnalysis) throw new Error(`Environmental analysis failed for id: ${modelId}`);
         
-        // Check if userVerticalAdjustment is present after analysis
-        if (environmentalAnalysis.userVerticalAdjustment === undefined) {
-             logger.warn('EnvironmentalAnalysis missing userVerticalAdjustment after analyzeEnvironment. Defaulting to 0.');
-             // Optionally try fetching from metadata again, or just default:
-             environmentalAnalysis.userVerticalAdjustment = fetchedEnvironmentalMetadata?.userVerticalAdjustment ?? 0;
-        }
+        // <<< MANUALLY ADD userVerticalAdjustment to the analysis object >>>
+        environmentalAnalysis.userVerticalAdjustment = savedUserVerticalAdjustment;
+        logger.debug('Manually added userVerticalAdjustment to EnvironmentalAnalysis object:', environmentalAnalysis.userVerticalAdjustment);
         
-        logger.debug('Successfully fetched and analyzed context data');
+        // Check if userVerticalAdjustment was *previously* missing from analyzeEnvironment output (for logging continuity)
+        // This check is just for observation, the value is now set from metadata.
+        // if (environmentalAnalysis.userVerticalAdjustment === undefined) { // This will now be false
+        //      logger.warn('EnvironmentalAnalysis previously missed userVerticalAdjustment (now set from metadata).');
+        // }
+        
+        logger.debug('Successfully fetched and analyzed context data, including userVerticalAdjustment.');
 
     } catch (contextError: any) { // Catch for context fetching/analysis errors
         logger.error('Error fetching/analyzing context data:', contextError);

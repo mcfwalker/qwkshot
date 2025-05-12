@@ -32,7 +32,7 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 ## Current Instruction Version
 *(Latest file represents the instructions configured in the OpenAI Assistant)*
 
-*   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-29-1322.txt` - Failed implementation of the motion type roll.
+*   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-05-11-1837.txt` - Added guidance for 'orbit up/down'.
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-29-0658.txt` - 
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1737.txt` - Refined Step 3 to emphasize extracting ALL required parameters.
 *   `system-instructions/SYSTEM_INSTRUCTIONS_REF_2025-04-28-1730.txt` - Base ...1429 + new primitives, pattern layer, rule refinements (no-op, focus_on, roll, override).
@@ -46,6 +46,7 @@ This directory contains reference files used by the OpenAI Assistant for motion 
 ## Current Motion KB Version
 *(Latest file represents the KB uploaded for Assistant Retrieval)*
 
+*   `motion-kb/motion_kb_2025-05-11-1840.json` - Added 'up'/'down' to orbit.direction, updated description.
 *   `motion-kb/motion_kb_2025-04-28-1805.json` - Added `rotate`, `move_to`, `focus_on`; removed `fly_by`, `fly_away`; aligned `rotate` params.
 *   `motion-kb/motion_kb_4-28-2025-1224.json` - (Older version, check content if needed)
 
