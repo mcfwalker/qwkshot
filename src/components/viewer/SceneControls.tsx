@@ -1,19 +1,20 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // CardTitle no longer used directly here in this way
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { FloorType } from './Floor';
-import FloorControls from './FloorControls';
+// import { ScrollArea } from '@/components/ui/scroll-area'; // Not used
+// import { FloorType } from './Floor'; // Not used
+// import FloorControls from './FloorControls'; // Not used
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
-import { Switch } from "@/components/ui/switch";
+// import { Switch } from "@/components/ui/switch"; // Not used
 import { Button } from "@/components/ui/button";
-import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react";
+// import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react"; // Not used
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AppPanel } from "@/components/ui/AppPanel"; // IMPORT AppPanel
 
 interface SceneControlsProps {
   gridVisible: boolean;
@@ -45,10 +46,12 @@ export function SceneControlsComponent({
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
-      <CardTitle className="text-sm font-medium text-[#C2F751] uppercase">SCENE</CardTitle>
+    <AppPanel className="w-[200px]"> {/* USE AppPanel with fixed width */}
+      {/* Replaced CardTitle with a simple div for now, styling can be adjusted */}
+      <div className="text-sm font-medium text-[#E2E2E5] uppercase self-start">SCENE</div>
       
-      <div className="space-y-6"> 
+      {/* Content remains largely the same, ensure w-full for inner elements if needed */}
+      <div className="space-y-6 w-full"> {/* Added w-full here to ensure content stretches */}
         <div className="space-y-5"> 
           <div className="flex items-center justify-between">
             <Label className="text-sm font-medium text-muted-foreground">Model Offset</Label>
@@ -77,13 +80,9 @@ export function SceneControlsComponent({
 
         <div>
            <Button 
-             variant="secondary"
+             variant="primary"
              className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535]",
-                "disabled:opacity-70 disabled:pointer-events-none",
-                "text-sm text-foreground/80"
+                "w-full"
              )}
              onClick={texture ? onRemoveTexture : onAddTextureClick}
              disabled={isLocked}
@@ -92,7 +91,7 @@ export function SceneControlsComponent({
            </Button>
         </div>
       </div>
-    </Card>
+    </AppPanel>
   );
 }
 

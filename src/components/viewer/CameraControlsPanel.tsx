@@ -9,6 +9,7 @@ import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Mouse } from '
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
+import { AppPanel } from "@/components/ui/AppPanel";
 
 export interface CameraControlsPanelProps {
   fov: number;
@@ -52,7 +53,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
+    <AppPanel className="w-[200px]">
       
       {/* Instructions Section (Moved Up) */}
       <div className="flex w-[168px] p-4 flex-col justify-center items-center gap-4 rounded-lg bg-[#121212]">
@@ -95,13 +96,9 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
 
       {/* Reset Button Section (Remains at bottom) */}
       <Button 
-        variant="secondary" 
+        variant="primary"
         className={cn(
-          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
-          "rounded-[10px] border border-[#353535] bg-[#121212]",
-          "hover:bg-[#353535]",
-          "disabled:opacity-70 disabled:pointer-events-none",
-          "text-sm text-foreground/80"
+          "w-full"
         )}
         disabled={isLocked}
         onClick={handleReset}
@@ -112,7 +109,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
       {/* Placeholder for Coordinate Display */}
       {/* <div className="text-xs text-muted-foreground text-center">Coordinates Placeholder</div> */}
 
-    </Card>
+    </AppPanel>
   );
 }
 

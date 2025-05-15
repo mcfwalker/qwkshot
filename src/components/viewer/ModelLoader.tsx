@@ -22,6 +22,7 @@ import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analy
 import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
 import { normalizeModelAction } from '@/app/actions/normalization';
+import { AppPanel } from "@/components/ui/AppPanel";
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -338,74 +339,67 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   }, [loading, isAnalyzed, currentFile]);
 
   return (
-    <>
-      <div className="relative">
-        <div
-          {...getRootProps()}
-          className={cn(
-            "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[10px] border border-dashed border-[#444444] text-center cursor-pointer",
-            "transition-colors",
-            "hover:border-[#C2F751]",
-            isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
-            error && 'border-destructive',
-            isInitializing && 'opacity-60 cursor-not-allowed'
-          )}
-        >
-          <input {...getInputProps()} />
-          
-          {isInitializing ? (
-            <div className="text-center">
-              <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
-              <p className="text-sm font-medium">Initializing system...</p>
-              <p className="text-xs text-muted-foreground italic font-light">
-                Please wait a moment
-              </p>
+    <AppPanel className="w-[200px] h-full items-center justify-center text-center">
+      <div
+        {...getRootProps()}
+        className={cn(
+          "relative",
+          "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[10px] border border-dashed border-[#444444] text-center cursor-pointer",
+          "transition-colors",
+          "hover:border-[#C2F751]",
+          isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
+          error && 'border-destructive',
+          isInitializing && 'opacity-60 cursor-not-allowed'
+        )}
+      >
+        <input {...getInputProps()} />
+        
+        {isInitializing ? (
+          <div className="text-center">
+            <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
+            <p className="text-sm font-medium">Initializing system...</p>
+            <p className="text-xs text-muted-foreground italic font-light">
+              Please wait a moment
+            </p>
+          </div>
+        ) : (
+          <>
+            <Upload className="h-5 w-5 mb-1 text-muted-foreground" />
+            
+            <div className="text-center space-y-0.5">
+              <p className="text-sm font-medium text-foreground">Drop your model here</p>
+              <p className="text-xs text-muted-foreground font-light">Supports .glb and .gltf</p>
+              {error && (
+                <div className="space-y-2">
+                  <p className="text-xs text-destructive font-medium">
+                    {error}
+                  </p>
+                  {currentFile && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRetry();
+                      }}
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <>
-              <Upload className="h-5 w-5 mb-1 text-muted-foreground" />
-              
-              <div className="text-center space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Drop your model here</p>
-                <p className="text-xs text-muted-foreground font-light">Supports .glb and .gltf</p>
-                {error && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-destructive font-medium">
-                      {error}
-                    </p>
-                    {currentFile && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRetry();
-                        }}
-                        className="w-full"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Retry
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Completely hide loading overlay when save dialog is shown */}
+          </>
+        )}
         {loading && !showSaveDialog && <LoadingOverlay message={loadingMessage} />}
       </div>
 
       <Button
-        variant="secondary"
+        variant="primary"
         className={cn(
-          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch",
-          "rounded-[10px] border border-[#353535] bg-[#121212]",
-          "hover:bg-[#353535]",
-          "disabled:opacity-70 disabled:pointer-events-none",
-          "text-sm text-foreground/80"
+          "self-stretch"
         )}
         size="default"
         onClick={() => setShowLibraryModal(true)}
@@ -436,6 +430,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           onClose={() => setShowLibraryModal(false)}
         />
       )}
-    </>
+    </AppPanel>
   );
 }; 

@@ -1067,8 +1067,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
           </TabsPrimitive.Trigger>
         </TabsPrimitive.List>
 
-        <Card className="viewer-card bg-[#1D1D1D] rounded-xl border-0 flex flex-col flex-1">
-          <CardContent className="p-0 flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -1114,8 +1113,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
                 )}
               </motion.div>
             </AnimatePresence>
-          </CardContent>
-        </Card>
+        </div>
 
       </TabsPrimitive.Root>
       {/* Audio element is now created programmatically */}
