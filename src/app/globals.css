@@ -235,7 +235,7 @@
   }
   
   .viewer-slider [data-orientation="horizontal"] {
-    @apply h-1;
+    @apply h-0.5;
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-track {

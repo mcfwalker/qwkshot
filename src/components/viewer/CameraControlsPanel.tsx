@@ -77,7 +77,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
       {/* FOV Slider Section (Moved Down) */}
       <div className="space-y-5"> 
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-muted-foreground">Field Of View</Label>
+          <Label className="text-sm font-medium text-muted-foreground">FOV</Label>
           <span className="text-sm font-medium text-muted-foreground">{fov}°</span>
         </div>
         <Slider

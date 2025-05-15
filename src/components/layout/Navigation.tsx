@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ViewIcon, FolderOpen, LogOut, Home, Settings } from 'lucide-react'
+import { ViewIcon, FolderOpen, LogOut, Home, Settings, Images, User, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSupabaseClient } from '@/lib/supabase'
 import { cn } from "@/lib/utils"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 
 export function Navigation() {
   const pathname = usePathname()
@@ -45,22 +46,48 @@ export function Navigation() {
           <img 
             src="/images/logo.svg" 
             alt="Qwk Shot Logo" 
-            className="h-5 w-auto group-hover:opacity-90 transition-opacity"
+            className="h-8 w-auto group-hover:opacity-90 transition-opacity"
           />
         </Link>
         <div className="flex items-center space-x-4">
-          <Link href="/library" className={cn(
-              "text-sm font-normal transition-colors",
-              pathname.startsWith('/library') ? "text-white" : "text-[#CFD0D0] hover:text-white"
-          )}>
-            Library
-          </Link>
-          <button 
-            onClick={handleSignOut}
-            className="text-sm font-normal text-[#CFD0D0] hover:text-white transition-colors"
+          {/* Library Button - Icon Only */}
+          <Button 
+            variant="primary" 
+            size="default" 
+            onClick={() => router.push('/library')}
+            className="font-normal"
           >
-            Sign Out
-          </button>
+            <Images className="h-6 w-6" />
+          </Button>
+          
+          {/* User Dropdown Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="flex items-center justify-center w-[92px] h-[40px] py-2 px-4 gap-6 shrink-0 rounded-md bg-[#2E2E2E] hover:bg-[#343434]">
+                <User className="h-6 w-6 text-[#E2E2E5]" />
+                <ChevronDown className="h-4 w-4 text-[#E2E2E5]" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent 
+              className="w-48 bg-[#1E1E1E] border-[#1E1E1E] text-[#E2E2E5] flex flex-col items-start gap-4 p-2" 
+              sideOffset={8}
+              align="end"
+            >
+              <DropdownMenuItem 
+                onSelect={() => router.push('/account')}
+                className="focus:bg-[#343434] focus:text-white cursor-pointer w-full justify-start"
+              >
+                <span>Manage Account</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={handleSignOut} 
+                className="focus:bg-[#343434] focus:text-white cursor-pointer w-full justify-start"
+              >
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
         </div>
       </div>
     </nav>

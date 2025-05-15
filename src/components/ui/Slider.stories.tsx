@@ -34,7 +34,7 @@ export const LabeledSliderWithValue: Story = {
       <div className="w-[250px] space-y-3 p-4 bg-[#1D1D1D] rounded-md">
         <div className="flex items-center justify-between">
           <Label htmlFor="fov-slider" className="text-sm font-medium text-[#E2E2E5]">
-            Field Of View
+            FOV
           </Label>
           <span className="text-sm font-medium text-[#E2E2E5]">{value[0]}°</span>
         </div>
