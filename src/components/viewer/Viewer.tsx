@@ -929,59 +929,52 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       </Canvas>
 
       {/* This is the CORRECT container for BOTH left panels */}
-      <div className="absolute top-[96px] left-4 w-[200px] z-10 flex flex-col gap-4"> {/* Changed from top-16 to top-[96px] */} 
+      <div className="absolute top-[96px] left-4 w-[200px] z-10 flex flex-col gap-4"> {/* REMOVED bg, rounded, p-4 */}
         {/* --- NEW Tabbed Panel for Model/Camera --- */}
-        <TabsPrimitive.Root 
-            value={activeLeftPanelTab}
-            onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
-            className="flex flex-col gap-4" // Use flex-col within the tab root
-        >
-          <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
-            <TabsPrimitive.Trigger 
-              value="model" 
-              className={cn(
-                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'model' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-              )}
-            >
-              MODEL
-            </TabsPrimitive.Trigger>
-            <TabsPrimitive.Trigger 
-              value="camera" 
-              className={cn(
-                  "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  activeLeftPanelTab === 'camera' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-              )}
-            >
-              CAMERA
-            </TabsPrimitive.Trigger>
-          </TabsPrimitive.List>
+        {/* ADDED Wrapper Div for Model/Camera Tabs Panel with styling */}
+        <div className="bg-[#1D1D1D] rounded-xl p-4 flex flex-col flex-1 min-h-0">
+          <TabsPrimitive.Root
+              value={activeLeftPanelTab}
+              onValueChange={(value) => setActiveLeftPanelTab(value as 'model' | 'camera')}
+              className="flex flex-col flex-1 min-h-0 gap-6" // Use flex-col within the tab root
+          >
+            <TabsPrimitive.List className="flex items-center justify-center h-[40px] w-full"> {/* No gap for 200px panel, no bg/rounding */}
+              <TabsPrimitive.Trigger
+                value="model"
+                className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+              >
+                MODEL
+              </TabsPrimitive.Trigger>
+              <TabsPrimitive.Trigger
+                value="camera"
+                className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+              >
+                CAMERA
+              </TabsPrimitive.Trigger>
+            </TabsPrimitive.List>
 
-          {/* Model Tab Content */}
-          <TabsPrimitive.Content value="model">
-            <ErrorBoundary name="ModelSelectorTabs">
-              <ModelSelectorTabs onModelSelect={handleModelSelected} />
-            </ErrorBoundary>
-          </TabsPrimitive.Content>
+            {/* Model Tab Content */}
+            <TabsPrimitive.Content value="model">
+              <ErrorBoundary name="ModelSelectorTabs">
+                <ModelSelectorTabs onModelSelect={handleModelSelected} />
+              </ErrorBoundary>
+            </TabsPrimitive.Content>
 
-          {/* Camera Tab Content (Placeholder for now) */}
-          <TabsPrimitive.Content value="camera">
-            <CameraControlsPanel 
-              fov={fov} 
-              onFovChange={setFov} 
-              onCameraMove={handleCameraMove} // Pass real handler
-              onCameraReset={handleCameraReset} // Pass real handler
-            />
-          </TabsPrimitive.Content>
+            {/* Camera Tab Content (Placeholder for now) */}
+            <TabsPrimitive.Content value="camera">
+              <CameraControlsPanel 
+                fov={fov} 
+                onFovChange={setFov} 
+                onCameraMove={handleCameraMove} // Pass real handler
+                onCameraReset={handleCameraReset} // Pass real handler
+              />
+            </TabsPrimitive.Content>
 
-        </TabsPrimitive.Root>
+          </TabsPrimitive.Root>
+        </div> {/* END of ADDED Wrapper Div for Model/Camera Tabs Panel */}
         {/* --- END Tabbed Panel --- */}
         
-        {/* Scene Controls (Remains separate below the tabs) */}
+        {/* Scene Controls (Remains separate below the tabs, now a direct sibling to the Model/Camera panel div) */}
         <SceneControls
           userVerticalAdjustment={userVerticalAdjustment}
           onUserVerticalAdjustmentChange={setUserVerticalAdjustment}

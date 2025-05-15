@@ -41,7 +41,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => {
   const [isDurationOpen, setIsDurationOpen] = React.useState(false);
 
   return (
-    <AppPanel className="w-[288px]">
+    <div className="flex flex-col gap-6 h-full">
       <div className="flex w-full justify-between items-center self-stretch">
         <Label className="text-sm font-medium text-foreground">
           {props.isLocked ? 'Camera is Locked' : 'Lock Start Position'}
@@ -185,6 +185,6 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => {
           </Tooltip>
         </TooltipProvider>
       </div>
-    </AppPanel>
+    </div>
   );
 }; 

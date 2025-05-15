@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 // import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react"; // Not used
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AppPanel } from "@/components/ui/AppPanel"; // IMPORT AppPanel
+// import { AppPanel } from "@/components/ui/AppPanel"; // IMPORT AppPanel -- REMOVED
 
 interface SceneControlsProps {
   gridVisible: boolean;
@@ -46,7 +46,8 @@ export function SceneControlsComponent({
   };
 
   return (
-    <AppPanel className="w-[200px]"> {/* USE AppPanel with fixed width */}
+    // <AppPanel className="w-[200px]"> {/* USE AppPanel with fixed width */}
+    <div className="bg-[#1D1D1D] rounded-xl p-4 flex flex-col items-start gap-6 w-[200px]">
       {/* Replaced CardTitle with a simple div for now, styling can be adjusted */}
       <div className="text-sm font-medium text-[#E2E2E5] uppercase self-start">SCENE</div>
       
@@ -91,7 +92,8 @@ export function SceneControlsComponent({
            </Button>
         </div>
       </div>
-    </AppPanel>
+    </div>
+    // </AppPanel>
   );
 }
 

@@ -22,7 +22,6 @@ import { EnvironmentalAnalyzerFactory } from '@/features/p2p/environmental-analy
 import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
 import { normalizeModelAction } from '@/app/actions/normalization';
-import { AppPanel } from "@/components/ui/AppPanel";
 
 export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
   const [loading, setLoading] = useState(false);
@@ -339,12 +338,12 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   }, [loading, isAnalyzed, currentFile]);
 
   return (
-    <AppPanel className="w-[200px] h-full items-center justify-center text-center">
+    <div className="flex flex-col gap-6 h-full items-center justify-center text-center">
       <div
         {...getRootProps()}
         className={cn(
           "relative",
-          "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[10px] border border-dashed border-[#444444] text-center cursor-pointer",
+          "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[6px] border border-dashed border-[#444444] text-center cursor-pointer",
           "transition-colors",
           "hover:border-[#C2F751]",
           isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
@@ -414,22 +413,21 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           onSave={handleSaveModel}
           onClose={() => {
             setShowSaveDialog(false);
-            // Clear loading state when user cancels
-            setLoading(false);
             setCurrentFile(null);
-            setCurrentAnalysisMetadata(null);
+            setError(null);
+            setIsAnalyzed(false);
           }}
-          loadingMessage={loading ? loadingMessage : undefined}
+          loadingMessage={loading && loadingMessage === 'Analyzing scene...' ? loadingMessage : undefined}
         />
       )}
 
       {showLibraryModal && (
         <LibraryModelPortal
           isOpen={showLibraryModal}
-          onSelect={handleLibrarySelect}
           onClose={() => setShowLibraryModal(false)}
+          onSelect={handleLibrarySelect}
         />
       )}
-    </AppPanel>
+    </div>
   );
 }; 

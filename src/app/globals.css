@@ -228,7 +228,7 @@
   }
   
   .viewer-slider [role="slider"] {
-    @apply block h-3 w-3 rounded-full border border-primary bg-background 
+    @apply block h-3 w-3 rounded-full border border-[#e2e2e5] bg-background 
            transition-colors focus-visible:outline-none focus-visible:ring-2 
            focus-visible:ring-ring focus-visible:ring-offset-2 
            disabled:pointer-events-none disabled:opacity-50;
@@ -243,7 +243,7 @@
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-range {
-    @apply absolute h-full bg-primary;
+    @apply absolute h-full bg-[#e2e2e5];
   }
   
   .viewer-label {

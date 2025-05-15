@@ -1036,87 +1036,80 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   };
 
   return (
-    <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
-      <TabsPrimitive.Root 
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as TabValue)}
-          className="flex flex-col w-[288px] gap-4"
-      >
-        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
-          <TabsPrimitive.Trigger 
-            value="shotCaller" 
-            className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-            )}
-          >
-            SHOT CALLER
-          </TabsPrimitive.Trigger>
-          <TabsPrimitive.Trigger 
-            value="playback" 
-            className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'playback' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-            )}
-          >
-            PLAYBACK
-          </TabsPrimitive.Trigger>
-        </TabsPrimitive.List>
+    // NEW WRAPPING DIV for the main panel structure
+    <div className="w-[288px] bg-[#1D1D1D] rounded-xl p-4 flex flex-col gap-6">
+      <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
+        <TabsPrimitive.Root 
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as TabValue)}
+            className="flex flex-col flex-1 min-h-0 gap-6"
+        >
+          <TabsPrimitive.List className="flex items-center justify-center h-[40px] w-full gap-4">
+            <TabsPrimitive.Trigger 
+              value="shotCaller" 
+              className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+            >
+              SHOT CALLER
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger 
+              value="playback" 
+              className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+            >
+              PLAYBACK
+            </TabsPrimitive.Trigger>
+          </TabsPrimitive.List>
 
-        <div className="flex flex-col flex-1 min-h-0">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                className="h-full"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === 'shotCaller' && (
-                  <ShotCallerPanel 
-                    isLocked={isLocked}
-                    isGenerating={isGenerating}
-                    generatePathState={generatePathState}
-                    instruction={instruction}
-                    inputDuration={inputDuration}
-                    generatingMessage={generatingMessages[messageIndex]}
-                    messageIndex={messageIndex}
-                    onLockToggle={handleLockToggle}
-                    onInstructionChange={setInstruction}
-                    onDurationChange={handleDurationChange}
-                    onDurationBlur={handleDurationBlur}
-                    onGeneratePath={handleGeneratePath}
-                    isModelLoaded={isModelLoaded}
-                  />
-                )}
-                {activeTab === 'playback' && (
-                  <PlaybackPanel 
-                    commands={commands}
-                    isPlaying={isPlaying}
-                    isRecording={isRecording}
-                    playbackSpeed={playbackSpeed}
-                    duration={duration}
-                    takeCount={takeCount}
-                    modelName={modelName}
-                    isGenerating={isGenerating}
-                    progress={progress}
-                    onPlayPause={handlePlayPause}
-                    onDownload={handleDownload}
-                    onSpeedChange={handleSpeedChange}
-                    onCreateNewShot={handleCreateNewShot}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-        </div>
+          <div className="flex flex-col flex-1 min-h-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  className="h-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeTab === 'shotCaller' && (
+                    <ShotCallerPanel 
+                      isLocked={isLocked}
+                      isGenerating={isGenerating}
+                      generatePathState={generatePathState}
+                      instruction={instruction}
+                      inputDuration={inputDuration}
+                      generatingMessage={generatingMessages[messageIndex]}
+                      messageIndex={messageIndex}
+                      onLockToggle={handleLockToggle}
+                      onInstructionChange={setInstruction}
+                      onDurationChange={handleDurationChange}
+                      onDurationBlur={handleDurationBlur}
+                      onGeneratePath={handleGeneratePath}
+                      isModelLoaded={isModelLoaded}
+                    />
+                  )}
+                  {activeTab === 'playback' && (
+                    <PlaybackPanel 
+                      commands={commands}
+                      isPlaying={isPlaying}
+                      isRecording={isRecording}
+                      playbackSpeed={playbackSpeed}
+                      duration={duration}
+                      takeCount={takeCount}
+                      modelName={modelName}
+                      isGenerating={isGenerating}
+                      progress={progress}
+                      onPlayPause={handlePlayPause}
+                      onDownload={handleDownload}
+                      onSpeedChange={handleSpeedChange}
+                      onCreateNewShot={handleCreateNewShot}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+          </div>
 
-      </TabsPrimitive.Root>
-      {/* Audio element is now created programmatically */}
-    </ErrorBoundary>
+        </TabsPrimitive.Root>
+        {/* Audio element is now created programmatically */}
+      </ErrorBoundary>
+    </div>
   );
 }; 

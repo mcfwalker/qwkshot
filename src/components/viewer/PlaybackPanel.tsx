@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Play, Pause, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
-import { AppPanel } from "@/components/ui/AppPanel";
 
 interface PlaybackPanelProps {
   commands: CameraCommand[];
@@ -60,7 +59,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   const displayDuration = hasCommands ? (duration / playbackSpeed) : 0;
 
   return (
-    <AppPanel className="w-[288px] h-full"> 
+    <div className="flex flex-col gap-6 h-full">
       
       {/* Take Label Section - Updated Structure */}
       <div 
@@ -178,6 +177,6 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         </Button>
       </div>
 
-    </AppPanel>
+    </div>
   );
 }; 

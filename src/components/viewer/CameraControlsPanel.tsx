@@ -9,7 +9,6 @@ import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Mouse } from '
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
-import { AppPanel } from "@/components/ui/AppPanel";
 
 export interface CameraControlsPanelProps {
   fov: number;
@@ -53,7 +52,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   return (
-    <AppPanel className="w-[200px]">
+    <div className="flex flex-col gap-6 h-full">
       
       {/* Instructions Section (Moved Up) */}
       <div className="flex w-[168px] p-4 flex-col justify-center items-center gap-4 rounded-lg bg-[#121212]">
@@ -62,7 +61,6 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
           <Mouse className="h-5 w-5 text-foreground/80" />
           <div className="flex flex-col">
             <span className="text-sm text-foreground">Orbit & zoom</span>
-            <span className="text-sm text-muted-foreground">with mouse</span>
           </div>
         </div>
         {/* Divider */}
@@ -71,8 +69,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
         <div className="flex items-center gap-3 self-stretch">
           <Move className="h-5 w-5 text-foreground/80" /> 
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">Move with</span>
-            <span className="text-sm text-muted-foreground">arrow keys</span>
+            <span className="text-sm text-foreground">Move</span>
           </div>
         </div>
       </div>
@@ -103,13 +100,13 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
         disabled={isLocked}
         onClick={handleReset}
       >
-        Reset Camera
+        Recenter
       </Button>
 
       {/* Placeholder for Coordinate Display */}
       {/* <div className="text-xs text-muted-foreground text-center">Coordinates Placeholder</div> */}
 
-    </AppPanel>
+    </div>
   );
 }
 
