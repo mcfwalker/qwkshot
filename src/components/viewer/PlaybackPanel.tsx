@@ -86,46 +86,8 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         </div>
       </div>
 
-      {/* Play/Download Buttons Section */}
-      <div className="flex justify-between gap-4">
-        <Button
-          onClick={onPlayPause}
-          variant="primary"
-          size="xl"
-          className={cn(
-            "flex-1",
-            "relative overflow-hidden"
-          )}
-          disabled={!hasCommands || isGenerating || isRecording}
-        >
-          {/* Progress Bar Div */}
-          <div 
-            className="absolute top-0 left-0 h-full bg-[#A8D34A] z-0 transition-width duration-100 ease-linear" // Darker green, absolute, behind content
-            style={{ width: `${progress}%` }} // Dynamic width based on progress
-          />
-          {/* Icon (needs to be above progress bar) */}
-          <span className="relative z-10"> {/* Wrap icon in span with relative z-index */}
-            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </span>
-        </Button>
-        <Button
-          onClick={onDownload}
-          variant="primary"
-          size="xl"
-          className="flex-1"
-          disabled={!hasCommands || isPlaying || isRecording || isGenerating}
-        >
-          {isRecording ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Download className="h-5 w-5" />
-          )}
-        </Button>
-      </div>
-
-      {/* Playback Speed Slider Section */}
-      {/* Apply space-y-5 like SceneControls */}
-      <div className="space-y-5">
+      {/* Playback Speed Slider Section (Moved Up) */}
+      <div className="space-y-5 w-full">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-[#CFD0D0]">Playback Speed</Label>
           <span className="text-sm font-medium text-[#CFD0D0]">
@@ -163,9 +125,46 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         </div>
       </div>
 
+      {/* Play/Download Buttons Section (Moved Down) */}
+      <div className="flex justify-between gap-4 w-full">
+        <Button
+          onClick={onPlayPause}
+          variant="primary"
+          size="xl"
+          className={cn(
+            "flex-1",
+            "relative overflow-hidden"
+          )}
+          disabled={!hasCommands || isGenerating || isRecording}
+        >
+          {/* Progress Bar Div */}
+          <div 
+            className="absolute top-0 left-0 h-full bg-[#A8D34A] z-0 transition-width duration-100 ease-linear" // Darker green, absolute, behind content
+            style={{ width: `${progress}%` }} // Dynamic width based on progress
+          />
+          {/* Icon (needs to be above progress bar) */}
+          <span className="relative z-10"> {/* Wrap icon in span with relative z-index */}
+            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          </span>
+        </Button>
+        <Button
+          onClick={onDownload}
+          variant="primary"
+          size="xl"
+          className="flex-1"
+          disabled={!hasCommands || isPlaying || isRecording || isGenerating}
+        >
+          {isRecording ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Download className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
+
       {/* Create New Shot Button Section */}
       {/* Use flex-grow to push this button towards the bottom */}
-      <div className="flex-grow flex items-end"> 
+      <div className="flex-grow flex items-end w-full"> 
         <Button
           variant="primary"
           className={cn(
