@@ -57,18 +57,20 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const prevTriggerResetRef = useRef<number | undefined>(triggerReset);
   const prevIsModelLoadedRef = useRef<boolean>(false);
 
-  // === Effect 1: Set and Save Initial State ===
-  // Runs when controls are ready or initial state prop changes
+  // === Effect 1: Set and Save Initial State (FROM PROP - Temporarily Disabled for testing hardcoded initial view) ===
+  // This effect used the `initialState` prop. We are currently prioritizing a hardcoded
+  // initial view based on previous findings (modelCenter not centering well with CameraControls).
+  // This effect will be re-evaluated when `modelCenter` vs hardcoded target is addressed.
+  /*
   useEffect(() => {
     const controls = cameraControlsRef.current;
-    console.log('[AC InitEffect] Running. Controls available:', !!controls, 'Initial state:', !!initialState);
+    console.log('[AC InitEffect (from prop)] Running. Controls available:', !!controls, 'Initial state prop:', !!initialState);
     
-    // Reset the flag whenever initialState changes, forcing re-save
-    isInitialStateSavedRef.current = false;
+    isInitialStateSavedRef.current = false; 
     
     if (controls && initialState) {
       const setupAndSave = async () => {
-        console.log('[AC InitEffect] Controls and initialState exist. Setting and saving...');
+        console.log('[AC InitEffect (from prop)] Controls and initialState prop exist. Setting and saving...');
         try {
           controls.stop();
           await controls.setLookAt(
@@ -77,23 +79,23 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
             false // Instant snap
           );
           controls.setOrbitPoint(initialState.target.x, initialState.target.y, initialState.target.z);
-          controls.saveState(); // Save this state for reset()
-          isInitialStateSavedRef.current = true; // Mark as saved
-          console.log('[AC InitEffect] Initial state SET and SAVED.');
+          controls.saveState(); 
+          isInitialStateSavedRef.current = true; 
+          console.log('[AC InitEffect (from prop)] Initial state (from prop) SET and SAVED.');
         } catch (error) {
-          console.error('[AC InitEffect] Error setting/saving initial state:', error);
-          isInitialStateSavedRef.current = false; // Ensure flag is false on error
+          console.error('[AC InitEffect (from prop)] Error setting/saving initial state from prop:', error);
+          isInitialStateSavedRef.current = false; 
         }
       };
-      setupAndSave(); // Execute the async setup
+      setupAndSave(); 
     } else {
-      // If no controls or initialState, ensure flag is false
       isInitialStateSavedRef.current = false;
-      console.log('[AC InitEffect] No controls or initialState, cannot save state.');
+      console.log('[AC InitEffect (from prop)] No controls or initialState prop, cannot save state from prop.');
     }
+  }, [cameraControlsRef.current, initialState]);
+  */
+  // === END OF TEMPORARILY DISABLED Effect 1 ===
 
-    // No cleanup needed here, saving state doesn't require cleanup
-  }, [cameraControlsRef.current, initialState]); // Depend on controls ref *value* and initialState
 
   // === Effect 2: Define Animation Logic ===
   useEffect(() => {
@@ -190,35 +192,32 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
   // === Effect 4: Handle Manual Reset Trigger ===
   useEffect(() => {
+    console.log('[AC ResetEffect ENTRY] triggerReset:', triggerReset, 'prevTrigger:', prevTriggerResetRef.current, 'Controls available?:', !!cameraControlsRef.current);
     const controls = cameraControlsRef.current;
     const shouldTrigger = triggerReset !== undefined && triggerReset !== prevTriggerResetRef.current;
     
     if (shouldTrigger && controls) {
-      console.log('[AC ResetEffect] Reset triggered! (Test: setPosition & setTarget)');
+      console.log('[AC ResetEffect] Manual Reset triggered!');
       
       const defaultPosition = new Vector3(0, 1.5, 6); 
       const defaultTarget = new Vector3(0, 1, 0);   
 
       const performReset = async () => {
         try {
-          console.log('[AC ResetEffect] Stopping controls and setting view via setPosition/setTarget...');
+          console.log('[AC ResetEffect] Stopping controls and setting view to defaults...');
           controls.stop();
-          // Test 1: setPosition then setTarget
-          await controls.setPosition(defaultPosition.x, defaultPosition.y, defaultPosition.z, false); // false for instant
-          await controls.setTarget(defaultTarget.x, defaultTarget.y, defaultTarget.z, false);   // false for instant
+          await controls.setPosition(defaultPosition.x, defaultPosition.y, defaultPosition.z, false); 
+          await controls.setTarget(defaultTarget.x, defaultTarget.y, defaultTarget.z, false);   
           
-          // Test 2 (Alternative - comment above and uncomment below if Test 1 fails to center reticle):
-          // await controls.setPosition(defaultPosition.x, defaultPosition.y, defaultPosition.z, false);
-          // controls.setOrbitPoint(defaultTarget.x, defaultTarget.y, defaultTarget.z); 
-          // await controls.setTarget(defaultTarget.x, defaultTarget.y, defaultTarget.z, false); // Still might need setTarget after orbit point
-
-          // controls.saveState(); // Still commented out for this test
-          console.log('[AC ResetEffect] Camera view set. Reticle should be at Y=1.');
+          controls.saveState(); // <<< ADDED: Save state after manual reset
+          isInitialStateSavedRef.current = true; // <<< ADDED: Mark state as saved
+          console.log('[AC ResetEffect] Camera view set to defaults AND SAVED.');
           console.log('[AC ResetEffect] Controls Position after set:', controls.getPosition(new Vector3()).toArray());
           console.log('[AC ResetEffect] Controls Target after set (focal point):', controls.getTarget(new Vector3()).toArray());
 
         } catch (error) {
           console.error('[AC ResetEffect] Error during camera reset:', error);
+          isInitialStateSavedRef.current = false; // Ensure flag is false on error
         }
       };
 
@@ -228,32 +227,33 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
 
   }, [triggerReset, cameraControlsRef.current]);
 
-  // === NEW Effect 5: Handle Initial Load Camera Set ===
+  // === NEW Effect 5: Handle Initial Load Camera Set (Consolidated Initial Setup) ===
   useEffect(() => {
     const controls = cameraControlsRef.current;
-    // Trigger only when isModelLoaded goes from false to true
+    // Trigger only when isModelLoaded goes from false to true AND controls are available
     if (isModelLoaded && !prevIsModelLoadedRef.current && controls) {
-      console.log('[AC InitialLoadEffect] Model loaded. Setting initial camera view via CameraControls...');
-      const initialPosition = new Vector3(0, 1.5, 6);
-      const initialTarget = new Vector3(0, 1, 0); // Use the same target as reset
+      console.log('[AC InitialLoadEffect] Model loaded & Controls ready. Setting AND SAVING initial camera view...');
+      const initialPosition = new Vector3(0, 1.5, 6); // Hardcoded initial
+      const initialTarget = new Vector3(0, 1, 0);   // Hardcoded initial
 
-      const setInitialView = async () => {
+      const setInitialViewAndSave = async () => {
         try {
           controls.stop();
           await controls.setPosition(initialPosition.x, initialPosition.y, initialPosition.z, false);
           await controls.setTarget(initialTarget.x, initialTarget.y, initialTarget.z, false);
-          console.log('[AC InitialLoadEffect] Initial view set successfully.');
-          // Maybe save state here too if needed for reset consistency?
-          // controls.saveState();
+          controls.saveState(); // <<< ENSURED: Save state after initial setup
+          isInitialStateSavedRef.current = true; // <<< ENSURED: Mark state as saved
+          console.log('[AC InitialLoadEffect] Initial view SET AND SAVED.');
         } catch (error) {
-          console.error('[AC InitialLoadEffect] Error setting initial view:', error);
+          console.error('[AC InitialLoadEffect] Error setting and saving initial view:', error);
+          isInitialStateSavedRef.current = false; // Ensure flag is false on error
         }
       };
-      setInitialView();
+      setInitialViewAndSave();
     }
     // Update previous value ref for edge detection
     prevIsModelLoadedRef.current = isModelLoaded;
-  }, [isModelLoaded, cameraControlsRef.current]); // Depend on load state and controls ref value
+  }, [isModelLoaded, cameraControlsRef.current]); // CORRECTED Dependency Array
 
   // useFrame only needed for controls.update()
   useFrame((_state, delta) => {
@@ -270,5 +270,6 @@ export const AnimationController: React.FC<AnimationControllerProps> = ({
   const calculatedSmoothTime = Math.max(0.1, (duration * smoothTimeFactor) / safePlaybackSpeed); // Divide by speed
   
   // Pass the calculated smoothTime, adjusted by playbackSpeed
+  console.log('[AC RENDER] triggerReset prop:', triggerReset, 'isModelLoaded:', isModelLoaded, 'isPlaying:', isPlaying);
   return <CameraControls ref={cameraControlsRef} smoothTime={calculatedSmoothTime} enabled={!isLocked} />;
 };
