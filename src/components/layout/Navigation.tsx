@@ -1,16 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ViewIcon, FolderOpen, LogOut, Home, Settings, Images, User, ChevronDown } from 'lucide-react'
+import { Images, User, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSupabaseClient } from '@/lib/supabase'
-import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 
 export function Navigation() {
-  const pathname = usePathname()
   const router = useRouter()
   const supabase = getSupabaseClient()
 
@@ -23,20 +21,6 @@ export function Navigation() {
       console.error('Error signing out:', error)
       toast.error('Failed to sign out')
     }
-  }
-
-  const handleNavigation = (path: string) => {
-    try {
-      router.push(path)
-    } catch (error) {
-      console.error('Navigation error:', error)
-      toast.error('Failed to navigate. Please try again.')
-    }
-  }
-
-  const handleAdminNavigation = () => {
-    // Open admin in same window to maintain session state
-    router.push('/admin')
   }
 
   return (

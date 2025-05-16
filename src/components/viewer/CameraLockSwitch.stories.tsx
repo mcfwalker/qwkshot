@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { CameraLockSwitch, CameraLockSwitchProps } from './CameraLockSwitch';
+import { CameraLockSwitch } from './CameraLockSwitch';
 
 const meta: Meta<typeof CameraLockSwitch> = {
   title: 'Viewer/CameraLockSwitch',
