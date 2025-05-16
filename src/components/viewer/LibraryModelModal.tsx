@@ -48,10 +48,10 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
+      <DialogContent className="sm:max-w-md bg-[#1E1E1E] border-[#353535]">
         <DialogHeader>
-          <DialogTitle>Select Model</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-[#e2e2e2]">Select Model</DialogTitle>
+          <DialogDescription className="text-[#e2e2e2] mt-2">
             Choose a model from your library to load into the viewer.
           </DialogDescription>
         </DialogHeader>
@@ -76,19 +76,16 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
                       onSelect(model)
                       onClose()
                     }}
-                    className="w-full text-left p-3 rounded-md bg-[#121212] border border-[#353535] hover:border-[#C2F751] transition-colors group"
+                    className="w-full text-left p-3 rounded-md bg-[#2E2E2E] hover:bg-[#343434] transition-colors group cursor-pointer"
                   >
-                    <div className="font-medium text-[#CFD0D0] group-hover:text-[#C2F751] transition-colors">
+                    <div className="font-medium text-[#e2e2e2] transition-colors">
                       {model.name}
                     </div>
                     {model.description && (
-                      <div className="text-sm text-[#666666] mt-1">
+                      <div className="text-sm text-[#e2e2e2] mt-1">
                         {model.description}
                       </div>
                     )}
-                    <div className="text-xs text-[#666666] mt-1">
-                      Added {new Date(model.created_at).toLocaleDateString()}
-                    </div>
                   </button>
                 ))}
               </div>

@@ -74,6 +74,7 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
     }
   }, [])
 
+  // This function is for the OLD delete flow (separate AlertDialog), can be removed later
   function openDeleteDialog(model: Model) {
     setModelToDelete(model);
     setIsDeleteDialogOpen(true);
@@ -83,47 +84,10 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
     setImageErrors(prev => ({ ...prev, [modelId]: true }));
   };
 
-  async function handleDelete() {
-    if (!modelToDelete) return;
-    
-    try {
-      // Delete the file from storage
-      const { error: storageError } = await supabase.storage
-        .from('models')
-        .remove([modelToDelete.file_url])
-      
-      if (storageError) {
-        console.error('Storage error:', storageError)
-        toast.error('Failed to delete model file')
-        return
-      }
+  // This is the OLD handleDelete function, tied to the separate AlertDialog
+  // We will create a new one for the ModelEditDialog
+  // async function handleDelete() { ... existing handleDelete logic ... }
 
-      // Delete the record
-      const { error } = await supabase
-        .from('models')
-        .delete()
-        .eq('id', modelToDelete.id)
-
-      if (error) {
-        console.error('Database error:', error)
-        toast.error('Failed to delete model record')
-        return
-      }
-
-      toast.success('Model deleted successfully')
-      router.refresh() // Trigger a router refresh to update server components
-      setModels(models.filter(m => m.id !== modelToDelete.id))
-    } catch (error) {
-      console.error('Error deleting model:', error)
-      toast.error('Failed to delete model')
-    } finally {
-      // Reset state
-      setModelToDelete(null);
-      setIsDeleteDialogOpen(false);
-    }
-  }
-
-  // Helper function to refresh models after edit/delete
   const handleModelUpdated = async () => {
     try {
       const { data, error } = await supabase
@@ -133,12 +97,57 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
 
       if (error) throw error
       setModels(data || [])
-      router.refresh() // Refresh the page to update server components
+      router.refresh()
       setEditingModel(null); // Close dialog on update
     } catch (error) {
       console.error('Error refreshing models:', error)
     }
   }
+
+  // New delete handler for ModelEditDialog
+  const handleConfirmedDeleteFromEditDialog = async () => {
+    if (!editingModel) return;
+
+    try {
+      // Delete the file from storage
+      // Make sure editingModel.file_url is the correct path. It might just be a filename.
+      // Assuming it's a full path or a path that supabase.storage.remove can handle.
+      if (editingModel.file_url) { // Only attempt to delete if file_url exists
+        const { error: storageError } = await supabase.storage
+          .from('models') // Ensure this is your correct bucket name
+          .remove([editingModel.file_url]) // file_url might need to be just the file name/path within bucket
+        
+        if (storageError && storageError.message !== 'The resource was not found') { // Ignore if file not found, otherwise error
+          console.error('Storage error:', storageError)
+          toast.error(`Failed to delete model file: ${storageError.message}`)
+          // Do not return here, allow DB record deletion attempt if desired, or handle as critical error.
+          // For now, we'll let it proceed to delete the DB record.
+        }
+      }
+
+      // Delete the record from the database
+      const { error: dbError } = await supabase
+        .from('models')
+        .delete()
+        .eq('id', editingModel.id)
+
+      if (dbError) {
+        console.error('Database error:', dbError)
+        toast.error(`Failed to delete model record: ${dbError.message}`)
+        return; // If DB delete fails, stop here
+      }
+
+      toast.success('Model deleted successfully');
+      setModels(prevModels => prevModels.filter(m => m.id !== editingModel.id));
+      setEditingModel(null); // Close the ModelEditDialog
+      router.refresh(); // Refresh server components and other data
+    } catch (error) {
+      console.error('Error deleting model:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete model');
+    } finally {
+      // setLoading state for the delete button in ModelEditDialog is handled internally there
+    }
+  };
 
   if (models.length === 0) {
     return (
@@ -157,7 +166,6 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
     <>
       <div className="library-grid">
         {models.map((model) => {
-          // Calculate cache-busting URL directly without useMemo
           let thumbnailUrl: string | null = null;
           if (model.thumbnail_url) {
             if (model.thumbnail_url.includes('?t=')) {
@@ -166,7 +174,6 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
               thumbnailUrl = `${model.thumbnail_url}?t=${Date.now()}`;
             }
           }
-
           return (
             <ModelLibraryCard
               key={model.id}
@@ -174,7 +181,6 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
               thumbnailUrl={thumbnailUrl === null ? undefined : thumbnailUrl}
               onClick={() => router.push(`/viewer/${model.id}`)}
               onEditClick={() => {
-                console.log("Edit clicked for model:", model.name);
                 setEditingModel(model);
               }}
             />
@@ -186,6 +192,7 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
         <ModelEditDialog
           model={editingModel}
           onModelUpdated={handleModelUpdated}
+          onDeleteClick={handleConfirmedDeleteFromEditDialog}
           open={!!editingModel}
           onOpenChange={(isOpen) => {
             if (!isOpen) {
@@ -208,7 +215,32 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleDelete}
+              onClick={async () => {
+                if (!modelToDelete) return;
+                try {
+                  if (modelToDelete.file_url) {
+                    const { error: storageError } = await supabase.storage.from('models').remove([modelToDelete.file_url]);
+                    if (storageError && storageError.message !== 'The resource was not found') {
+                      console.error('Storage error:', storageError); 
+                      toast.error('Failed to delete model file'); 
+                      return;
+                    }
+                  }
+                  const { error } = await supabase.from('models').delete().eq('id', modelToDelete.id);
+                  if (error) { 
+                    console.error('Database error:', error); 
+                    toast.error('Failed to delete model record'); 
+                    return; 
+                  }
+                  toast.success('Model deleted successfully');
+                  setModels(prev => prev.filter(m => m.id !== modelToDelete.id));
+                  setIsDeleteDialogOpen(false);
+                  setModelToDelete(null);
+                  router.refresh();
+                } catch (err) {
+                  toast.error('Failed to delete model');
+                }
+              }}
               className="bg-[#F76451] text-white hover:bg-[#F76451]/90 border-0"
             >
               Delete

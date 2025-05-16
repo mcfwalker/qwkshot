@@ -89,10 +89,10 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
+      <DialogContent className="sm:max-w-md bg-[#1E1E1E] border-[#353535]">
         <DialogHeader>
-          <DialogTitle>Select Texture</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-[#e2e2e2]">Select Texture</DialogTitle>
+          <DialogDescription className="text-[#e2e2e2] mt-2">
             Choose a texture for the floor or upload a new one.
           </DialogDescription>
         </DialogHeader>
@@ -182,7 +182,7 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
                       onSelect(texture)
                       onClose()
                     }}
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-[#353535] hover:border-[#C2F751] transition-colors"
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-[#353535] transition-colors cursor-pointer"
                   >
                     {/* Thumbnail */}
                     <img
@@ -207,9 +207,8 @@ export function TextureLibraryModal({ isOpen, onClose, onSelect }: TextureLibrar
             <div className="mt-8">
               <Button
                 onClick={() => setShowUploadForm(true)}
-                className="flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full rounded-[10px] border border-[#353535] bg-[#121212] hover:bg-[#353535] disabled:opacity-70 disabled:pointer-events-none text-sm text-foreground/80"
+                className="flex h-[40px] px-6 justify-center items-center self-stretch w-full rounded-md bg-[#CFD0D0] text-[#121212] hover:bg-[#CFD0D0]/90 disabled:opacity-70 disabled:pointer-events-none text-sm"
               >
-                <Upload className="h-4 w-4" />
                 Add New Texture
               </Button>
             </div>

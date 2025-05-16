@@ -10,7 +10,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 
 interface ThumbnailPreviewModalProps {
   isOpen: boolean;
@@ -41,10 +41,10 @@ export function ThumbnailPreviewModal({
         onClose();
       }
     }}>
-      <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
+      <DialogContent className="sm:max-w-md bg-[#1E1E1E] border-[#353535]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">Preview</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl font-semibold text-[#e2e2e2]">Preview</DialogTitle>
+          <DialogDescription className="text-[#e2e2e2] mt-2">
             Preview the captured thumbnail before saving or downloading.
           </DialogDescription>
         </DialogHeader>
@@ -70,25 +70,34 @@ export function ThumbnailPreviewModal({
           </div>
         )}
         
-        <DialogFooter className="flex gap-12 sm:gap-12 mt-4">
-          <button
-            className="flex-1 h-12 rounded-lg bg-[#CFD0D0] border-0 text-[#121212] font-medium hover:bg-[#BBBCBC] transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center"
+        <DialogFooter className="flex gap-3 sm:gap-3 mt-4">
+          <Button
+            className="flex-1 h-12 bg-[#CFD0D0] text-[#121212] hover:bg-[#CFD0D0]/90 flex items-center justify-center"
             onClick={onDownload}
             disabled={!thumbnailImage || isProcessing || isCapturing}
             type="button"
           >
             <span className="text-[#121212] font-medium">Download</span>
-          </button>
-          <button
-            className="flex-1 h-12 rounded-lg bg-[#CFD0D0] border-0 text-[#121212] font-medium hover:bg-[#BBBCBC] transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center"
+          </Button>
+          <Button
+            className="flex-1 h-12 bg-[#CFD0D0] text-[#121212] hover:bg-[#CFD0D0]/90 flex items-center justify-center gap-2"
             onClick={onSetAsThumbnail}
             disabled={!thumbnailImage || isProcessing || isSaved || isCapturing}
             type="button"
           >
-            <span className="text-[#121212] font-medium">
-              {isProcessing ? "Processing..." : isSaved ? "Thumbnail Saved" : "Set as Thumbnail"}
-            </span>
-          </button>
+            {isProcessing ? (
+              <>
+                <span className="text-[#121212] font-medium">Processing...</span>
+              </>
+            ) : isSaved ? (
+              <>
+                <Check className="h-5 w-5 text-[#121212]" />
+                <span className="text-[#121212] font-medium">Thumbnail Saved!</span>
+              </>
+            ) : (
+              <span className="text-[#121212] font-medium">Set as Thumbnail</span>
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
