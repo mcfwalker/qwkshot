@@ -965,7 +965,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
               <CameraControlsPanel 
                 fov={fov} 
                 onFovChange={setFov} 
-                onCameraMove={handleCameraMove} // Pass real handler
                 onCameraReset={handleCameraReset} // Pass real handler
               />
             </TabsPrimitive.Content>

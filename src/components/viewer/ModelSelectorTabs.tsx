@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Removed unused import
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ModelLoader } from './ModelLoader';
 

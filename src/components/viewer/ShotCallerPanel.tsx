@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Wand2, Loader2, Clock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Switch } from "@/components/ui/switch";
-import { AppPanel } from "@/components/ui/AppPanel";
+import { CameraLockSwitch } from './CameraLockSwitch';
 
 // Copied from CameraAnimationSystem - move to a shared types file?
 type GeneratePathState = 'initial' | 'generating' | 'ready';
@@ -42,29 +41,11 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <div className="flex w-full justify-between items-center self-stretch">
-        <Label className="text-sm font-medium text-foreground">
-          {props.isLocked ? 'Camera is Locked' : 'Lock Start Position'}
-        </Label>
-        <div className="flex items-center justify-end min-w-[54px]">
-          <Switch
-            checked={props.isLocked}
-            onCheckedChange={props.onLockToggle}
-            disabled={!props.isModelLoaded || props.isGenerating}
-            className={cn(
-              "peer inline-flex h-6 w-[54px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors", 
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
-              "data-[state=checked]:bg-[#F76451]",    
-              "data-[state=unchecked]:bg-[#CFD0D0]", 
-              "[&>span]:pointer-events-none [&>span]:block [&>span]:h-5 [&>span]:w-5 [&>span]:rounded-full [&>span]:shadow-lg [&>span]:ring-0 [&>span]:transition-transform",
-              "[&>span]:data-[state=checked]:translate-x-[28px]",
-              "[&>span]:data-[state=unchecked]:translate-x-0",
-              "data-[state=checked]:[&>span]:bg-[#121212]",     
-              "data-[state=unchecked]:[&>span]:bg-[#121212]"
-            )}
-          />
-        </div>
-      </div>
+      <CameraLockSwitch 
+        isLocked={props.isLocked}
+        onLockToggle={props.onLockToggle} 
+        disabled={!props.isModelLoaded || props.isGenerating}
+      />
       <div className="space-y-4 w-full">
         <div className="space-y-1">
           <div className="space-y-2">

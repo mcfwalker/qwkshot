@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from '@storybook/react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { AppPanel } from '@/components/ui/AppPanel';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 const TabsWithPanelDemo = ({ initialTab = 'tab1' }: { initialTab?: string }) => {
   const [activeTab, setActiveTab] = useState(initialTab);

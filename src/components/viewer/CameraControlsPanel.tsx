@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+// import { Card, CardContent } from '@/components/ui/card'; // Removed unused import
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Mouse } from 'lucide-react';
+import { /*ChevronUp, ChevronDown, ChevronLeft, ChevronRight,*/ Move, Mouse } from 'lucide-react'; // Removed unused Chevrons
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
@@ -14,14 +14,14 @@ export interface CameraControlsPanelProps {
   fov: number;
   onFovChange: (fov: number) => void;
   // Placeholder handlers - to be implemented in Viewer.tsx
-  onCameraMove?: (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => void;
+  // onCameraMove?: (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => void; // Removed unused prop
   onCameraReset?: () => void;
 }
 
 export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = ({
   fov,
   onFovChange,
-  onCameraMove = () => console.warn('onCameraMove not implemented'), // Default dummy handlers
+  // onCameraMove = () => console.warn('onCameraMove not implemented'), // Removed unused prop
   onCameraReset = () => console.warn('onCameraReset not implemented'),
 }: CameraControlsPanelProps) => {
   const { isLocked } = useViewerStore(); // Needed to disable controls when locked
@@ -35,6 +35,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   // Handlers for D-Pad buttons (using onPointerDown/Up for hold support)
+  /* // Removed unused handleMove function
   const handleMove = (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
     if (isLocked) {
       toast.error('Viewer is locked. Unlock to move camera.');
@@ -42,6 +43,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
     }
     onCameraMove(direction, active);
   };
+  */
 
   const handleReset = () => {
      if (isLocked) {

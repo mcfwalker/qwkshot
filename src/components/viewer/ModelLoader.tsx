@@ -2,10 +2,9 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, RefreshCw, FolderOpen, FolderGit2, Library } from 'lucide-react';
+import { Upload, RefreshCw } from 'lucide-react';
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
-import { withRetry } from '@/lib/retry-utils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { SaveModelPortal } from './SaveModelPortal';
@@ -28,7 +27,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   const [loadingMessage, setLoadingMessage] = useState('Processing model...');
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [currentAnalysisMetadata, setCurrentAnalysisMetadata] = useState<any | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -148,12 +146,11 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     setLoadingMessage('Analyzing scene...');
     
     // Run client-side analysis to get metadata for saving
-    const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
+    const { metadata } = await pipelineRef.current.processModel({
       file,
       userId: 'current-user-id'
     });
     
-    setCurrentAnalysisMetadata(metadata);
     setIsAnalyzed(true);
     
     return metadata; // Return metadata so caller can access it
@@ -188,10 +185,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       if (!metadata) {
         throw new Error('Failed to analyze model.');
       }
-      
-      // Set metadata explicitly from the result
-      setCurrentAnalysisMetadata(metadata);
-      setIsAnalyzed(true);
       
       // Continue with save process
       setLoadingMessage('Saving model metadata...');
@@ -279,7 +272,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       setShowSaveDialog(false);
       setLoading(false);
       setCurrentFile(null);
-      setCurrentAnalysisMetadata(null);
     }
   };
 

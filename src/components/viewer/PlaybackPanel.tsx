@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button /*, buttonVariants*/ } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Play, Pause, Download, Loader2 } from 'lucide-react';
@@ -28,6 +28,7 @@ interface PlaybackPanelProps {
 }
 
 // Keep speed options if needed for slider logic, though direct values are used now
+/* // Removed SPEED_OPTIONS
 const SPEED_OPTIONS = [
   { value: 0.25, label: '0.25x' },
   // { value: 0.5, label: '0.5x' },
@@ -38,6 +39,7 @@ const SPEED_OPTIONS = [
   // { value: 1.75, label: '1.75x' },
   { value: 2, label: '2.0x' }
 ];
+*/
 
 export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   commands,
