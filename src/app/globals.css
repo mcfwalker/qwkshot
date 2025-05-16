@@ -367,18 +367,19 @@
   }
 
   /* Library specific styles */
-  .library-card {
-    @apply bg-red-500
-           border border-[#353535]
-           rounded shadow-lg 
-           transition-all duration-200
-           hover:shadow-xl
-           hover:bg-red-600
-           p-4;
+  .library-card { /* Styles for the skeleton card */
+    @apply w-[312px] max-w-[312px] /* Added fixed width */
+           p-4 /* Existing padding */
+           rounded-xl /* Match ModelLibraryCard rounding */
+           bg-[#1E1E1E] /* Match ModelLibraryCard background */
+           border border-[#353535]; /* Existing border */
+            /* Removed debug bg, hover, shadow, transition for skeleton */
   }
   
   .library-grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
+    @apply grid justify-items-start justify-start; /* Removed red border */
+    grid-template-columns: repeat(auto-fill, 312px); /* Each column is 312px wide */
+    gap: 20px; /* Explicit 20px gap (equivalent to gap-5) */
   }
   
   .library-header {

@@ -48,16 +48,19 @@ export default function LibraryPage() {
   return (
     <div className="container px-4 pt-10 pb-8">
       {/* Flex container for header and tabs */}
-      <div className="flex items-center gap-6 mb-10">
-        {/* SVG Header */}
-        <div style={{ width: '237px', height: '38px', position: 'relative' }}>
+      <div className="flex items-center gap-14 mb-10">
+        {/* SVG Header Replaced with Text Header */}
+        {/* <div style={{ width: '237px', height: '38px', position: 'relative' }}>
           <Image 
             src="/images/header_library.svg" 
             alt="Library Header"
             fill
             style={{ objectFit: 'contain' }}
           />
-        </div>
+        </div> */}
+        <h1 className="text-[#e2e2e2] font-sans text-[48px] font-extrabold leading-normal uppercase">
+          Library
+        </h1>
 
         {/* Tabs */}
         <Tabs
@@ -67,27 +70,13 @@ export default function LibraryPage() {
           <TabsList className="flex items-center justify-center h-10 text-muted-foreground gap-4">
             <TabsTrigger
               value="models"
-              className={cn(
-                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'models'
-                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md"
-                  : "text-[#CFD0D0] hover:text-[#FFFFFF]"
-              )}
+              variant="default"
             >
               MODELS
             </TabsTrigger>
             <TabsTrigger
               value="textures"
-              className={cn(
-                "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'textures'
-                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md"
-                  : "text-[#CFD0D0] hover:text-[#FFFFFF]"
-              )}
+              variant="default"
             >
               TEXTURES
             </TabsTrigger>

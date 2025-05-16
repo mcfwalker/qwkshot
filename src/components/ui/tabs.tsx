@@ -34,17 +34,21 @@ function TabsList({
   )
 }
 
-function TabsTrigger({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+interface TabsTriggerProps extends React.ComponentProps<typeof TabsPrimitive.Trigger> {
+  variant?: 'default';
+}
+
+function TabsTrigger({ className, variant = 'default', ...props }: TabsTriggerProps) {
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0] cursor-pointer",
         "focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-50",
+        "cursor-pointer transition-all",
+        {
+          "flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]": variant === 'default',
+        },
         className
       )}
       {...props}
