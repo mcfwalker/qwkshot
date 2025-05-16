@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Play, Pause, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { TakeInfoDisplay } from './TakeInfoDisplay';
 
 interface PlaybackPanelProps {
   commands: CameraCommand[];
@@ -63,29 +64,12 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   return (
     <div className="flex flex-col gap-6 h-full">
       
-      {/* Take Label Section - Updated Structure */}
-      <div 
-        className={cn(
-          "flex items-stretch w-full h-[64px] overflow-hidden", // Removed bg, border, rounded
-        )}
-      >
-        {/* Left Section (Take Count) */}
-        <div className="flex items-center px-4 border-r border-[#353535] flex-shrink-0">
-          <span className="text-sm font-medium text-[#CFD0D0]">
-            TAKE {hasCommands ? takeCount : 0}
-          </span>
-        </div>
-        {/* Right Section (Model Name / Placeholder) */}
-        <div className="flex items-center px-4 flex-grow min-w-0">
-          <span className={cn(
-            "text-sm font-medium block",
-            "overflow-hidden whitespace-nowrap text-ellipsis",
-            hasCommands ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
-          )}>
-            {hasCommands ? (modelName || 'Untitled Shot') : 'No animation loaded'}
-          </span>
-        </div>
-      </div>
+      <TakeInfoDisplay 
+        hasCommands={hasCommands}
+        takeCount={takeCount}
+        animationName={modelName}
+        className="w-full"
+      />
 
       {/* Playback Speed Slider Section (Moved Up) */}
       <div className="space-y-5 w-full">
