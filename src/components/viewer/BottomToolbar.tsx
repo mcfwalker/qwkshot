@@ -34,23 +34,21 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
   isCapturingThumbnail = false,
 }) => {
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 p-2 rounded-xl bg-[#1D1D1D]">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 inline-flex items-center justify-center gap-6 p-4 rounded-xl bg-[#1E1E1E]">
       
       {/* Reticle Toggle Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
+                "h-10 w-10",
+                "rounded-[10px]",
                 isReticleVisible 
                   ? "text-[#C2F751]" 
-                  : "text-foreground/80",
-                "transition-colors duration-200"
+                  : ""
               )}
               onClick={onToggleReticle}
               disabled={isReticleLoading}
@@ -68,20 +66,18 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       </TooltipProvider>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-[#444] mx-1"></div>
+      {/* <div className="h-6 w-px bg-[#444] mx-1"></div> */}
       
       {/* Capture Thumbnail Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80 transition-colors duration-200"
+                "h-10 w-10",
+                "rounded-[10px]"
               )}
               onClick={onCaptureThumbnail}
               disabled={!isModelLoaded || isCapturingThumbnail}
@@ -105,20 +101,18 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       </TooltipProvider>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-[#444] mx-1"></div>
+      {/* <div className="h-6 w-px bg-[#444] mx-1"></div> */}
 
       {/* Clear Stage / Reset Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80 transition-colors duration-200"
+                "h-10 w-10",
+                "rounded-[10px]"
               )}
               onClick={onClearStageReset}
             >
