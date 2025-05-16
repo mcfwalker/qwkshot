@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Upload, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { FloorTexture } from '@/lib/supabase'
 import { getTextures, uploadTexture } from '@/lib/texture-service'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog'
 

@@ -1070,7 +1070,6 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         isProcessing={isSavingThumbnail}
         isSaved={isThumbnailSaved}
         isCapturing={isCapturingThumbnail}
-        modelName={modelName}
       />
     </div>
   );

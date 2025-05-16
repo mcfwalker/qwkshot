@@ -21,7 +21,6 @@ interface ThumbnailPreviewModalProps {
   isProcessing: boolean;
   isSaved?: boolean;
   isCapturing?: boolean;
-  modelName?: string;
 }
 
 export function ThumbnailPreviewModal({
@@ -33,7 +32,6 @@ export function ThumbnailPreviewModal({
   isProcessing,
   isSaved = false,
   isCapturing = false,
-  modelName = 'model'
 }: ThumbnailPreviewModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {

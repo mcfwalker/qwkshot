@@ -94,10 +94,6 @@ export function ModelEditDialog(props: ModelEditDialogProps) {
     setIsConfirmingDelete(true);
   };
 
-  const handleCancelDelete = () => {
-    setIsConfirmingDelete(false);
-  };
-
   const handleConfirmDeleteAction = async () => {
     setIsDeleting(true);
     try {

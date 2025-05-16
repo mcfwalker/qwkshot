@@ -1,17 +1,13 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { Model } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Trash2, Box } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ModelEditDialog } from './ModelEditDialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import Image from 'next/image'
 import ModelLibraryCard from '@/components/viewer/ModelLibraryCard'
 
 interface ModelGridClientProps {
@@ -21,9 +17,6 @@ interface ModelGridClientProps {
 export function ModelGridClient({ initialModels }: ModelGridClientProps) {
   const [models, setModels] = useState<Model[]>(initialModels)
   const router = useRouter()
-  const [modelToDelete, setModelToDelete] = useState<Model | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
   const [editingModel, setEditingModel] = useState<Model | null>(null)
 
   // Refresh models when component mounts or when router is refreshed
@@ -73,20 +66,6 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
       supabase.removeChannel(channel)
     }
   }, [])
-
-  // This function is for the OLD delete flow (separate AlertDialog), can be removed later
-  function openDeleteDialog(model: Model) {
-    setModelToDelete(model);
-    setIsDeleteDialogOpen(true);
-  }
-
-  const handleImageError = (modelId: string) => {
-    setImageErrors(prev => ({ ...prev, [modelId]: true }));
-  };
-
-  // This is the OLD handleDelete function, tied to the separate AlertDialog
-  // We will create a new one for the ModelEditDialog
-  // async function handleDelete() { ... existing handleDelete logic ... }
 
   const handleModelUpdated = async () => {
     try {
@@ -201,53 +180,6 @@ export function ModelGridClient({ initialModels }: ModelGridClientProps) {
           }}
         />
       )}
-
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="bg-[#1D1D1D] border-[#353535]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Model</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this model? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-[#353535] text-white hover:bg-[#444444] border-0">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={async () => {
-                if (!modelToDelete) return;
-                try {
-                  if (modelToDelete.file_url) {
-                    const { error: storageError } = await supabase.storage.from('models').remove([modelToDelete.file_url]);
-                    if (storageError && storageError.message !== 'The resource was not found') {
-                      console.error('Storage error:', storageError); 
-                      toast.error('Failed to delete model file'); 
-                      return;
-                    }
-                  }
-                  const { error } = await supabase.from('models').delete().eq('id', modelToDelete.id);
-                  if (error) { 
-                    console.error('Database error:', error); 
-                    toast.error('Failed to delete model record'); 
-                    return; 
-                  }
-                  toast.success('Model deleted successfully');
-                  setModels(prev => prev.filter(m => m.id !== modelToDelete.id));
-                  setIsDeleteDialogOpen(false);
-                  setModelToDelete(null);
-                  router.refresh();
-                } catch (err) {
-                  toast.error('Failed to delete model');
-                }
-              }}
-              className="bg-[#F76451] text-white hover:bg-[#F76451]/90 border-0"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 } 

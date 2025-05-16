@@ -4,15 +4,15 @@
 // Note: 'force-dynamic' might not be needed here anymore as data fetching is in an action.
 // export const dynamic = 'force-dynamic'; 
 
-import { Suspense, useState, useEffect } from 'react' // Import useEffect
+import { useState, useEffect } from 'react' // Import useEffect, Removed Suspense
 // import { createServerClient } from '@/lib/supabase-server' // No longer needed here
 import { Model } from '@/lib/supabase'
 import { ModelGridSkeleton } from '@/components/library/ModelGridSkeleton'
 import { ModelGridClient } from '@/components/library/ModelGridClient'
-import Image from 'next/image';
+// import Image from 'next/image'; // Removed Image import
 // import * as TabsPrimitive from '@radix-ui/react-tabs'; // Remove this
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'; // Add this
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils'; // Removed cn import
 import { getModels } from '@/app/actions/libraryActions'; // Import server action
 import { toast } from 'sonner'; // Import toast for error feedback
 
