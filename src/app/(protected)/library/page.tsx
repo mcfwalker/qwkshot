@@ -10,7 +10,8 @@ import { Model } from '@/lib/supabase'
 import { ModelGridSkeleton } from '@/components/library/ModelGridSkeleton'
 import { ModelGridClient } from '@/components/library/ModelGridClient'
 import Image from 'next/image';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+// import * as TabsPrimitive from '@radix-ui/react-tabs'; // Remove this
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'; // Add this
 import { cn } from '@/lib/utils';
 import { getModels } from '@/app/actions/libraryActions'; // Import server action
 import { toast } from 'sonner'; // Import toast for error feedback
@@ -59,57 +60,57 @@ export default function LibraryPage() {
         </div>
 
         {/* Tabs */}
-        <TabsPrimitive.Root 
+        <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
         >
-          <TabsPrimitive.List className="flex items-center justify-center h-10 text-muted-foreground gap-4">
-            <TabsPrimitive.Trigger
+          <TabsList className="flex items-center justify-center h-10 text-muted-foreground gap-4">
+            <TabsTrigger
               value="models"
               className={cn(
                 "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'models' 
-                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md" 
+                activeTab === 'models'
+                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md"
                   : "text-[#CFD0D0] hover:text-[#FFFFFF]"
               )}
             >
               MODELS
-            </TabsPrimitive.Trigger>
-            <TabsPrimitive.Trigger
+            </TabsTrigger>
+            <TabsTrigger
               value="textures"
               className={cn(
                 "flex h-10 min-w-[83px] px-9 justify-center items-center gap-2.5 text-sm font-medium uppercase transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'textures' 
-                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md" 
+                activeTab === 'textures'
+                  ? "bg-[#2A2A2A] text-[#C2F751] rounded-xl shadow-md"
                   : "text-[#CFD0D0] hover:text-[#FFFFFF]"
               )}
             >
               TEXTURES
-            </TabsPrimitive.Trigger>
-          </TabsPrimitive.List>
-        </TabsPrimitive.Root>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Tab Content */}
-      <TabsPrimitive.Root value={activeTab} className="mt-4">
-          <TabsPrimitive.Content value="models">
+      <Tabs value={activeTab} className="mt-4">
+          <TabsContent value="models">
             {/* Use isLoading state to conditionally render Skeleton or Client */}
             {isLoading ? (
               <ModelGridSkeleton />
             ) : (
               <ModelGridClient initialModels={models} />
             )}
-          </TabsPrimitive.Content>
-          <TabsPrimitive.Content value="textures">
+          </TabsContent>
+          <TabsContent value="textures">
             <div className="text-center text-muted-foreground p-8">
               Texture management coming soon!
             </div>
-          </TabsPrimitive.Content>
-        </TabsPrimitive.Root>
+          </TabsContent>
+        </Tabs>
     </div>
   );
 }

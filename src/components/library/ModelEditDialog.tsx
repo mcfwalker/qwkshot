@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Model } from '@/lib/supabase'
 import { getSupabaseClient } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -19,13 +19,38 @@ import { Pencil } from 'lucide-react'
 interface ModelEditDialogProps {
   model: Model
   onModelUpdated: () => void
+  open?: boolean
+  onOpenChange?: (isOpen: boolean) => void
 }
 
-export function ModelEditDialog({ model, onModelUpdated }: ModelEditDialogProps) {
+export function ModelEditDialog(props: ModelEditDialogProps) {
+  const { model, onModelUpdated, open: externalOpen, onOpenChange: externalOnOpenChange } = props
   const [name, setName] = useState(model.name)
   const [isLoading, setIsLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const supabase = getSupabaseClient()
+
+  const isEffectivelyOpen = externalOpen !== undefined ? externalOpen : internalOpen
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (externalOnOpenChange) {
+      externalOnOpenChange(isOpen)
+    } else {
+      setInternalOpen(isOpen)
+    }
+  }
+
+  useEffect(() => {
+    if (model) {
+      setName(model.name)
+    }
+  }, [model])
+
+  useEffect(() => {
+    if (!isEffectivelyOpen) {
+      setName(model.name)
+    }
+  }, [isEffectivelyOpen, model.name])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -67,7 +92,7 @@ export function ModelEditDialog({ model, onModelUpdated }: ModelEditDialogProps)
       }
       
       toast.success('Model updated successfully')
-      setOpen(false)
+      handleOpenChange(false)
       onModelUpdated()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update model')
@@ -77,14 +102,16 @@ export function ModelEditDialog({ model, onModelUpdated }: ModelEditDialogProps)
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button 
-          className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isEffectivelyOpen} onOpenChange={handleOpenChange}>
+      {externalOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button 
+            className="flex items-center justify-center w-10 h-10 p-2 rounded-lg border border-[#353535] bg-[#121212] hover:bg-[#353535] text-foreground/60 hover:text-foreground transition-colors"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md bg-[#1D1D1D] border-[#353535]">
         <DialogHeader>
           <DialogTitle>Edit Model Name</DialogTitle>

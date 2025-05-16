@@ -26,6 +26,7 @@ import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
 import { SerializedVector3 } from '@/types/p2p/shared';
 import { supabase } from '@/lib/supabase';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TabsTrigger } from '../ui/tabs';
 
 // Import the extracted components
 import { ShotCallerPanel } from './ShotCallerPanel'; 
@@ -1045,18 +1046,18 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
             className="flex flex-col flex-1 min-h-0 gap-6"
         >
           <TabsPrimitive.List className="flex items-center justify-center h-[40px] w-full gap-4">
-            <TabsPrimitive.Trigger 
-              value="shotCaller" 
-              className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+            <TabsTrigger
+              value="shotCaller"
+              className="TEST_CURSOR_TARGET cursor-pointer"
             >
               SHOT CALLER
-            </TabsPrimitive.Trigger>
-            <TabsPrimitive.Trigger 
-              value="playback" 
-              className="flex flex-1 h-[40px] px-3 justify-center items-center flex-shrink-0 uppercase text-sm transition-colors text-[rgba(226,226,229,0.48)] hover:text-[rgba(226,226,229,0.84)] data-[state=active]:text-[#E2E2E5] data-[state=active]:border-b data-[state=active]:border-[#CFD0D0]"
+            </TabsTrigger>
+            <TabsTrigger
+              value="playback"
+              className="TEST_CURSOR_TARGET cursor-pointer"
             >
               PLAYBACK
-            </TabsPrimitive.Trigger>
+            </TabsTrigger>
           </TabsPrimitive.List>
 
           <div className="flex flex-col flex-1 min-h-0">
