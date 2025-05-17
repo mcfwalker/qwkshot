@@ -87,6 +87,9 @@
     background-color: #121212 !important;
     font-family: var(--font-inter-tight);
     color: #CFD0D0;
+    /* Remove dot pattern from body */
+    /* background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); */
+    /* background-size: 20px 20px; */
   }
 
   /* Add global style for SVG icons */
@@ -434,3 +437,5 @@
     background-color: rgb(163, 230, 53);
   }
 }
+
+/* Custom scrollbar styles */

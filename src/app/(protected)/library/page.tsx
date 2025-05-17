@@ -45,8 +45,16 @@ export default function LibraryPage() {
     fetchModels();
   }, []); // Empty dependency array means run once on mount
 
+  // const dotPatternStyle = { // Removed inline style object
+  //   backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)',
+  //   backgroundSize: '20px 20px',
+  // };
+
   return (
-    <div className="container px-4 pt-10 pb-8">
+    <div 
+      className="container px-4 pt-10 pb-8 min-h-screen" 
+      // style={dotPatternStyle} // Removed inline style attribute
+    >
       {/* Flex container for header and tabs */}
       <div className="flex items-center gap-14 mb-10">
         {/* SVG Header Replaced with Text Header */}
