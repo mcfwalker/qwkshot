@@ -4,6 +4,8 @@ import { EnvironmentalMetadata } from '@/types/p2p/environmental-metadata';
 import { analyzeScene as analyzeSceneGeometry } from '@/lib/scene-analysis';
 import { Object3D, PerspectiveCamera } from 'three';
 import { NotFoundError } from '@/types/p2p/metadata-manager';
+import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { FloorType } from '@/components/viewer/Floor';
 
 // Create MetadataManagerFactory instance
 const metadataManagerFactory = new MetadataManagerFactory({
@@ -35,20 +37,67 @@ const metadataManager = metadataManagerFactory.create({
 interface ViewerState {
   isLocked: boolean;
   modelId: string | null;
+  sceneBackgroundColor: string;
+  gridColor: string;
+  gridVisible: boolean;
+  fov: number;
+  showReticle: boolean;
+  floorType: FloorType;
+  floorTexture: string | null;
+  userVerticalAdjustment: number;
+  activeLeftPanelTab: 'model' | 'camera';
+  animationCommands: CameraCommand[];
+  animationDuration: number;
+  animationPlaybackSpeed: number;
+  isAnimationPlaying: boolean;
+  animationProgress: number;
   toggleLock: () => void;
   setLock: (locked: boolean) => void;
   setModelId: (id: string | null) => void;
+  setSceneBackgroundColor: (color: string) => void;
+  setGridColor: (color: string) => void;
+  setGridVisible: (visible: boolean) => void;
+  setFov: (fov: number) => void;
+  setShowReticle: (visible: boolean) => void;
+  setFloorType: (type: FloorType) => void;
+  setFloorTexture: (textureUrl: string | null) => void;
+  setUserVerticalAdjustment: (adjustment: number) => void;
+  setActiveLeftPanelTab: (tab: 'model' | 'camera') => void;
+  setAnimationCommands: (commands: CameraCommand[]) => void;
+  setAnimationDuration: (duration: number) => void;
+  setAnimationPlaybackSpeed: (speed: number) => void;
+  setIsAnimationPlaying: (playing: boolean) => void;
+  setAnimationProgress: (progress: number) => void;
   storeEnvironmentalMetadata: (
     modelRef: Object3D,
     cameraRef: PerspectiveCamera,
     controlsRef: any,
     fov: number
   ) => Promise<void>;
+  resetViewerSettings: () => void;
 }
+
+const defaultSettings = {
+  sceneBackgroundColor: '#121212',
+  gridColor: '#444444',
+  gridVisible: true,
+  fov: 50,
+  showReticle: true,
+  floorType: 'grid' as FloorType,
+  floorTexture: null as string | null,
+  userVerticalAdjustment: 0,
+  activeLeftPanelTab: 'model' as 'model' | 'camera',
+  animationCommands: [] as CameraCommand[],
+  animationDuration: 10,
+  animationPlaybackSpeed: 1,
+  isAnimationPlaying: false,
+  animationProgress: 0,
+};
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
   isLocked: false,
   modelId: null,
+  ...defaultSettings,
   toggleLock: () => {
     const currentState = get();
     console.log('Toggling lock state in store. Current state:', {
@@ -63,6 +112,20 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
   setLock: (locked) => set({ isLocked: locked }),
   setModelId: (id) => set({ modelId: id }),
+  setSceneBackgroundColor: (color) => set({ sceneBackgroundColor: color }),
+  setGridColor: (color) => set({ gridColor: color }),
+  setGridVisible: (visible) => set({ gridVisible: visible }),
+  setFov: (fov) => set({ fov: fov }),
+  setShowReticle: (visible) => set({ showReticle: visible }),
+  setFloorType: (type) => set({ floorType: type }),
+  setFloorTexture: (textureUrl) => set({ floorTexture: textureUrl }),
+  setUserVerticalAdjustment: (adjustment) => set({ userVerticalAdjustment: adjustment }),
+  setActiveLeftPanelTab: (tab) => set({ activeLeftPanelTab: tab }),
+  setAnimationCommands: (commands) => set({ animationCommands: commands }),
+  setAnimationDuration: (duration) => set({ animationDuration: duration }),
+  setAnimationPlaybackSpeed: (speed) => set({ animationPlaybackSpeed: speed }),
+  setIsAnimationPlaying: (playing) => set({ isAnimationPlaying: playing }),
+  setAnimationProgress: (progress) => set({ animationProgress: progress }),
   storeEnvironmentalMetadata: async (modelRef, cameraRef, controlsRef, fov) => {
     const { modelId } = get();
     if (!modelId) {
@@ -160,6 +223,16 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       console.error('Failed to store or update environmental metadata:', error);
       // Ensure the error is propagated
       throw error instanceof Error ? error : new Error('Failed to save environmental metadata');
+    }
+  },
+  resetViewerSettings: () => {
+    set({
+      ...defaultSettings,
+      modelId: get().modelId,
+      isLocked: get().isLocked,
+    });
+    if (get().modelId) {
+      set({ activeLeftPanelTab: 'camera' });
     }
   }
 }));

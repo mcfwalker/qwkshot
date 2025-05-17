@@ -5,7 +5,7 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { ModelLoader } from './ModelLoader';
 
 interface ModelSelectorTabsProps {
-  onModelSelect: (url: string) => void;
+  onModelSelect: (modelId: string) => void;
 }
 
 export function ModelSelectorTabs({ onModelSelect }: ModelSelectorTabsProps) {

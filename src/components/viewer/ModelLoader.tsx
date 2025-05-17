@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
 import { normalizeModelAction } from '@/app/actions/normalization';
 
-export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
+export const ModelLoader = ({ onModelLoad }: { onModelLoad: (modelId: string) => void }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Processing model...');
   const [error, setError] = useState<string | null>(null);
@@ -249,42 +249,33 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
         loggerRef.current.info('Backend normalization completed successfully.');
       }
 
-      // --- Load the final (normalized) model URL for display --- 
-      setLoadingMessage('Loading final model...');
-      try {
-        const finalUrl = await loadModel(modelId); 
-        onModelLoad(finalUrl); // Update the viewer with the URL from storage
-        loggerRef.current.info('Viewer updated with final model URL from storage.');
-      } catch (loadError) {
-        loggerRef.current.error('Failed to load final model URL after save/normalization:', loadError);
-        toast.error('Failed to display final model', { description: loadError instanceof Error ? loadError.message : undefined });
-      }
-
-      const newPath = `/viewer/${modelId}`;
-      window.history.pushState({}, '', newPath);
-      toast.success('Model saved successfully!');
+      toast.success('Model saved and processed!');
+      onModelLoad(modelId); // Changed: Pass modelId instead of a URL
+      setShowSaveDialog(false);
+      setCurrentFile(null);
 
     } catch (err) {
       console.error('Model processing/saving error:', err);
       setError(err instanceof Error ? err.message : 'Failed to process/save model');
-    } finally {
-      // Now that everything is done, close the dialog
-      setShowSaveDialog(false);
-      setLoading(false);
-      setCurrentFile(null);
     }
   };
 
-  const handleLibrarySelect = async (model: any) => {
+  const handleLibrarySelect = async (selectedModelId: string) => { // Changed: param from model (any) to selectedModelId (string)
+    if (isInitializing) {
+      toast.error('System is still initializing. Please wait a moment and try again.');
+      return;
+    }
+    setLoading(true);
+    setLoadingMessage('Loading model from library...');
+    setError(null);
     try {
-      setLoading(true);
-      const url = await loadModel(model.id);
-      const newPath = `/viewer/${model.id}`;
-      window.history.pushState({}, '', newPath);
-      onModelLoad(url);
-    } catch (error) {
-      console.error('Error loading model:', error);
-      toast.error('Failed to load model from library');
+      // No longer need to call loadModel here, ViewerContainer will do it with the ID
+      onModelLoad(selectedModelId); // Changed: Pass selectedModelId directly
+      setShowLibraryModal(false);
+    } catch (e: any) {
+      console.error('Error in handleLibrarySelect:', e);
+      setError(e.message || 'Failed to load model from library.');
+      toast.error('Failed to load model', { description: e.message });
     } finally {
       setLoading(false);
     }

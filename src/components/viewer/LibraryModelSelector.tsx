@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Model } from '@/lib/supabase';
 
 interface LibraryModelSelectorProps {
-  onSelectModel: (url: string) => void;
+  onSelectModel: (modelId: string) => void;
 }
 
 export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProps) => {
@@ -42,12 +42,10 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
     try {
       setLoadingModelId(model.id);
       setError(null);
-      const modelUrl = await loadModel(model.id);
-      onSelectModel(modelUrl);
+      onSelectModel(model.id);
     } catch (error) {
-      console.error('Error loading model:', error);
-      setError('Failed to load model');
-      setRetryingModelId(model.id);
+      console.error('Error selecting model (this should ideally not happen if just passing ID):', error);
+      setError('Failed to select model');
     } finally {
       setLoadingModelId(null);
     }
@@ -58,11 +56,10 @@ export const LibraryModelSelector = ({ onSelectModel }: LibraryModelSelectorProp
       setLoadingModelId(model.id);
       setError(null);
       setRetryingModelId(null);
-      const modelUrl = await loadModel(model.id);
-      onSelectModel(modelUrl);
+      onSelectModel(model.id);
     } catch (error) {
-      console.error('Error loading model:', error);
-      setError('Failed to load model');
+      console.error('Error retrying model selection:', error);
+      setError('Failed to select model on retry');
       setRetryingModelId(model.id);
     } finally {
       setLoadingModelId(null);

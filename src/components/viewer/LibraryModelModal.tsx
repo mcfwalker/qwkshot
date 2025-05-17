@@ -16,7 +16,7 @@ import { Loader2 } from 'lucide-react'
 interface LibraryModelModalProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (model: Model) => void
+  onSelect: (modelId: string) => void
 }
 
 export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelModalProps) {
@@ -73,7 +73,7 @@ export function LibraryModelModal({ isOpen, onClose, onSelect }: LibraryModelMod
                   <button
                     key={model.id}
                     onClick={() => {
-                      onSelect(model)
+                      onSelect(model.id)
                       onClose()
                     }}
                     className="w-full text-left p-3 rounded-md bg-[#2E2E2E] hover:bg-[#343434] transition-colors group cursor-pointer"
