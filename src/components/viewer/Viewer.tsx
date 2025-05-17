@@ -1,9 +1,9 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene } from 'three';
+import { Vector3, PerspectiveCamera as ThreePerspectiveCamera, Object3D, MOUSE, AxesHelper, Box3, Box3Helper, Scene, Color } from 'three';
 // Commented out unused imports (keeping for reference)
 // import CameraControls from './CameraControls';
 // import FloorControls from './FloorControls';
@@ -133,6 +133,7 @@ interface ViewerProps {
 }
 
 function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
+  const [sceneBackgroundColor, setSceneBackgroundColor] = useState('#121212'); // Changed to #121212
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
   const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>(modelUrl ? 'camera' : 'model');
@@ -838,6 +839,13 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     toast.success('Thumbnail downloaded');
   }, [capturedThumbnail, modelName, currentModelId]);
 
+  // Effect to update scene background color when it changes
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.background = new Color(sceneBackgroundColor);
+    }
+  }, [sceneBackgroundColor]);
+
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
       {/* Reticle Overlay - Conditionally HIDE via className */}
@@ -850,7 +858,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         ref={canvasRef}
         shadows
         camera={{ position: [5, 5, 5], fov }}
-        onCreated={({ scene }) => { sceneRef.current = scene; }} // Capture scene reference
+        onCreated={({ scene, gl }) => { 
+          sceneRef.current = scene; 
+          scene.background = new Color(sceneBackgroundColor); // Set initial background color
+          // gl.setClearColor(new Color(sceneBackgroundColor)); // Alternative: set renderer clear color
+        }} // Capture scene reference and set initial background
       >
         <Suspense fallback={null}>
           {/* Camera setup */}

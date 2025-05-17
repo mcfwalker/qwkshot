@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, Suspense } from 'react';
-import { useTexture } from '@react-three/drei';
+import { useTexture, Grid as DreiGrid } from '@react-three/drei';
 import { DoubleSide, TextureLoader, RepeatWrapping, Texture, MeshStandardMaterial, LinearFilter } from 'three';
 import { supabase } from '@/lib/supabase';
 
@@ -10,17 +10,31 @@ export type FloorType = 'grid' | 'none';
 interface FloorProps {
   type: FloorType;
   texture?: string | null; // URL to texture
-  size?: number;
-  divisions?: number;
-  color?: string;
+  gridCellColor?: string;
+  gridSectionColor?: string;
+  gridFadeDistance?: number;
+  gridFadeStrength?: number;
+  gridInfinite?: boolean;
+  gridFollowCamera?: boolean;
+  gridCellSize?: number;
+  gridSectionSize?: number;
+  gridSectionThickness?: number;
+  gridCellThickness?: number;
 }
 
 export default function Floor({
   type = 'grid',
   texture = null,
-  size = 20,
-  divisions = 20,
-  color = '#444444'
+  gridCellColor = '#444444',
+  gridSectionColor = '#444444',
+  gridFadeDistance = 45,
+  gridFadeStrength = 3.5,
+  gridInfinite = true,
+  gridFollowCamera = true,
+  gridCellSize = 0.75,
+  gridSectionSize = 3,
+  gridSectionThickness = 1.5,
+  gridCellThickness = 1,
 }: FloorProps) {
   console.log('Floor component props:', { type, texture }); // Log received props
 
@@ -31,13 +45,22 @@ export default function Floor({
   if (texture) {
     return (
       <Suspense fallback={
-        <gridHelper
-          args={[size, divisions, color, color]}
-          rotation={[0, 0, 0]}
-          position={[0, -0.01, 0]} 
+        <DreiGrid
+          position={[0, -0.01, 0]}
+          args={[undefined, undefined]}
+          cellSize={gridCellSize}
+          sectionSize={gridSectionSize}
+          cellColor={gridCellColor}
+          sectionColor={gridSectionColor}
+          cellThickness={gridCellThickness}
+          sectionThickness={gridSectionThickness}
+          fadeDistance={gridFadeDistance}
+          fadeStrength={gridFadeStrength}
+          infiniteGrid={gridInfinite}
+          followCamera={gridFollowCamera}
         />
       }>
-        <TexturedFloor url={texture} size={size} fallbackColor={color} />
+        <TexturedFloor url={texture} size={100} fallbackColor={gridCellColor} />
       </Suspense>
     );
   }
@@ -45,10 +68,18 @@ export default function Floor({
   // Default to grid if no texture and type is grid
   if (type === 'grid') {
     return (
-      <gridHelper
-        args={[size, divisions, color, color]}
-        rotation={[0, 0, 0]}
-        position={[0, -0.01, 0]} // Slightly below 0 to avoid z-fighting
+      <DreiGrid
+        position={[0, -0.01, 0]}
+        cellSize={gridCellSize}
+        sectionSize={gridSectionSize}
+        cellColor={gridCellColor}
+        sectionColor={gridSectionColor}
+        cellThickness={gridCellThickness}
+        sectionThickness={gridSectionThickness}
+        fadeDistance={gridFadeDistance}
+        fadeStrength={gridFadeStrength}
+        infiniteGrid={gridInfinite}
+        followCamera={gridFollowCamera}
       />
     );
   }
@@ -57,7 +88,7 @@ export default function Floor({
 }
 
 // Wrapper component that handles URL processing
-function TexturedFloor({ url, size = 20, fallbackColor = '#444444' }: { url: string; size?: number; fallbackColor?: string }) {
+function TexturedFloor({ url, size = 100, fallbackColor = '#444444' }: { url: string; size?: number; fallbackColor?: string }) {
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
   const [error, setError] = useState<boolean>(false);
   
@@ -153,10 +184,18 @@ function TexturedFloor({ url, size = 20, fallbackColor = '#444444' }: { url: str
   // If there was an error or we don't have a URL yet, show the fallback grid
   if (error || !processedUrl) {
     return (
-      <gridHelper
-        args={[size, 20, fallbackColor, fallbackColor]}
-        rotation={[0, 0, 0]}
+      <DreiGrid
         position={[0, -0.01, 0]}
+        cellSize={0.5}
+        sectionSize={2.5}
+        cellColor={fallbackColor}
+        sectionColor={fallbackColor}
+        cellThickness={1}
+        sectionThickness={1.5}
+        fadeDistance={25}
+        fadeStrength={2}
+        infiniteGrid={true}
+        followCamera={true}
       />
     );
   }
