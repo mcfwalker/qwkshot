@@ -1,17 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, Suspense } from 'react';
-import { useTexture, Grid as DreiGrid } from '@react-three/drei';
-import { DoubleSide, TextureLoader, RepeatWrapping, Texture, MeshStandardMaterial, LinearFilter } from 'three';
+import { useTexture, Grid as DreiGrid, Plane } from '@react-three/drei';
+import { useLoader } from '@react-three/fiber';
+import { DoubleSide, RepeatWrapping, MeshStandardMaterial, LinearFilter, Color } from 'three';
 import { supabase } from '@/lib/supabase';
 
-export type FloorType = 'grid' | 'none';
+export type FloorType = 'grid' | 'textured' | 'none';
 
 interface FloorProps {
   type: FloorType;
   texture?: string | null; // URL to texture
-  gridCellColor?: string;
-  gridSectionColor?: string;
+  gridMainColor?: string;
   gridFadeDistance?: number;
   gridFadeStrength?: number;
   gridInfinite?: boolean;
@@ -25,18 +25,17 @@ interface FloorProps {
 export default function Floor({
   type = 'grid',
   texture = null,
-  gridCellColor = '#444444',
-  gridSectionColor = '#444444',
-  gridFadeDistance = 45,
+  gridMainColor = '#444444',
+  gridFadeDistance = 25,
   gridFadeStrength = 3.5,
   gridInfinite = true,
   gridFollowCamera = true,
-  gridCellSize = 0.75,
-  gridSectionSize = 3,
+  gridCellSize = 0.5,
+  gridSectionSize = 2.5,
   gridSectionThickness = 1.5,
   gridCellThickness = 1,
 }: FloorProps) {
-  console.log('Floor component props:', { type, texture }); // Log received props
+  console.log('Floor component props:', { type, texture, gridMainColor });
 
   // Don't render anything if type is 'none' and no texture
   if (type === 'none' && !texture) return null;
@@ -50,8 +49,8 @@ export default function Floor({
           args={[undefined, undefined]}
           cellSize={gridCellSize}
           sectionSize={gridSectionSize}
-          cellColor={gridCellColor}
-          sectionColor={gridSectionColor}
+          cellColor={gridMainColor}
+          sectionColor={gridMainColor}
           cellThickness={gridCellThickness}
           sectionThickness={gridSectionThickness}
           fadeDistance={gridFadeDistance}
@@ -60,7 +59,7 @@ export default function Floor({
           followCamera={gridFollowCamera}
         />
       }>
-        <TexturedFloor url={texture} size={100} fallbackColor={gridCellColor} />
+        <TexturedFloor url={texture} size={100} fallbackColor={gridMainColor} />
       </Suspense>
     );
   }
@@ -72,8 +71,8 @@ export default function Floor({
         position={[0, -0.01, 0]}
         cellSize={gridCellSize}
         sectionSize={gridSectionSize}
-        cellColor={gridCellColor}
-        sectionColor={gridSectionColor}
+        cellColor={gridMainColor}
+        sectionColor={gridMainColor}
         cellThickness={gridCellThickness}
         sectionThickness={gridSectionThickness}
         fadeDistance={gridFadeDistance}

@@ -33,6 +33,7 @@ import { supabase } from '@/lib/supabase';
 import { updateThumbnailUrlAction, uploadThumbnailAction } from '@/app/actions/thumbnail';
 import { playSound, Sounds } from '@/lib/soundUtils';
 import { ThumbnailPreviewModal } from './ThumbnailPreviewModal';
+import { DesignSettingsDialog } from './DesignSettingsDialog';
 
 // Model component - simplified to load GLTF/GLB without client normalization
 function Model({ url, modelRef }: { url: string; modelRef: React.RefObject<Object3D | null>; }) {
@@ -134,6 +135,8 @@ interface ViewerProps {
 
 function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   const [sceneBackgroundColor, setSceneBackgroundColor] = useState('#121212'); // Changed to #121212
+  const [gridColor, setGridColor] = useState('#444444'); // New state for grid color
+  const [isDesignDialogOpen, setIsDesignDialogOpen] = useState(false); // New state for dialog visibility
   const [fov, setFov] = useState(50);
   const [userVerticalAdjustment, setUserVerticalAdjustment] = useState(0);
   const [activeLeftPanelTab, setActiveLeftPanelTab] = useState<'model' | 'camera'>(modelUrl ? 'camera' : 'model');
@@ -349,11 +352,10 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   // --- END Keyboard Controls Effect ---
 
   // Handler for grid toggle
-  const handleGridToggle = (visible: boolean) => {
-      setGridVisible(visible);
-      // Optionally update floorType based on visibility?
-      // setFloorType(visible ? 'grid' : 'none'); // Example logic
-  };
+  // const handleGridToggle = (visible: boolean) => {
+  //   setGridVisible(visible);
+  //   toast.info(`Grid ${visible ? 'enabled' : 'disabled'}`);
+  // };
 
   // Handler for texture button click
   const handleAddTextureClick = () => {
@@ -894,7 +896,11 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           })()}
 
           {/* Floor */}
-          <Floor type={gridVisible ? floorType : 'none'} texture={floorTexture} />
+          <Floor 
+            type={gridVisible ? floorType : 'none'} 
+            texture={floorTexture} 
+            gridMainColor={gridColor} // Pass the new gridColor state
+          />
 
           {/* Model - Now wrapped in a group for user adjustment */} 
           <group position-y={userVerticalAdjustment}> 
@@ -985,13 +991,12 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         
         {/* Scene Controls (Remains separate below the tabs, now a direct sibling to the Model/Camera panel div) */}
         <SceneControls
-          userVerticalAdjustment={userVerticalAdjustment}
-          onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
-          gridVisible={gridVisible}
-          onGridToggle={handleGridToggle}
           onAddTextureClick={handleAddTextureClick}
           texture={floorTexture}
           onRemoveTexture={handleRemoveTexture}
+          userVerticalAdjustment={userVerticalAdjustment}
+          onUserVerticalAdjustmentChange={setUserVerticalAdjustment}
+          onOpenDesignDialog={() => setIsDesignDialogOpen(true)}
         />
       </div>
 
@@ -1082,6 +1087,18 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         isProcessing={isSavingThumbnail}
         isSaved={isThumbnailSaved}
         isCapturing={isCapturingThumbnail}
+      />
+
+      {/* Design Settings Dialog */}
+      <DesignSettingsDialog
+        isOpen={isDesignDialogOpen}
+        onOpenChange={setIsDesignDialogOpen}
+        canvasBackgroundColor={sceneBackgroundColor}
+        onCanvasBackgroundColorChange={setSceneBackgroundColor}
+        gridVisible={gridVisible}
+        onGridVisibleChange={setGridVisible}
+        gridColor={gridColor}
+        onGridColorChange={setGridColor}
       />
     </div>
   );
