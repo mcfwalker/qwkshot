@@ -363,27 +363,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   }, [duration, inputDuration]);
 
   const handleGeneratePath = async (isRetry: boolean = false) => {
+    console.log('[CameraAnimationSystem] handleGeneratePath called. isRetry:', isRetry);
+    console.log('[CameraAnimationSystem] modelId from props:', modelId); // Log the modelId prop
+
+    if (!isModelLoaded || !modelRef.current || !cameraRef.current || !controlsRef.current) {
+      toast.error("Model not loaded or refs not available.");
+      return;
+    }
+
     if (!instruction.trim()) {
       toast.error('Please describe the camera movement you want');
-      return;
-    }
-
-    // Early validation of required refs
-    if (!modelRef?.current) {
-      console.error('Model reference is not available');
-      toast.error('Model not loaded properly');
-      return;
-    }
-
-    if (!cameraRef?.current) {
-      console.error('Camera reference is not available');
-      toast.error('Camera not initialized properly');
-      return;
-    }
-
-    if (!controlsRef?.current) {
-      console.error('Camera controls not initialized properly');
-      toast.error('Camera controls not initialized properly');
       return;
     }
 
@@ -392,15 +381,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     setMessageIndex(0); // Reset message index
     
     try {
-      // Get the model ID from the URL
-      const pathParts = window.location.pathname.split('/');
-      const modelId = pathParts[pathParts.length - 1];
-      
-      if (!modelId) {
-        throw new Error('No model ID found in URL');
+      // ADDED: Validate the modelId prop
+      if (!modelId || !uuidRegex.test(modelId)) {
+        console.error('[CameraAnimationSystem] Invalid modelId prop for animation generation:', modelId);
+        toast.error('Cannot generate animation: Invalid model identifier.');
+        setIsGenerating(false);
+        setGeneratePathState('initial');
+        return;
       }
 
-      // Fetch model name from Supabase
+      // Fetch model name from Supabase - modelId here now refers to the prop
       const { data: modelData, error: modelError } = await supabase
         .from('models')
         .select('name')
@@ -444,7 +434,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       const payload: any = {
           instruction,
           duration: parseFloat(inputDuration),
-          modelId
+          modelId // This now correctly refers to the modelId prop
       };
 
       // If it's a retry, add context
