@@ -69,13 +69,11 @@ export async function POST(request: Request) {
     logger.info('Starting camera path generation request (Assistants API Refactor)'); // Updated log message
 
     // --- Initialize Components (Keep existing, some might be simplified/removed later) --- 
-    // await ensureLLMSystemInitialized(); // Old LLM init might not be needed
-    // const engine = getLLMEngine(); // <<< COMMENT OUT OLD ENGINE INSTANTIATION
-    const interpreter = new SceneInterpreterImpl({} as SceneInterpreterConfig, logger); // Keep interpreter instance for now, methods commented out later
-    // const promptCompiler = promptCompilerFactory.create({ maxTokens: 2048, temperature: 0.7 }); // <<< COMMENT OUT OLD COMPILER INSTANTIATION
-    // await promptCompiler.initialize({ maxTokens: 2048, temperature: 0.7 }); // <<< COMMENT OUT OLD COMPILER INIT
+    logger.info('Initializing components...');
+    const interpreter = new SceneInterpreterImpl({} as SceneInterpreterConfig, logger);
     
     // --- Metadata Manager and Analyzers remain crucial --- 
+    logger.info('Creating metadata manager...');
     const metadataManager = metadataManagerFactory.create(
       { // Config object
         database: { 
@@ -89,15 +87,18 @@ export async function POST(request: Request) {
       'serviceRole'
     );
     await metadataManager.initialize();
-    logger.debug('Got and initialized Metadata Manager instance (Service Role)');
+    logger.info('Metadata Manager initialized successfully');
     
+    logger.info('Creating environmental analyzer...');
     const environmentalAnalyzer = environmentalAnalyzerFactory.create(defaultEnvAnalyzerConfig);
     await environmentalAnalyzer.initialize(defaultEnvAnalyzerConfig);
-    logger.debug('Initialized core components (Metadata, EnvAnalyzer, Interpreter stub)');
+    logger.info('Environmental analyzer initialized successfully');
 
     // --- Process Request Body --- 
+    logger.info('Processing request body...');
     const body = await request.json();
-    const { instruction, duration, modelId } = body; 
+    const { instruction, duration, modelId } = body;
+    logger.info('Request body processed:', { instruction, duration, modelId });
 
     // --- Input Validation (Keep as is) --- 
     if (!instruction || !duration || !modelId) { 
@@ -112,7 +113,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    logger.info(`Received instruction: "${instruction}", duration: ${duration}s, modelId: ${modelId}`);
 
     // --- Declare Context Variables (Keep as is) --- 
     let modelMetadata: ModelMetadata;
@@ -124,19 +124,30 @@ export async function POST(request: Request) {
     // --- Fetch & Analyze Context Data (Keep as is) --- 
     logger.info(`Fetching context data for modelId: ${modelId}`);
     try { 
+        logger.info('Fetching model metadata...');
         modelMetadata = await metadataManager.getModelMetadata(modelId);
-        if (!modelMetadata) throw new Error(`Model metadata not found for id: ${modelId}`);
+        if (!modelMetadata) {
+            logger.error(`Model metadata not found for id: ${modelId}`);
+            throw new Error(`Model metadata not found for id: ${modelId}`);
+        }
+        logger.info('Model metadata fetched successfully');
         
+        logger.info('Fetching environmental metadata...');
         fetchedEnvironmentalMetadata = await metadataManager.getEnvironmentalMetadata(modelId);
         if (!fetchedEnvironmentalMetadata) {
-             logger.error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
-             throw new Error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
+            logger.error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
+            throw new Error(`Environmental metadata not found for modelId: ${modelId}. Scene must be locked first.`);
         }
+        logger.info('Environmental metadata fetched successfully');
+
         if (!fetchedEnvironmentalMetadata.camera?.position || !fetchedEnvironmentalMetadata.camera?.target) {
-            logger.error('Fetched environmental metadata is missing essential camera position or target.');
+            logger.error('Fetched environmental metadata is missing essential camera position or target:', {
+                hasPosition: !!fetchedEnvironmentalMetadata.camera?.position,
+                hasTarget: !!fetchedEnvironmentalMetadata.camera?.target
+            });
             throw new Error('Stored environmental metadata is incomplete (missing camera position/target).');
         }
-        logger.info('Environmental Metadata Fetched and Validated Successfully');
+        logger.info('Environmental metadata validated successfully');
 
         // --- DESERIALIZATION STEP (Keep as is) --- 
         logger.info('Attempting to deserialize stored SceneAnalysis...');
@@ -144,7 +155,7 @@ export async function POST(request: Request) {
         if (storedSerializedAnalysis) {
              sceneAnalysis = deserializeSceneAnalysis(storedSerializedAnalysis);
              if (sceneAnalysis) {
-                 logger.info('Successfully deserialized stored SceneAnalysis.');
+                 logger.info('Successfully deserialized stored SceneAnalysis');
              } else {
                  logger.warn('Deserialization of stored SceneAnalysis failed. Falling back to placeholder.');
              }
@@ -301,19 +312,16 @@ export async function POST(request: Request) {
         type: 'openai-assistant',
         apiKey: apiKey,
         assistantId: assistantId,
-        // Optional: Add polling/timeout overrides if needed
-        // pollingIntervalMs: 1500,
-        // timeoutMs: 90000, 
     };
 
     const motionPlanner = new OpenAIAssistantAdapter(adapterConfig);
 
     // --- Generate the Motion Plan using the Adapter --- 
-    logger.info(`Generating motion plan via ${adapterConfig.type} adapter (ID: ${adapterConfig.assistantId})...`); 
+    logger.info('Generating motion plan via OpenAI Assistant...'); 
     let motionPlan: MotionPlan;
     try {
+      logger.info('Starting motion plan generation...');
       motionPlan = await motionPlanner.generatePlan(instruction, duration);
-
       logger.info(`Motion Plan received from Assistant Adapter with ${motionPlan.steps.length} steps.`);
 
       // --- >>> NEW: Interpret the Motion Plan <<< ---
@@ -321,9 +329,15 @@ export async function POST(request: Request) {
       try {
         // Ensure necessary context is available
         if (!sceneAnalysis || !environmentalAnalysis || !currentCameraState) {
+          logger.error('Missing context for interpretation:', {
+            hasSceneAnalysis: !!sceneAnalysis,
+            hasEnvironmentalAnalysis: !!environmentalAnalysis,
+            hasCurrentCameraState: !!currentCameraState
+          });
           throw new Error('Interpreter context (SceneAnalysis, EnvironmentalAnalysis, or CameraState) is missing.');
         }
 
+        logger.info('Starting path interpretation...');
         const cameraCommands: CameraCommand[] = interpreter.interpretPath(
           motionPlan,
           sceneAnalysis,
@@ -331,47 +345,41 @@ export async function POST(request: Request) {
           { position: currentCameraState.position, target: currentCameraState.target }
         );
 
-        logger.info(`Motion Plan interpreted successfully. Returning ${cameraCommands.length} CameraCommands.`);
+        logger.info(`Motion Plan interpreted successfully. Generated ${cameraCommands.length} CameraCommands.`);
         
         // --- ADDED: Serialize Vector3 before sending --- 
+        logger.info('Serializing camera commands...');
         const serializableCommands = cameraCommands.map(cmd => ({
             position: { x: cmd.position.x, y: cmd.position.y, z: cmd.position.z },
             target: { x: cmd.target.x, y: cmd.target.y, z: cmd.target.z },
             duration: cmd.duration,
             easing: cmd.easing
         }));
-        // --- END ADDED ---
+        logger.info('Camera commands serialized successfully');
         
-        return NextResponse.json(serializableCommands); // Return the serialized commands
+        return NextResponse.json(serializableCommands);
 
-      } catch (interpreterError: any) { // Catch block for interpreter errors
+      } catch (interpreterError: any) {
         logger.error('Error during Scene Interpreter execution:', interpreterError);
         const errorMessage = interpreterError instanceof Error ? interpreterError.message : 'Unknown interpretation error';
         return NextResponse.json(
             { error: `Scene Interpretation Failed: ${errorMessage}` },
             { status: 500 }
-        ); // <-- Ensure this block is closed properly
-      } // <-- Added closing brace for inner catch
-
-    } catch (motionPlannerError: any) { // Catch errors from the adapter (outer catch)
-      // --- Log specific error type --- 
-      const errorName = motionPlannerError instanceof Error ? motionPlannerError.name : 'UnknownError';
-      // Sanitize the error message: replace newlines with spaces
-      // Define errorMessage within this scope
-      let errorMessage = motionPlannerError instanceof Error ? motionPlannerError.message : 'Unknown motion planning error';
-      errorMessage = errorMessage.replace(/\r?\n|\r/g, ' '); // Replace newlines/carriage returns with spaces
-      
-      // Log the FULL error object for detailed debugging
-      logger.error(`Error during Motion Planner execution (${errorName}):`, motionPlannerError); 
-      // Also log the sanitized message just to be sure
-      logger.error(`Sanitized error message for response: ${errorMessage}`);
-      
-      // Keep generic 500 response for now, but could customize based on errorName later
+        );
+      }
+    } catch (error: any) {
+      logger.error('Motion planning failed:', error);
+      if (error.message?.includes('timed out')) {
+        return NextResponse.json(
+          { error: 'Motion Planning Failed: Run timed out after 60 seconds.' },
+          { status: 504 }
+        );
+      }
       return NextResponse.json(
-          { error: `Motion Planning Failed: ${errorMessage}`, code: errorName }, // Include error name/code
-          { status: 500 }
+        { error: error.message || 'Motion planning failed' },
+        { status: 500 }
       );
-    } // <-- Ensure this block is closed properly
+    }
 
   } catch (requestError: any) { // Catch for the outermost try block
     logger.error('Error during request processing:', requestError);
