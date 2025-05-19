@@ -35,9 +35,10 @@ export const CameraLockSwitch: React.FC<CameraLockSwitchProps> = ({
           className={cn(
             "peer inline-flex h-[30px] p-[3px] w-[54px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
-            "data-[state=checked]:bg-[#C2F751]",
-            "data-[state=unchecked]:bg-[#e2e2e2]",
+            "data-[state=checked]:bg-[#e2e2e2]",
+            "data-[state=unchecked]:bg-[#1e1e1e]",
             "[&>span]:pointer-events-none [&>span]:block [&>span]:h-6 [&>span]:w-6 [&>span]:rounded-full [&>span]:bg-[#121212] shadow-lg ring-0 transition-transform",
+            "data-[state=unchecked]:[&>span]:bg-[#e2e2e2]",
             "[&>span]:data-[state=checked]:translate-x-[20px]",
             "[&>span]:data-[state=unchecked]:translate-x-0"
           )}

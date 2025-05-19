@@ -289,9 +289,9 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
     onModelSelect('');
     resetViewerSettings();
     if (controlsRef.current) {
-      controlsRef.current.reset();
+      controlsRef.current.reset(); 
     }
-    setResetCounter(prev => prev + 1);
+    setResetCounter(prev => prev + 1); 
     toast.success("Stage Reset Successfully");
     setIsConfirmingReset(false);
     setShowClearConfirm(false);
@@ -307,7 +307,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
   }, [onModelSelect]);
 
   const handleToggleReticle = useCallback(() => {
-      if (isReticleLoading) return;
+      if (isReticleLoading) return; 
       setIsReticleLoading(true);
       setShowReticle(!showReticle);
       setTimeout(() => setIsReticleLoading(false), 1000);
@@ -354,9 +354,9 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       captureCanvas.width = canvas.width;
       captureCanvas.height = canvas.height;
       await new Promise(resolve => requestAnimationFrame(() => {
-        try {
-          captureContext.drawImage(canvas, 0, 0);
-          resolve(true);
+          try {
+            captureContext.drawImage(canvas, 0, 0);
+            resolve(true);
         } catch (e) { resolve(false); }
       }));
       const size = Math.min(captureCanvas.width, captureCanvas.height);
@@ -395,7 +395,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       img.src = base64Image;
     });
   };
-
+  
   const saveThumbnail = useCallback(async () => {
     const activeModelId = useViewerStore.getState().modelId; // Use store modelId
     if (!capturedThumbnail || !activeModelId) {
@@ -409,9 +409,9 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       const resizedImage = await resizeImage(capturedThumbnail, 512, 512);
       // @ts-ignore 
       const result = await uploadThumbnailAction(activeModelId, resizedImage, nameToUse);
-      if (!result.success) {
-        throw new Error(`Failed to upload thumbnail: ${result.error}`);
-      }
+        if (!result.success) {
+          throw new Error(`Failed to upload thumbnail: ${result.error}`);
+        }
       toast.success('Thumbnail saved successfully');
       setIsThumbnailSaved(true);
       setTimeout(() => supabase.auth.refreshSession(), 500);
@@ -422,7 +422,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
       setIsSavingThumbnail(false);
     }
   }, [capturedThumbnail, modelName, resizeImage]); // supabase dep removed as it's globally available
-
+  
   const downloadThumbnail = useCallback(async () => {
     if (!capturedThumbnail) {
       toast.error('No thumbnail to download'); return;
@@ -479,7 +479,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
 
   return (
     <div className={cn('relative w-full h-full min-h-screen -mt-14', className)}>
-      <div className={cn(!showReticle && "hidden")}>
+      <div className={cn(!showReticle && "hidden")}> 
           <CenterReticle />
       </div>
 
@@ -489,7 +489,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         shadows
         camera={{ position: [5, 5, 5], fov: useViewerStore.getState().fov }}
         onCreated={({ scene }) => {
-          sceneRef.current = scene;
+          sceneRef.current = scene; 
           scene.background = new Color(useViewerStore.getState().sceneBackgroundColor);
         }}
       >
@@ -513,12 +513,12 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
               />
             );
           })()}
-          <Floor
-            type={gridVisible ? floorType : 'none'}
-            texture={floorTexture}
+          <Floor 
+            type={gridVisible ? floorType : 'none'} 
+            texture={floorTexture} 
             gridMainColor={gridColor}
           />
-          <group position-y={userVerticalAdjustment}>
+          <group position-y={userVerticalAdjustment}> 
             {modelUrl ? (
               <Model url={modelUrl} modelRef={modelRef} />
             ) : null}
@@ -529,7 +529,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
           <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI} />
 
-          <AnimationController
+          <AnimationController 
             commands={animationCommands}
             isPlaying={isAnimationPlaying}
             playbackSpeed={animationPlaybackSpeed}
@@ -540,7 +540,7 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
             currentProgress={animationProgress}
             isRecording={isRecording}
           />
-          <CameraMover
+          <CameraMover 
             movementDirection={movementDirection}
             cameraRef={cameraRef}
             controlsRef={controlsRef}
@@ -567,9 +567,9 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
               </ErrorBoundary>
             </TabsContent>
             <TabsContent value="camera">
-              <CameraControlsPanel
-                fov={fov}
-                onFovChange={setFov}
+              <CameraControlsPanel 
+                fov={fov} 
+                onFovChange={setFov} 
                 onCameraReset={handleCameraReset}
               />
             </TabsContent>
@@ -620,22 +620,22 @@ function ViewerComponent({ className, modelUrl, onModelSelect }: ViewerProps) {
         />
       </div>
 
-      <TextureLibraryModal
+      <TextureLibraryModal 
         isOpen={showTextureModal}
         onClose={() => setShowTextureModal(false)}
         onSelect={handleTextureSelect}
       />
 
-      <BottomToolbar
+      <BottomToolbar 
         onClearStageReset={() => setShowClearConfirm(true)}
-        onToggleReticle={handleToggleReticle}
-        isReticleVisible={showReticle}
+        onToggleReticle={handleToggleReticle} 
+        isReticleVisible={showReticle} 
         isReticleLoading={isReticleLoading}
         onCaptureThumbnail={captureThumbnail}
         isModelLoaded={isModelLoaded}
         isCapturingThumbnail={isCapturingThumbnail}
       />
-
+      
       {showClearConfirm && (
         <ClearSceneConfirmPortal
           isOpen={showClearConfirm}

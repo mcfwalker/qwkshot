@@ -97,7 +97,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
                 key={index}
                 className={cn(
                   "w-px h-4", // Increased tick height
-                  index === 3 ? "bg-[#bef264]" : "bg-[#444444]" // Highlight middle tick (1.0x)
+                  index === 3 ? "bg-[#e2e2e2]" : "bg-[#444444]" // Highlight middle tick (1.0x) with #e2e2e2
                 )}
               />
             ))}

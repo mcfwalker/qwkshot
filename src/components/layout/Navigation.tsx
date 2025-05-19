@@ -27,11 +27,13 @@ export function Navigation() {
     <nav className="sticky top-0 z-[999] w-full h-14 bg-transparent">
       <div className="flex h-full items-center justify-between px-4">
         <Link href="/viewer" className="flex items-center gap-2 group">
-          <img 
-            src="/images/logo.svg" 
-            alt="Qwk Shot Logo" 
-            className="h-8 w-auto group-hover:opacity-90 transition-opacity"
-          />
+          <div className="h-[40px] w-auto rounded-[6px] bg-[#1e1e1e] flex items-center justify-center p-2 group-hover:opacity-90 transition-opacity">
+            <img 
+              src="/images/logo.svg" 
+              alt="Qwk Shot Logo" 
+              className="h-6 w-auto filter brightness-[.886]"
+            />
+          </div>
         </Link>
         <div className="flex items-center space-x-4">
           {/* Library Button - Icon Only */}

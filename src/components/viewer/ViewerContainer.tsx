@@ -14,7 +14,7 @@ const Viewer = dynamic(() => import("./Viewer"), { ssr: false });
 // Define props for ViewerContainer
 interface ViewerContainerProps {
   // This is the modelId from the URL path param
-  modelId?: string;
+  modelId?: string; 
 }
 
 export const ViewerContainer = ({ modelId: pathModelId }: ViewerContainerProps) => {
@@ -73,22 +73,22 @@ export const ViewerContainer = ({ modelId: pathModelId }: ViewerContainerProps) 
       if (modelUrl !== null) setModelUrl(null);
       return;
     }
-
+    
     const getSignedUrl = async () => {
       console.log(`[ViewerContainer] getSignedUrl: Attempting to load model for effectiveModelId: ${effectiveModelId}`);
-      setIsLoading(true);
-      setError(null);
+    setIsLoading(true);
+    setError(null);
       try {
         const url = await loadModel(effectiveModelId as string);
         console.log(`[ViewerContainer] getSignedUrl: Successfully loaded model URL for ${effectiveModelId}:`, url);
-        setModelUrl(url);
+        setModelUrl(url); 
       } catch (e: any) {
         console.error(`[ViewerContainer] getSignedUrl: Failed to load model for ${effectiveModelId}:`, e);
         setError(e.message || 'Failed to load model.');
         toast.error('Failed to load model', { description: e.message });
         setModelUrl(null);
       } finally {
-        setIsLoading(false);
+         setIsLoading(false); 
       }
     };
 

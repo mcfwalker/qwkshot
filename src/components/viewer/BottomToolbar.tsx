@@ -47,8 +47,8 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
                 "h-10 w-10",
                 "rounded-[10px]",
                 isReticleVisible 
-                  ? "text-[#C2F751]" 
-                  : ""
+                  ? "bg-[#e2e2e2] text-[#121212] hover:bg-[#e2e2e2]/90" 
+                  : "text-white"
               )}
               onClick={onToggleReticle}
               disabled={isReticleLoading}
