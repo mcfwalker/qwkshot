@@ -12,13 +12,13 @@ export function CenterReticle() {
     'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 flex flex-col items-center justify-center'; // Restored justify-center
 
   // Define colors
-  const lockedColor = '#F76451'; // Red/orange for locked
-  const unlockedColor = '#C2F751'; // Accent green for unlocked
+  // const lockedColor = '#F76451'; // Red/orange for locked - REMOVED
+  // const unlockedColor = '#C2F751'; // Accent green for unlocked - REMOVED
   const circleFillColor = '#4B4B4B';
   const textColor = '#A0A0A0';
 
   // Determine current color based on state
-  const currentReticleColor = isLocked ? lockedColor : unlockedColor;
+  // const currentReticleColor = isLocked ? lockedColor : unlockedColor; - REMOVED
 
   return (
     <div className={cn(baseContainerClasses)}> {/* Removed gap-* */} 

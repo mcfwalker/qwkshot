@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { SaveModelPortal } from './SaveModelPortal';
 import { LibraryModelPortal } from './LibraryModelPortal';
-import { loadModel } from '@/lib/library-service';
 import { P2PPipelineFactoryImpl } from '@/features/p2p/pipeline/P2PPipelineFactory';
 import { P2PPipelineConfig, P2PPipeline } from '@/types/p2p/pipeline';
 import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
