@@ -39,6 +39,7 @@ Each status report should include:
 5. **Notes** - Additional relevant information
 
 ## Current Reports
+- M3DV-SR-2025-05-16-2230-NavPlaybackUIRefine - UI Consistency, Navigation, and Playback Controls Refinement
 - M3DV-SR-2025-05-16-2102-DesignDialogCleanup - Design Settings Dialog Refinement & Scene Controls Cleanup
 - M3DV-SR-2025-05-16-1031-LibDialogsCleanup - Library Page, Dialog System Refactor & Cleanup
 - M3DV-SR-2025-05-15-2051-UIStorybook - UI Enhancements & Storybook Integration
