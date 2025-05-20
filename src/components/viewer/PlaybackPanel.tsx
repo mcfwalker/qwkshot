@@ -124,12 +124,15 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         >
           {/* Progress Bar Div */}
           <div 
-            className="absolute top-0 left-0 h-full bg-[#121212] z-0 transition-width duration-100 ease-linear" // Changed to #121212
-            style={{ width: `${progress}%` }} // Dynamic width based on progress
+            className="absolute top-0 left-0 h-full bg-[#121212] z-0 transition-width duration-100 ease-linear"
+            style={{ width: `${progress}%` }}
           />
           {/* Icon (needs to be above progress bar) */}
           <span className="relative z-10 flex items-center justify-center w-full">
-            <span className="flex items-center justify-center w-10 h-10 bg-[#E2E2E2] rounded-full">
+            <span className={cn(
+              "flex items-center justify-center w-10 h-10 rounded-full",
+              (!hasCommands || isGenerating || isRecording) ? "bg-transparent" : "bg-[#E2E2E2]"
+            )}>
               {isPlaying ? <Pause className="h-5 w-5 text-[#121212]" /> : <Play className="h-5 w-5 text-[#121212]" />}
             </span>
           </span>

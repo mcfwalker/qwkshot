@@ -27,7 +27,7 @@ export function Navigation() {
     <nav className="sticky top-0 z-[999] w-full h-14 bg-transparent">
       <div className="flex h-full items-center justify-between px-4">
         <Link href="/viewer" className="flex items-center gap-2 group">
-          <div className="h-[40px] w-auto rounded-[6px] bg-[#1e1e1e] flex items-center justify-center p-2 group-hover:opacity-90 transition-opacity">
+          <div className="h-[40px] w-auto rounded-[12px] bg-[#1e1e1e] group-hover:bg-[#343434] flex items-center justify-center p-2 transition-colors">
             <img 
               src="/images/logo.svg" 
               alt="Qwk Shot Logo" 
@@ -38,10 +38,9 @@ export function Navigation() {
         <div className="flex items-center space-x-4">
           {/* Library Button - Icon Only */}
           <Button 
-            variant="primary" 
             size="default" 
             onClick={() => router.push('/library')}
-            className="font-normal"
+            className="font-normal bg-[#1e1e1e] hover:bg-[#343434] rounded-[12px] transition-colors"
           >
             <Images className="h-6 w-6" />
           </Button>
@@ -49,7 +48,7 @@ export function Navigation() {
           {/* User Dropdown Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="flex items-center justify-center w-[92px] h-[40px] py-2 px-4 gap-6 shrink-0 rounded-md bg-[#2E2E2E] hover:bg-[#343434]">
+              <Button className="flex items-center justify-center w-[92px] h-[40px] py-2 px-4 gap-6 shrink-0 rounded-[12px] bg-[#1e1e1e] hover:bg-[#343434] transition-colors">
                 <User className="h-6 w-6 text-[#E2E2E5]" />
                 <ChevronDown className="h-4 w-4 text-[#E2E2E5]" />
               </Button>
