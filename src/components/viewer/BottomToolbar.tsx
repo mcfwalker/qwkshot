@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Target, Loader2, Camera } from 'lucide-react';
+import { Crosshair, Loader2, Camera } from 'lucide-react';
 import { broom } from '@lucide/lab';
 import { Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -55,7 +55,7 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
             >
               {isReticleLoading 
                 ? <Loader2 className="h-4 w-4 animate-spin" /> 
-                : <Target className="h-4 w-4" />
+                : <Crosshair className="h-4 w-4" />
               }
             </Button>
           </TooltipTrigger>
@@ -86,7 +86,7 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
             >
               {isCapturingThumbnail 
                 ? <Loader2 className="h-4 w-4 animate-spin" /> 
-                : <Camera className="h-4 w-4" />
+                : <Camera className="h-5 w-5" />
               }
             </Button>
           </TooltipTrigger>
@@ -116,7 +116,7 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
               )}
               onClick={onClearStageReset}
             >
-              <Icon iconNode={broom} className="h-4 w-4" />
+              <Icon iconNode={broom} className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

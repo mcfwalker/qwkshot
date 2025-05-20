@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 // import { Image as ImageIcon, PlusIcon, Trash2Icon } from "lucide-react"; // Not used
 import { cn } from "@/lib/utils";
 // import { Checkbox } from "@/components/ui/checkbox"; // Remove this line
-import { Palette } from 'lucide-react'; // Import Palette icon
+import { Palette, Image } from 'lucide-react'; // Import Palette and Image icons
 // import { AppPanel } from "@/components/ui/AppPanel"; // IMPORT AppPanel -- REMOVED
 
 interface SceneControlsProps {
@@ -107,6 +107,7 @@ export function SceneControlsComponent({
              onClick={texture ? onRemoveTexture : onAddTextureClick}
              disabled={isLocked}
            >
+             <Image className="h-4 w-4 mr-2" />
              {texture ? "Remove Texture" : "Add Texture"}
            </Button>
         </div>

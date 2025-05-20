@@ -12,10 +12,18 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-50",
         primary: cn(
-          "bg-[#2E2E2E] text-[#E2E2E5] font-normal",
-          "hover:bg-[#343434]",
-          "active:bg-[#202020]",
-          "disabled:bg-[#2E2E2E] disabled:text-[#E2E2E5]/[.48] disabled:shadow-none disabled:hover:bg-[#2E2E2E] disabled:active:bg-[#2E2E2E]"
+          "bg-[#515151] text-[#E2E2E5] font-normal",
+          "hover:bg-[#616161] hover:-translate-y-[1px]",
+          "active:bg-[#515151] active:translate-y-0",
+          "disabled:bg-[#2E2E2E] disabled:text-[#E2E2E5]/[.48] disabled:shadow-none disabled:hover:bg-[#2E2E2E] disabled:active:bg-[#2E2E2E] disabled:translate-y-0",
+          "transition-all duration-200 ease-in-out"
+        ),
+        "primary-light": cn(
+          "bg-[#E2E2E5] text-[#121212] font-normal",
+          "hover:bg-[#E2E2E5]/90 hover:-translate-y-[1px]",
+          "active:bg-[#E2E2E5] active:translate-y-0",
+          "disabled:bg-[#2E2E2E] disabled:text-[#E2E2E5]/[.48] disabled:shadow-none disabled:hover:bg-[#2E2E2E] disabled:active:bg-[#2E2E2E] disabled:translate-y-0",
+          "transition-all duration-200 ease-in-out"
         ),
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 disabled:opacity-50",

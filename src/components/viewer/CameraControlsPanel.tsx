@@ -5,7 +5,7 @@ import React from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { /*ChevronUp, ChevronDown, ChevronLeft, ChevronRight,*/ Move, Mouse } from 'lucide-react'; // Removed unused Chevrons
+import { /*ChevronUp, ChevronDown, ChevronLeft, ChevronRight,*/ Move, Mouse, Target } from 'lucide-react'; // Removed unused Chevrons and added Target icon
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
@@ -102,6 +102,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
         disabled={isLocked}
         onClick={handleReset}
       >
+        <Target className="h-4 w-4 mr-2" />
         Recenter
       </Button>
 

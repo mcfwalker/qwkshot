@@ -122,7 +122,7 @@ export const ShotCallerPanel: React.FC<ShotCallerPanelProps> = (props) => {
           <Tooltip>
             <TooltipTrigger asChild className="w-full">
               <Button 
-                variant="primary"
+                variant="primary-light"
                 size="xl"
                 onClick={(e) => { e.preventDefault(); props.onGeneratePath(); }}
                 disabled={!props.isModelLoaded || !props.isLocked || props.isGenerating || props.generatePathState === 'ready'}

@@ -114,7 +114,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
       <div className="flex justify-between gap-4 w-full">
         <Button
           onClick={onPlayPause}
-          variant="primary"
+          variant="primary-light"
           size="xl"
           className={cn(
             "flex-1",
@@ -124,17 +124,19 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         >
           {/* Progress Bar Div */}
           <div 
-            className="absolute top-0 left-0 h-full bg-[#A8D34A] z-0 transition-width duration-100 ease-linear" // Darker green, absolute, behind content
+            className="absolute top-0 left-0 h-full bg-[#121212] z-0 transition-width duration-100 ease-linear" // Changed to #121212
             style={{ width: `${progress}%` }} // Dynamic width based on progress
           />
           {/* Icon (needs to be above progress bar) */}
-          <span className="relative z-10"> {/* Wrap icon in span with relative z-index */}
-            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          <span className="relative z-10 flex items-center justify-center w-full">
+            <span className="flex items-center justify-center w-10 h-10 bg-[#E2E2E2] rounded-full">
+              {isPlaying ? <Pause className="h-5 w-5 text-[#121212]" /> : <Play className="h-5 w-5 text-[#121212]" />}
+            </span>
           </span>
         </Button>
         <Button
           onClick={onDownload}
-          variant="primary"
+          variant="primary-light"
           size="xl"
           className="flex-1"
           disabled={!hasCommands || isPlaying || isRecording || isGenerating}
@@ -142,7 +144,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           {isRecording ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <Download className="h-5 w-5" />
+            <Download className="h-5 w-5 text-[#121212]" />
           )}
         </Button>
       </div>
@@ -159,7 +161,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
           onClick={onCreateNewShot}
           disabled={isGenerating || isRecording}
         >
-          Create New Shot
+          Unlock & Create New Shot
         </Button>
       </div>
 

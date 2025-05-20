@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, RefreshCw } from 'lucide-react';
+import { Upload, RefreshCw, Library } from 'lucide-react';
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -386,6 +386,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (modelId: string) =>
         onClick={() => setShowLibraryModal(true)}
         disabled={isInitializing}
       >
+        <Library className="h-4 w-4 mr-2" />
         Library
       </Button>
 
