@@ -74,15 +74,15 @@ function SignInContent() {
   }
 
   return (
-    // This div centers the form card vertically within the first column
-    <div className="flex h-full w-full flex-col items-center justify-center py-6 md:py-10">
-      {/* Form Card: Semi-transparent with backdrop blur, now 50% width of its parent column */}
-      <div className="w-[50%] space-y-6 rounded-xl bg-black/60 p-8 shadow-2xl backdrop-blur-lg">
-        <div className="space-y-4 text-center">
+    // This div takes full height & width of the padded area from parent, then centers and left-aligns the form card.
+    <div className="flex h-full w-full items-center justify-start">
+      {/* Form Card: No background, no shadow, constrained width. */}
+      <div className="w-full max-w-xs space-y-6 sm:max-w-sm"> 
+        <div className="space-y-4 text-left">
           <img
             src="/images/logo_pink.png"
             alt="Awk Shot Logo"
-            className="mx-auto"
+            className=""
             style={{ width: '296px', height: 'auto' }}
           />
         </div>
@@ -98,7 +98,7 @@ function SignInContent() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="rounded-md border-gray-500 bg-white/10 text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
+              className="h-16 rounded-md border-[#383838] bg-black text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
             />
           </div>
           <div className="space-y-2">
@@ -110,16 +110,18 @@ function SignInContent() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="rounded-md border-gray-500 bg-white/10 text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
+              className="h-16 rounded-md border-[#383838] bg-black text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
             />
           </div>
-          <Button 
-            className="w-full bg-[#FEE3E5] text-black hover:bg-[#FEE3E5]/90 focus-visible:ring-[#FEE3E5] mt-6"
-            type="submit" 
-            disabled={isLoading}
-          >
-            {isLoading ? 'Signing in...' : 'Sign in with Email'}
-          </Button>
+          <div className="flex justify-start">
+            <Button 
+              className="h-14 px-6 flex items-center justify-center gap-[10px] rounded-md border border-[#121212] bg-[#FEE3E5] text-black hover:bg-[#FEE3E5]/90 focus-visible:ring-[#FEE3E5] mt-6"
+              type="submit" 
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in...' : 'Sign in with Email'}
+            </Button>
+          </div>
         </form>
 
         {/* Hide "Or continue with" separator for now
@@ -156,17 +158,13 @@ export default function SignInPage() {
   return (
     <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
       <div className="flex min-h-screen w-full">
-        {/* Column 1: Login Form with SVG background */}
-        <div className="relative w-full overflow-hidden bg-black lg:w-1/3">
-          <img
-            src="/images/vert_logo.svg"
-            alt="Background Design"
-            className="absolute inset-0 h-full w-full object-contain object-center opacity-100"
-          />
-          {/* Container for SignInContent to be above SVG and allow for centering */}
-          <div className="relative z-10 flex h-full items-center justify-center">
+        {/* Column 1: Login Form with Graphic as column background, offset to extend below bottom (30%), sized to 75% height */}
+        <div className="relative flex w-full flex-col overflow-hidden bg-black bg-[url('/images/side_bar_graphic.svg')] bg-no-repeat bg-[length:auto_75%] bg-[center_130%] lg:w-1/3">
+          {/* Top Container: Form Area - 50% height, padding, vertically centers SignInContent. No background (transparent to parent). */}
+          <div className="relative z-10 flex h-1/2 items-center p-6 sm:p-8 lg:p-12">
             <SignInContent />
           </div>
+          {/* Bottom Container: This area is now part of the column background. */}
         </div>
 
         {/* Column 2: Background Video (takes up remaining 2/3 on large screens) */}

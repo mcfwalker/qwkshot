@@ -20,13 +20,13 @@ ensureLLMSystemInitialized().catch(error => {
 });
 
 export const metadata: Metadata = {
-  title: 'Modern 3D Viewer', // You might want to customize this
+  title: 'QWK Shot',
   description: 'An LLM-powered 3D model viewer and cameraman.', // Customize this too
   icons: {
     icon: '/images/favicon.svg',
   },
   openGraph: {
-    title: 'Modern 3D Viewer', // Customize
+    title: 'QWK Shot',
     description: 'An LLM-powered 3D model viewer and cameraman.', // Customize
     images: [
       {
