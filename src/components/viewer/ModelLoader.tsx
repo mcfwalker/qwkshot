@@ -2,15 +2,13 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, RefreshCw, FolderOpen, FolderGit2, Library } from 'lucide-react';
+import { Upload, RefreshCw, Library } from 'lucide-react';
 import { LoadingOverlay } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
-import { withRetry } from '@/lib/retry-utils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { SaveModelPortal } from './SaveModelPortal';
 import { LibraryModelPortal } from './LibraryModelPortal';
-import { loadModel } from '@/lib/library-service';
 import { P2PPipelineFactoryImpl } from '@/features/p2p/pipeline/P2PPipelineFactory';
 import { P2PPipelineConfig, P2PPipeline } from '@/types/p2p/pipeline';
 import { SceneAnalyzerFactory } from '@/features/p2p/scene-analyzer/SceneAnalyzerFactory';
@@ -23,12 +21,11 @@ import { cn } from '@/lib/utils';
 import { prepareModelUpload } from '@/app/actions/models';
 import { normalizeModelAction } from '@/app/actions/normalization';
 
-export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => void }) => {
+export const ModelLoader = ({ onModelLoad }: { onModelLoad: (modelId: string) => void }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Processing model...');
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [currentAnalysisMetadata, setCurrentAnalysisMetadata] = useState<any | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -148,12 +145,11 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
     setLoadingMessage('Analyzing scene...');
     
     // Run client-side analysis to get metadata for saving
-    const { modelId: tempModelId, analysis, metadata } = await pipelineRef.current.processModel({
+    const { metadata } = await pipelineRef.current.processModel({
       file,
       userId: 'current-user-id'
     });
     
-    setCurrentAnalysisMetadata(metadata);
     setIsAnalyzed(true);
     
     return metadata; // Return metadata so caller can access it
@@ -188,10 +184,6 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
       if (!metadata) {
         throw new Error('Failed to analyze model.');
       }
-      
-      // Set metadata explicitly from the result
-      setCurrentAnalysisMetadata(metadata);
-      setIsAnalyzed(true);
       
       // Continue with save process
       setLoadingMessage('Saving model metadata...');
@@ -256,43 +248,33 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
         loggerRef.current.info('Backend normalization completed successfully.');
       }
 
-      // --- Load the final (normalized) model URL for display --- 
-      setLoadingMessage('Loading final model...');
-      try {
-        const finalUrl = await loadModel(modelId); 
-        onModelLoad(finalUrl); // Update the viewer with the URL from storage
-        loggerRef.current.info('Viewer updated with final model URL from storage.');
-      } catch (loadError) {
-        loggerRef.current.error('Failed to load final model URL after save/normalization:', loadError);
-        toast.error('Failed to display final model', { description: loadError instanceof Error ? loadError.message : undefined });
-      }
-
-      const newPath = `/viewer/${modelId}`;
-      window.history.pushState({}, '', newPath);
-      toast.success('Model saved successfully!');
+      toast.success('Model saved and processed!');
+      onModelLoad(modelId); // Changed: Pass modelId instead of a URL
+      setShowSaveDialog(false);
+      setCurrentFile(null);
 
     } catch (err) {
       console.error('Model processing/saving error:', err);
       setError(err instanceof Error ? err.message : 'Failed to process/save model');
-    } finally {
-      // Now that everything is done, close the dialog
-      setShowSaveDialog(false);
-      setLoading(false);
-      setCurrentFile(null);
-      setCurrentAnalysisMetadata(null);
     }
   };
 
-  const handleLibrarySelect = async (model: any) => {
+  const handleLibrarySelect = async (selectedModelId: string) => { // Changed: param from model (any) to selectedModelId (string)
+    if (isInitializing) {
+      toast.error('System is still initializing. Please wait a moment and try again.');
+      return;
+    }
+    setLoading(true);
+    setLoadingMessage('Loading model from library...');
+    setError(null);
     try {
-      setLoading(true);
-      const url = await loadModel(model.id);
-      const newPath = `/viewer/${model.id}`;
-      window.history.pushState({}, '', newPath);
-      onModelLoad(url);
-    } catch (error) {
-      console.error('Error loading model:', error);
-      toast.error('Failed to load model from library');
+      // No longer need to call loadModel here, ViewerContainer will do it with the ID
+      onModelLoad(selectedModelId); // Changed: Pass selectedModelId directly
+      setShowLibraryModal(false);
+    } catch (e: any) {
+      console.error('Error in handleLibrarySelect:', e);
+      setError(e.message || 'Failed to load model from library.');
+      toast.error('Failed to load model', { description: e.message });
     } finally {
       setLoading(false);
     }
@@ -338,79 +320,73 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
   }, [loading, isAnalyzed, currentFile]);
 
   return (
-    <>
-      <div className="relative">
-        <div
-          {...getRootProps()}
-          className={cn(
-            "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[10px] border border-dashed border-[#444444] text-center cursor-pointer",
-            "transition-colors",
-            "hover:border-[#C2F751]",
-            isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
-            error && 'border-destructive',
-            isInitializing && 'opacity-60 cursor-not-allowed'
-          )}
-        >
-          <input {...getInputProps()} />
-          
-          {isInitializing ? (
-            <div className="text-center">
-              <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
-              <p className="text-sm font-medium">Initializing system...</p>
-              <p className="text-xs text-muted-foreground italic font-light">
-                Please wait a moment
-              </p>
+    <div className="flex flex-col gap-6 h-full items-center justify-center text-center">
+      <div
+        {...getRootProps()}
+        className={cn(
+          "relative",
+          "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[6px] border border-dashed border-[#444444] text-center cursor-pointer",
+          "transition-colors",
+          "hover:border-[#e2e2e2]",
+          isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
+          error && 'border-destructive',
+          isInitializing && 'opacity-60 cursor-not-allowed'
+        )}
+      >
+        <input {...getInputProps()} />
+        
+        {isInitializing ? (
+          <div className="text-center">
+            <RefreshCw className="h-6 w-6 mb-4 text-muted-foreground animate-spin mx-auto" />
+            <p className="text-sm font-medium">Initializing system...</p>
+            <p className="text-xs text-muted-foreground italic font-light">
+              Please wait a moment
+            </p>
+          </div>
+        ) : (
+          <>
+            <Upload className="h-5 w-5 mb-1 text-muted-foreground" />
+            
+            <div className="text-center space-y-0.5">
+              <p className="text-sm font-medium text-foreground">Drop your model here</p>
+              <p className="text-xs text-muted-foreground font-light">Supports .glb and .gltf</p>
+              {error && (
+                <div className="space-y-2">
+                  <p className="text-xs text-destructive font-medium">
+                    {error}
+                  </p>
+                  {currentFile && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRetry();
+                      }}
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <>
-              <Upload className="h-5 w-5 mb-1 text-muted-foreground" />
-              
-              <div className="text-center space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Drop your model here</p>
-                <p className="text-xs text-muted-foreground font-light">Supports .glb and .gltf</p>
-                {error && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-destructive font-medium">
-                      {error}
-                    </p>
-                    {currentFile && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRetry();
-                        }}
-                        className="w-full"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Retry
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Completely hide loading overlay when save dialog is shown */}
+          </>
+        )}
         {loading && !showSaveDialog && <LoadingOverlay message={loadingMessage} />}
       </div>
 
       <Button
-        variant="secondary"
+        variant="primary"
         className={cn(
-          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch",
-          "rounded-[10px] border border-[#353535] bg-[#121212]",
-          "hover:bg-[#353535]",
-          "disabled:opacity-70 disabled:pointer-events-none",
-          "text-sm text-foreground/80"
+          "self-stretch"
         )}
         size="default"
         onClick={() => setShowLibraryModal(true)}
         disabled={isInitializing}
       >
+        <Library className="h-4 w-4 mr-2" />
         Library
       </Button>
 
@@ -420,22 +396,21 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (url: string) => voi
           onSave={handleSaveModel}
           onClose={() => {
             setShowSaveDialog(false);
-            // Clear loading state when user cancels
-            setLoading(false);
             setCurrentFile(null);
-            setCurrentAnalysisMetadata(null);
+            setError(null);
+            setIsAnalyzed(false);
           }}
-          loadingMessage={loading ? loadingMessage : undefined}
+          loadingMessage={loading && loadingMessage === 'Analyzing scene...' ? loadingMessage : undefined}
         />
       )}
 
       {showLibraryModal && (
         <LibraryModelPortal
           isOpen={showLibraryModal}
-          onSelect={handleLibrarySelect}
           onClose={() => setShowLibraryModal(false)}
+          onSelect={handleLibrarySelect}
         />
       )}
-    </>
+    </div>
   );
 }; 

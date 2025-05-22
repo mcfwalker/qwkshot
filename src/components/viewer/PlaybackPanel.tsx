@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button /*, buttonVariants*/ } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Play, Pause, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CameraCommand } from '@/types/p2p/scene-interpreter';
+import { TakeInfoDisplay } from './TakeInfoDisplay';
 
 interface PlaybackPanelProps {
   commands: CameraCommand[];
@@ -28,6 +29,7 @@ interface PlaybackPanelProps {
 }
 
 // Keep speed options if needed for slider logic, though direct values are used now
+/* // Removed SPEED_OPTIONS
 const SPEED_OPTIONS = [
   { value: 0.25, label: '0.25x' },
   // { value: 0.5, label: '0.5x' },
@@ -38,6 +40,7 @@ const SPEED_OPTIONS = [
   // { value: 1.75, label: '1.75x' },
   { value: 2, label: '2.0x' }
 ];
+*/
 
 export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   commands,
@@ -59,73 +62,17 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
   const displayDuration = hasCommands ? (duration / playbackSpeed) : 0;
 
   return (
-    // Main container - Revert padding to p-0
-    <div className="flex flex-col p-0 gap-6 h-full"> 
+    <div className="flex flex-col gap-6 h-full">
       
-      {/* Take Label Section - Updated Structure */}
-      <div 
-        className={cn(
-          "flex items-stretch w-full h-[64px] rounded-[10px] bg-[#1D1D1D] border border-[#353535] overflow-hidden", // Updated with exact 10px border radius
-        )}
-      >
-        {/* Left Section (Take Count) */}
-        <div className="flex items-center px-4 border-r border-[#353535] flex-shrink-0">
-          <span className="text-sm font-medium text-[#CFD0D0]">
-            TAKE {hasCommands ? takeCount : 0}
-          </span>
-        </div>
-        {/* Right Section (Model Name / Placeholder) */}
-        <div className="flex items-center px-4 flex-grow min-w-0">
-          <span className={cn(
-            "text-sm font-medium block",
-            "overflow-hidden whitespace-nowrap text-ellipsis",
-            hasCommands ? "text-[#CFD0D0]" : "text-[#CFD0D0]/60"
-          )}>
-            {hasCommands ? (modelName || 'Untitled Shot') : 'No animation loaded'}
-          </span>
-        </div>
-      </div>
+      <TakeInfoDisplay 
+        hasCommands={hasCommands}
+        takeCount={takeCount}
+        animationName={modelName}
+        className="w-full"
+      />
 
-      {/* Play/Download Buttons Section */}
-      <div className="flex justify-between gap-4">
-        <Button
-          onClick={onPlayPause}
-          variant="primary"
-          size="lg"
-          className={cn(
-            "flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed", // Updated to exact 10px border radius
-            "relative overflow-hidden" // Add relative positioning and overflow hidden
-          )}
-          disabled={!hasCommands || isGenerating || isRecording}
-        >
-          {/* Progress Bar Div */}
-          <div 
-            className="absolute top-0 left-0 h-full bg-[#A8D34A] z-0 transition-width duration-100 ease-linear" // Darker green, absolute, behind content
-            style={{ width: `${progress}%` }} // Dynamic width based on progress
-          />
-          {/* Icon (needs to be above progress bar) */}
-          <span className="relative z-10"> {/* Wrap icon in span with relative z-index */}
-            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </span>
-        </Button>
-        <Button
-          onClick={onDownload}
-          variant="primary" // Use primary variant
-          size="lg" // Use larger size
-          className="flex-1 h-14 rounded-[10px] disabled:cursor-not-allowed" // Updated to exact 10px border radius
-          disabled={!hasCommands || isPlaying || isRecording || isGenerating}
-        >
-          {isRecording ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Download className="h-5 w-5" />
-          )}
-        </Button>
-      </div>
-
-      {/* Playback Speed Slider Section */}
-      {/* Apply space-y-5 like SceneControls */}
-      <div className="space-y-5">
+      {/* Playback Speed Slider Section (Moved Up) */}
+      <div className="space-y-5 w-full">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-[#CFD0D0]">Playback Speed</Label>
           <span className="text-sm font-medium text-[#CFD0D0]">
@@ -150,7 +97,7 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
                 key={index}
                 className={cn(
                   "w-px h-4", // Increased tick height
-                  index === 3 ? "bg-[#bef264]" : "bg-[#444444]" // Highlight middle tick (1.0x)
+                  index === 3 ? "bg-[#e2e2e2]" : "bg-[#444444]" // Highlight middle tick (1.0x) with #e2e2e2
                 )}
               />
             ))}
@@ -163,23 +110,61 @@ export const PlaybackPanel: React.FC<PlaybackPanelProps> = ({
         </div>
       </div>
 
+      {/* Play/Download Buttons Section (Moved Down) */}
+      <div className="flex justify-between gap-4 w-full">
+        <Button
+          onClick={onPlayPause}
+          variant="primary-light"
+          size="xl"
+          className={cn(
+            "flex-1",
+            "relative overflow-hidden"
+          )}
+          disabled={!hasCommands || isGenerating || isRecording}
+        >
+          {/* Progress Bar Div */}
+          <div 
+            className="absolute top-0 left-0 h-full bg-[#121212] z-0 transition-width duration-100 ease-linear"
+            style={{ width: `${progress}%` }}
+          />
+          {/* Icon (needs to be above progress bar) */}
+          <span className="relative z-10 flex items-center justify-center w-full">
+            <span className={cn(
+              "flex items-center justify-center w-10 h-10 rounded-full",
+              (!hasCommands || isGenerating || isRecording) ? "bg-transparent" : "bg-[#E2E2E2]"
+            )}>
+              {isPlaying ? <Pause className="h-5 w-5 text-[#121212]" /> : <Play className="h-5 w-5 text-[#121212]" />}
+            </span>
+          </span>
+        </Button>
+        <Button
+          onClick={onDownload}
+          variant="primary-light"
+          size="xl"
+          className="flex-1"
+          disabled={!hasCommands || isPlaying || isRecording || isGenerating}
+        >
+          {isRecording ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Download className="h-5 w-5 text-[#121212]" />
+          )}
+        </Button>
+      </div>
+
       {/* Create New Shot Button Section */}
       {/* Use flex-grow to push this button towards the bottom */}
-      <div className="flex-grow flex items-end"> 
+      <div className="flex-grow flex items-end w-full"> 
         <Button
-          variant="secondary"
+          variant="primary"
           className={cn(
-            "flex h-[40px] px-6 justify-center items-center gap-[10px] w-full", // Size, padding, flex
-            "rounded-[10px] border border-[#353535] bg-[#121212]", // Appearance with exact 10px border radius
-            "hover:bg-[#353535]", // Hover state
-            "disabled:opacity-70 disabled:pointer-events-none disabled:cursor-not-allowed", // Disabled state
-            "text-sm text-[#CFD0D0]" // Text style
+            "w-full"
           )}
           size="default"
           onClick={onCreateNewShot}
-          disabled={isGenerating || isRecording} // Keep existing disable logic
+          disabled={isGenerating || isRecording}
         >
-          Create New Shot
+          Unlock & Create New Shot
         </Button>
       </div>
 

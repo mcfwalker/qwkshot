@@ -26,6 +26,7 @@ import { updateEnvironmentalMetadataAction } from '@/app/actions/models';
 import { SerializedVector3 } from '@/types/p2p/shared';
 import { supabase } from '@/lib/supabase';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TabsTrigger } from '../ui/tabs';
 
 // Import the extracted components
 import { ShotCallerPanel } from './ShotCallerPanel'; 
@@ -362,27 +363,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   }, [duration, inputDuration]);
 
   const handleGeneratePath = async (isRetry: boolean = false) => {
+    console.log('[CameraAnimationSystem] handleGeneratePath called. isRetry:', isRetry);
+    console.log('[CameraAnimationSystem] modelId from props:', modelId); // Log the modelId prop
+
+    if (!isModelLoaded || !modelRef.current || !cameraRef.current || !controlsRef.current) {
+      toast.error("Model not loaded or refs not available.");
+      return;
+    }
+
     if (!instruction.trim()) {
       toast.error('Please describe the camera movement you want');
-      return;
-    }
-
-    // Early validation of required refs
-    if (!modelRef?.current) {
-      console.error('Model reference is not available');
-      toast.error('Model not loaded properly');
-      return;
-    }
-
-    if (!cameraRef?.current) {
-      console.error('Camera reference is not available');
-      toast.error('Camera not initialized properly');
-      return;
-    }
-
-    if (!controlsRef?.current) {
-      console.error('Camera controls not initialized properly');
-      toast.error('Camera controls not initialized properly');
       return;
     }
 
@@ -391,15 +381,16 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
     setMessageIndex(0); // Reset message index
     
     try {
-      // Get the model ID from the URL
-      const pathParts = window.location.pathname.split('/');
-      const modelId = pathParts[pathParts.length - 1];
-      
-      if (!modelId) {
-        throw new Error('No model ID found in URL');
+      // ADDED: Validate the modelId prop
+      if (!modelId || !uuidRegex.test(modelId)) {
+        console.error('[CameraAnimationSystem] Invalid modelId prop for animation generation:', modelId);
+        toast.error('Cannot generate animation: Invalid model identifier.');
+        setIsGenerating(false);
+        setGeneratePathState('initial');
+        return;
       }
 
-      // Fetch model name from Supabase
+      // Fetch model name from Supabase - modelId here now refers to the prop
       const { data: modelData, error: modelError } = await supabase
         .from('models')
         .select('name')
@@ -443,7 +434,7 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
       const payload: any = {
           instruction,
           duration: parseFloat(inputDuration),
-          modelId
+          modelId // This now correctly refers to the modelId prop
       };
 
       // If it's a retry, add context
@@ -1036,89 +1027,80 @@ export const CameraAnimationSystem: React.FC<CameraAnimationSystemProps> = ({
   };
 
   return (
-    <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
-      <TabsPrimitive.Root 
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as TabValue)}
-          className="flex flex-col w-[288px] gap-4"
-      >
-        <TabsPrimitive.List className="flex items-center justify-center h-10 rounded-xl bg-[#121212] text-muted-foreground w-full">
-          <TabsPrimitive.Trigger 
-            value="shotCaller" 
-            className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'shotCaller' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-            )}
-          >
-            SHOT CALLER
-          </TabsPrimitive.Trigger>
-          <TabsPrimitive.Trigger 
-            value="playback" 
-            className={cn(
-                "flex-1 inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-background transition-all h-10 uppercase",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-50",
-                activeTab === 'playback' ? "bg-[#1D1D1D] text-[#C2F751] shadow-sm rounded-xl" : "hover:text-foreground/80"
-            )}
-          >
-            PLAYBACK
-          </TabsPrimitive.Trigger>
-        </TabsPrimitive.List>
+    // NEW WRAPPING DIV for the main panel structure
+    <div className="w-[288px] bg-[#1D1D1D] rounded-xl p-4 flex flex-col gap-6">
+      <ErrorBoundary name="CameraAnimationSystem" fallback={<CameraSystemFallback />}>
+        <TabsPrimitive.Root 
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as TabValue)}
+            className="flex flex-col flex-1 min-h-0 gap-6"
+        >
+          <TabsPrimitive.List className="flex items-center justify-center h-[40px] w-full gap-4">
+            <TabsTrigger
+              value="shotCaller"
+              className="TEST_CURSOR_TARGET cursor-pointer"
+            >
+              SHOT CALLER
+            </TabsTrigger>
+            <TabsTrigger
+              value="playback"
+              className="TEST_CURSOR_TARGET cursor-pointer"
+            >
+              PLAYBACK
+            </TabsTrigger>
+          </TabsPrimitive.List>
 
-        <Card className="viewer-card bg-[#1D1D1D] rounded-xl border-0 flex flex-col flex-1">
-          <CardContent className="p-0 flex-1 overflow-hidden">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                className="h-full"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === 'shotCaller' && (
-                  <ShotCallerPanel 
-                    isLocked={isLocked}
-                    isGenerating={isGenerating}
-                    generatePathState={generatePathState}
-                    instruction={instruction}
-                    inputDuration={inputDuration}
-                    generatingMessage={generatingMessages[messageIndex]}
-                    messageIndex={messageIndex}
-                    onLockToggle={handleLockToggle}
-                    onInstructionChange={setInstruction}
-                    onDurationChange={handleDurationChange}
-                    onDurationBlur={handleDurationBlur}
-                    onGeneratePath={handleGeneratePath}
-                    isModelLoaded={isModelLoaded}
-                  />
-                )}
-                {activeTab === 'playback' && (
-                  <PlaybackPanel 
-                    commands={commands}
-                    isPlaying={isPlaying}
-                    isRecording={isRecording}
-                    playbackSpeed={playbackSpeed}
-                    duration={duration}
-                    takeCount={takeCount}
-                    modelName={modelName}
-                    isGenerating={isGenerating}
-                    progress={progress}
-                    onPlayPause={handlePlayPause}
-                    onDownload={handleDownload}
-                    onSpeedChange={handleSpeedChange}
-                    onCreateNewShot={handleCreateNewShot}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-          </CardContent>
-        </Card>
+          <div className="flex flex-col flex-1 min-h-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  className="h-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeTab === 'shotCaller' && (
+                    <ShotCallerPanel 
+                      isLocked={isLocked}
+                      isGenerating={isGenerating}
+                      generatePathState={generatePathState}
+                      instruction={instruction}
+                      inputDuration={inputDuration}
+                      generatingMessage={generatingMessages[messageIndex]}
+                      messageIndex={messageIndex}
+                      onLockToggle={handleLockToggle}
+                      onInstructionChange={setInstruction}
+                      onDurationChange={handleDurationChange}
+                      onDurationBlur={handleDurationBlur}
+                      onGeneratePath={handleGeneratePath}
+                      isModelLoaded={isModelLoaded}
+                    />
+                  )}
+                  {activeTab === 'playback' && (
+                    <PlaybackPanel 
+                      commands={commands}
+                      isPlaying={isPlaying}
+                      isRecording={isRecording}
+                      playbackSpeed={playbackSpeed}
+                      duration={duration}
+                      takeCount={takeCount}
+                      modelName={modelName}
+                      isGenerating={isGenerating}
+                      progress={progress}
+                      onPlayPause={handlePlayPause}
+                      onDownload={handleDownload}
+                      onSpeedChange={handleSpeedChange}
+                      onCreateNewShot={handleCreateNewShot}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+          </div>
 
-      </TabsPrimitive.Root>
-      {/* Audio element is now created programmatically */}
-    </ErrorBoundary>
+        </TabsPrimitive.Root>
+        {/* Audio element is now created programmatically */}
+      </ErrorBoundary>
+    </div>
   );
 }; 

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Target, Loader2, Camera } from 'lucide-react';
+import { Crosshair, Loader2, Camera } from 'lucide-react';
 import { broom } from '@lucide/lab';
 import { Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,30 +34,28 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
   isCapturingThumbnail = false,
 }) => {
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center gap-2 p-2 rounded-xl bg-[#1D1D1D]">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 inline-flex items-center justify-center gap-6 p-4 rounded-xl bg-[#1E1E1E]">
       
       {/* Reticle Toggle Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
+                "h-10 w-10",
+                "rounded-[10px]",
                 isReticleVisible 
-                  ? "text-[#C2F751]" 
-                  : "text-foreground/80",
-                "transition-colors duration-200"
+                  ? "bg-[#e2e2e2] text-[#121212] hover:bg-[#e2e2e2]/90" 
+                  : "text-white"
               )}
               onClick={onToggleReticle}
               disabled={isReticleLoading}
             >
               {isReticleLoading 
                 ? <Loader2 className="h-4 w-4 animate-spin" /> 
-                : <Target className="h-4 w-4" />
+                : <Crosshair className="h-4 w-4" />
               }
             </Button>
           </TooltipTrigger>
@@ -68,20 +66,18 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       </TooltipProvider>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-[#444] mx-1"></div>
+      {/* <div className="h-6 w-px bg-[#444] mx-1"></div> */}
       
       {/* Capture Thumbnail Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80 transition-colors duration-200"
+                "h-10 w-10",
+                "rounded-[10px]"
               )}
               onClick={onCaptureThumbnail}
               disabled={!isModelLoaded || isCapturingThumbnail}
@@ -90,7 +86,7 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
             >
               {isCapturingThumbnail 
                 ? <Loader2 className="h-4 w-4 animate-spin" /> 
-                : <Camera className="h-4 w-4" />
+                : <Camera className="h-5 w-5" />
               }
             </Button>
           </TooltipTrigger>
@@ -105,24 +101,22 @@ const BottomToolbarComponent: React.FC<BottomToolbarProps> = ({
       </TooltipProvider>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-[#444] mx-1"></div>
+      {/* <div className="h-6 w-px bg-[#444] mx-1"></div> */}
 
       {/* Clear Stage / Reset Button */}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="secondary"
+              variant="primary"
+              size="icon"
               className={cn(
-                "flex h-[40px] px-6 justify-center items-center gap-[10px]",
-                "rounded-[10px] border border-[#353535] bg-[#121212]",
-                "hover:bg-[#353535] hover:text-white hover:border-[#555555]",
-                "disabled:opacity-70 disabled:pointer-events-none",
-                "text-foreground/80 transition-colors duration-200"
+                "h-10 w-10",
+                "rounded-[10px]"
               )}
               onClick={onClearStageReset}
             >
-              <Icon iconNode={broom} className="h-4 w-4" />
+              <Icon iconNode={broom} className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

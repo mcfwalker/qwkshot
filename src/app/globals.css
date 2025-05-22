@@ -87,6 +87,9 @@
     background-color: #121212 !important;
     font-family: var(--font-inter-tight);
     color: #CFD0D0;
+    /* Remove dot pattern from body */
+    /* background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); */
+    /* background-size: 20px 20px; */
   }
 
   /* Add global style for SVG icons */
@@ -228,14 +231,14 @@
   }
   
   .viewer-slider [role="slider"] {
-    @apply block h-3 w-3 rounded-full border border-primary bg-background 
+    @apply block h-3 w-3 rounded-full border border-[#e2e2e5] bg-background 
            transition-colors focus-visible:outline-none focus-visible:ring-2 
            focus-visible:ring-ring focus-visible:ring-offset-2 
            disabled:pointer-events-none disabled:opacity-50;
   }
   
   .viewer-slider [data-orientation="horizontal"] {
-    @apply h-1;
+    @apply h-0.5;
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-track {
@@ -243,7 +246,7 @@
   }
   
   .viewer-slider [data-orientation="horizontal"] .slider-range {
-    @apply absolute h-full bg-primary;
+    @apply absolute h-full bg-[#e2e2e5];
   }
   
   .viewer-label {
@@ -367,18 +370,19 @@
   }
 
   /* Library specific styles */
-  .library-card {
-    @apply bg-red-500
-           border border-[#353535]
-           rounded shadow-lg 
-           transition-all duration-200
-           hover:shadow-xl
-           hover:bg-red-600
-           p-4;
+  .library-card { /* Styles for the skeleton card */
+    @apply w-[312px] max-w-[312px] /* Added fixed width */
+           p-4 /* Existing padding */
+           rounded-xl /* Match ModelLibraryCard rounding */
+           bg-[#1E1E1E] /* Match ModelLibraryCard background */
+           border border-[#353535]; /* Existing border */
+            /* Removed debug bg, hover, shadow, transition for skeleton */
   }
   
   .library-grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
+    @apply grid justify-items-start justify-start; /* Removed red border */
+    grid-template-columns: repeat(auto-fill, 312px); /* Each column is 312px wide */
+    gap: 20px; /* Explicit 20px gap (equivalent to gap-5) */
   }
   
   .library-header {
@@ -433,3 +437,5 @@
     background-color: rgb(163, 230, 53);
   }
 }
+
+/* Custom scrollbar styles */

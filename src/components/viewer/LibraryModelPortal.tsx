@@ -7,7 +7,7 @@ import { Model } from '@/lib/supabase'
 interface LibraryModelPortalProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (model: Model) => void
+  onSelect: (modelId: string) => void
 }
 
 export function LibraryModelPortal({ isOpen, onClose, onSelect }: LibraryModelPortalProps) {

@@ -171,11 +171,22 @@ export function clampPositionWithRaycast(
     const distanceToIntersection = startPosition.distanceTo(intersectionPoint);
 
     if (distanceToIntersection < distanceToEnd - 1e-6) { // Use tolerance
-      logger.warn(`Raycast: Path intersects bounding box at distance ${distanceToIntersection.toFixed(2)}. Clamping position with dynamic offset.`);
-      const finalClampedPosition = new Vector3()
-          .copy(intersectionPoint)
-          .addScaledVector(movementDirection, -dynamicOffset); // Use dynamicOffset
-      return finalClampedPosition;
+      logger.warn(`Raycast: Path intersects bounding box at distance ${distanceToIntersection.toFixed(2)}. Adjusting position.`);
+      let adjustedPosition: Vector3;
+      if (distanceToIntersection <= dynamicOffset) {
+        // If intersection is within or at dynamicOffset distance (i.e., start is very close/inside boundary),
+        // move *to* the intersection point (the boundary itself).
+        adjustedPosition = intersectionPoint.clone();
+        logger.debug(`Intersection at ${distanceToIntersection.toFixed(3)} is <= dynamicOffset ${dynamicOffset.toFixed(3)}. Moving to boundary.`);
+      } else {
+        // If intersection is further than dynamicOffset,
+        // move to dynamicOffset units *before* the intersection point.
+        adjustedPosition = new Vector3()
+            .copy(intersectionPoint)
+            .addScaledVector(movementDirection, -dynamicOffset);
+        logger.debug(`Intersection at ${distanceToIntersection.toFixed(3)} is > dynamicOffset ${dynamicOffset.toFixed(3)}. Pulling back by offset from boundary.`);
+      }
+      return adjustedPosition;
     }
   }
 

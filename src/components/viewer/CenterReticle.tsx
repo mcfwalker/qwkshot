@@ -12,13 +12,13 @@ export function CenterReticle() {
     'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 flex flex-col items-center justify-center'; // Restored justify-center
 
   // Define colors
-  const lockedColor = '#F76451'; // Red/orange for locked
-  const unlockedColor = '#C2F751'; // Accent green for unlocked
+  // const lockedColor = '#F76451'; // Red/orange for locked - REMOVED
+  // const unlockedColor = '#C2F751'; // Accent green for unlocked - REMOVED
   const circleFillColor = '#4B4B4B';
   const textColor = '#A0A0A0';
 
   // Determine current color based on state
-  const currentReticleColor = isLocked ? lockedColor : unlockedColor;
+  // const currentReticleColor = isLocked ? lockedColor : unlockedColor; - REMOVED
 
   return (
     <div className={cn(baseContainerClasses)}> {/* Removed gap-* */} 
@@ -30,20 +30,36 @@ export function CenterReticle() {
         fill="none" 
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* Center Circle & Plus - Use current color */}
-        <circle cx="50" cy="50" r="14" fill={circleFillColor} fillOpacity="0.25" /> {/* Centered, slightly larger radius */}
-        <line x1="50" y1="45" x2="50" y2="55" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" /> {/* Shorter lines */}
-        <line x1="45" y1="50" x2="55" y2="50" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" />
+        {/* Center Circle - Unchanged for now, but we might want to revisit its color if it clashes */}
+        <circle cx="50" cy="50" r="14" fill={circleFillColor} fillOpacity="0.25" />
+
+        {/* Center Plus - Outline Layer */}
+        <line x1="50" y1="45" x2="50" y2="55" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" />
+        <line x1="45" y1="50" x2="55" y2="50" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" />
+        {/* Center Plus - Inner Layer */}
+        <line x1="50" y1="45" x2="50" y2="55" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" />
+        <line x1="45" y1="50" x2="55" y2="50" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" />
         
-        {/* Corner Brackets (L-shapes) - adjust position/size for 100x100 viewBox */}
-        {/* Top Left */} 
-        <polyline points="15,25 15,15 25,15" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /> {/* Moved outwards */} 
-        {/* Top Right */} 
-        <polyline points="75,15 85,15 85,25" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /> {/* Moved outwards */} 
-        {/* Bottom Left */} 
-        <polyline points="25,85 15,85 15,75" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /> {/* Moved outwards */} 
-        {/* Bottom Right */} 
-        <polyline points="85,75 85,85 75,85" stroke={currentReticleColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /> {/* Moved outwards */} 
+        {/* Corner Brackets (L-shapes) */}
+        {/* Top Left Outline */}
+        <polyline points="15,25 15,15 25,15" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" strokeLinejoin="miter" />
+        {/* Top Left Notch */}
+        <polyline points="15,25 15,15 25,15" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
+        
+        {/* Top Right Outline */}
+        <polyline points="75,15 85,15 85,25" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" strokeLinejoin="miter" />
+        {/* Top Right Notch */}
+        <polyline points="75,15 85,15 85,25" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
+        
+        {/* Bottom Left Outline */}
+        <polyline points="25,85 15,85 15,75" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" strokeLinejoin="miter" />
+        {/* Bottom Left Notch */}
+        <polyline points="25,85 15,85 15,75" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
+        
+        {/* Bottom Right Outline */}
+        <polyline points="85,75 85,85 75,85" stroke="#e2e2e2" strokeWidth="5.5" strokeLinecap="square" strokeLinejoin="miter" />
+        {/* Bottom Right Notch */}
+        <polyline points="85,75 85,85 75,85" stroke="#121212" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
       </svg>
 
       {/* Wrapper for text labels with margin-top */}

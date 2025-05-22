@@ -5,15 +5,25 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none cursor-pointer",
   {
     variants: {
       variant: {
         default:
           "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-50",
         primary: cn(
-          "bg-[#bef264] text-black font-semibold shadow-md transition-all duration-200 hover:brightness-110 active:brightness-90 dark:shadow-[#bef264]/20",
-          "disabled:bg-[#444444] disabled:text-[#666666] disabled:shadow-none disabled:hover:brightness-100 disabled:pointer-events-none disabled:cursor-not-allowed"
+          "bg-[#515151] text-[#E2E2E5] font-normal",
+          "hover:bg-[#616161] hover:-translate-y-[1px]",
+          "active:bg-[#515151] active:translate-y-0",
+          "disabled:bg-[#2E2E2E] disabled:text-[#E2E2E5]/[.48] disabled:shadow-none disabled:hover:bg-[#2E2E2E] disabled:active:bg-[#2E2E2E] disabled:translate-y-0",
+          "transition-all duration-200 ease-in-out"
+        ),
+        "primary-light": cn(
+          "bg-[#E2E2E5] text-[#121212] font-normal",
+          "hover:bg-[#E2E2E5]/90 hover:-translate-y-[1px]",
+          "active:bg-[#E2E2E5] active:translate-y-0",
+          "disabled:bg-[#2E2E2E] disabled:text-[#E2E2E5]/[.48] disabled:shadow-none disabled:hover:bg-[#2E2E2E] disabled:active:bg-[#2E2E2E] disabled:translate-y-0",
+          "transition-all duration-200 ease-in-out"
         ),
         destructive:
           "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 disabled:opacity-50",
@@ -26,9 +36,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline disabled:opacity-50",
       },
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        default: "h-[40px] px-4 min-w-[56px]",
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-12 rounded-md px-8 text-base has-[>svg]:px-6",
+        lg: "h-12 rounded-md px-8 text-sm has-[>svg]:px-6",
+        xl: "h-[56px] px-8 text-sm rounded-md",
         icon: "size-9",
       },
     },

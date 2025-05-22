@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+// import { Card, CardContent } from '@/components/ui/card'; // Removed unused import
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Move, Mouse } from 'lucide-react';
+import { /*ChevronUp, ChevronDown, ChevronLeft, ChevronRight,*/ Move, Mouse, Target } from 'lucide-react'; // Removed unused Chevrons and added Target icon
 import { cn } from '@/lib/utils';
 import { useViewerStore } from '@/store/viewerStore';
 import { toast } from 'sonner';
@@ -14,14 +14,14 @@ export interface CameraControlsPanelProps {
   fov: number;
   onFovChange: (fov: number) => void;
   // Placeholder handlers - to be implemented in Viewer.tsx
-  onCameraMove?: (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => void;
+  // onCameraMove?: (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => void; // Removed unused prop
   onCameraReset?: () => void;
 }
 
 export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = ({
   fov,
   onFovChange,
-  onCameraMove = () => console.warn('onCameraMove not implemented'), // Default dummy handlers
+  // onCameraMove = () => console.warn('onCameraMove not implemented'), // Removed unused prop
   onCameraReset = () => console.warn('onCameraReset not implemented'),
 }: CameraControlsPanelProps) => {
   const { isLocked } = useViewerStore(); // Needed to disable controls when locked
@@ -35,6 +35,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   // Handlers for D-Pad buttons (using onPointerDown/Up for hold support)
+  /* // Removed unused handleMove function
   const handleMove = (direction: 'up' | 'down' | 'left' | 'right', active: boolean) => {
     if (isLocked) {
       toast.error('Viewer is locked. Unlock to move camera.');
@@ -42,6 +43,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
     }
     onCameraMove(direction, active);
   };
+  */
 
   const handleReset = () => {
      if (isLocked) {
@@ -52,7 +54,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
   };
 
   return (
-    <Card className="bg-[#1D1D1D] rounded-xl border-0 flex flex-col w-full p-4 gap-6">
+    <div className="flex flex-col gap-6 h-full">
       
       {/* Instructions Section (Moved Up) */}
       <div className="flex w-[168px] p-4 flex-col justify-center items-center gap-4 rounded-lg bg-[#121212]">
@@ -61,7 +63,6 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
           <Mouse className="h-5 w-5 text-foreground/80" />
           <div className="flex flex-col">
             <span className="text-sm text-foreground">Orbit & zoom</span>
-            <span className="text-sm text-muted-foreground">with mouse</span>
           </div>
         </div>
         {/* Divider */}
@@ -70,8 +71,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
         <div className="flex items-center gap-3 self-stretch">
           <Move className="h-5 w-5 text-foreground/80" /> 
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">Move with</span>
-            <span className="text-sm text-muted-foreground">arrow keys</span>
+            <span className="text-sm text-foreground">Move</span>
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
       {/* FOV Slider Section (Moved Down) */}
       <div className="space-y-5"> 
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-muted-foreground">Field Of View</Label>
+          <Label className="text-sm font-medium text-muted-foreground">FOV</Label>
           <span className="text-sm font-medium text-muted-foreground">{fov}°</span>
         </div>
         <Slider
@@ -95,24 +95,21 @@ export const CameraControlsPanelComponent: React.FC<CameraControlsPanelProps> = 
 
       {/* Reset Button Section (Remains at bottom) */}
       <Button 
-        variant="secondary" 
+        variant="primary"
         className={cn(
-          "flex h-[40px] px-6 justify-center items-center gap-[10px] self-stretch w-full",
-          "rounded-[10px] border border-[#353535] bg-[#121212]",
-          "hover:bg-[#353535]",
-          "disabled:opacity-70 disabled:pointer-events-none",
-          "text-sm text-foreground/80"
+          "w-full"
         )}
         disabled={isLocked}
         onClick={handleReset}
       >
-        Reset Camera
+        <Target className="h-4 w-4 mr-2" />
+        Recenter
       </Button>
 
       {/* Placeholder for Coordinate Display */}
       {/* <div className="text-xs text-muted-foreground text-center">Coordinates Placeholder</div> */}
 
-    </Card>
+    </div>
   );
 }
 

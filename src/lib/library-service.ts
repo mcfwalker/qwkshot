@@ -202,6 +202,20 @@ export async function updateCollection(id: string, updates: Partial<Collection>)
 
 export async function loadModel(modelId: string): Promise<string> {
   return withRetry(async () => {
+    // Log session state before attempting to fetch model details
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('loadModel diagnostic: Supabase session error:', sessionError.message);
+    }
+    console.log(
+      'loadModel diagnostic: Attempting to load. modelId:',
+      modelId,
+      'Has session:',
+      !!session,
+      'User ID:',
+      session?.user?.id
+    );
+
     // Get the model details first
     const { data: model, error: modelError } = await supabase
       .from('models')
