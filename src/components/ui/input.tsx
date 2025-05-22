@@ -14,7 +14,6 @@ function Input({ className, type, active, ...props }: InputProps) {
       className={cn(
         "flex w-full rounded-md border border-[#444444] bg-transparent px-3 py-2",
         "text-sm leading-relaxed text-white",
-        "placeholder:text-[#6b7280]",
         "hover:border-white focus:border-white focus:outline-none focus:ring-0",
         "focus:placeholder:text-transparent",
         "transition-colors",

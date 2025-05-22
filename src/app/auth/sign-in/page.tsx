@@ -74,63 +74,79 @@ function SignInContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-        <p className="text-sm text-muted-foreground">
-          Sign in to your account to continue
-        </p>
-      </div>
+    // This div centers the form card vertically within the first column
+    <div className="flex h-full w-full flex-col items-center justify-center py-6 md:py-10">
+      {/* Form Card: Semi-transparent with backdrop blur, now 50% width of its parent column */}
+      <div className="w-[50%] space-y-6 rounded-xl bg-black/60 p-8 shadow-2xl backdrop-blur-lg">
+        <div className="space-y-4 text-center">
+          <img
+            src="/images/logo_pink.png"
+            alt="Awk Shot Logo"
+            className="mx-auto"
+            style={{ width: '296px', height: 'auto' }}
+          />
+        </div>
 
-      <form onSubmit={handleEmailSignIn} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="m@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
+        <form onSubmit={handleEmailSignIn} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-gray-200">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="m@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="rounded-md border-gray-500 bg-white/10 text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-gray-200">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="rounded-md border-gray-500 bg-white/10 text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
+            />
+          </div>
+          <Button 
+            className="w-full bg-[#FEE3E5] text-black hover:bg-[#FEE3E5]/90 focus-visible:ring-[#FEE3E5] mt-6"
+            type="submit" 
+            disabled={isLoading}
+          >
+            {isLoading ? 'Signing in...' : 'Sign in with Email'}
+          </Button>
+        </form>
+
+        {/* Hide "Or continue with" separator for now
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <Separator className="w-full border-gray-600" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-black/60 px-2 text-gray-300">
+              Or continue with
+            </span>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </div>
-        <Button className="w-full" type="submit" disabled={isLoading}>
-          {isLoading ? 'Signing in...' : 'Sign in with Email'}
+        */}
+
+        {/* Hide Google Sign-In button for now
+        <Button
+          variant="outline"
+          type="button"
+          className="w-full rounded-md border-gray-500 bg-transparent text-gray-200 hover:bg-white/10 hover:text-white focus-visible:ring-[#FEE3E5]/70"
+          disabled={isLoading}
+          onClick={handleGoogleSignIn}
+        >
+          {isLoading ? 'Signing in...' : 'Sign in with Google'}
         </Button>
-      </form>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <Separator className="w-full" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">
-            Or continue with
-          </span>
-        </div>
+        */}
       </div>
-
-      <Button
-        variant="outline"
-        type="button"
-        className="w-full"
-        disabled={isLoading}
-        onClick={handleGoogleSignIn}
-      >
-        {isLoading ? 'Signing in...' : 'Sign in with Google'}
-      </Button>
     </div>
   )
 }
@@ -138,8 +154,35 @@ function SignInContent() {
 // Main component with Suspense boundary
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <SignInContent />
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
+      <div className="flex min-h-screen w-full">
+        {/* Column 1: Login Form with SVG background */}
+        <div className="relative w-full overflow-hidden bg-black lg:w-1/3">
+          <img
+            src="/images/vert_logo.svg"
+            alt="Background Design"
+            className="absolute inset-0 h-full w-full object-contain object-center opacity-100"
+          />
+          {/* Container for SignInContent to be above SVG and allow for centering */}
+          <div className="relative z-10 flex h-full items-center justify-center">
+            <SignInContent />
+          </div>
+        </div>
+
+        {/* Column 2: Background Video (takes up remaining 2/3 on large screens) */}
+        <div className="relative hidden flex-1 overflow-hidden lg:block">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute left-0 top-0 h-full w-full object-cover"
+          >
+            <source src="/videos/Ricky-Bobby-Take3-202505221246.webm" type="video/webm" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </div>
     </Suspense>
   )
 } 
