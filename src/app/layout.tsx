@@ -4,6 +4,7 @@ import { Providers } from "@/components/providers";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { DevInfo } from "@/components/dev/DevInfo/index";
 import { initializeLLMSystem, ensureLLMSystemInitialized } from '@/lib/llm/init';
+import type { Metadata } from 'next';
 
 // Configure Inter Tight
 const interTight = Inter_Tight({
@@ -17,6 +18,27 @@ const interTight = Inter_Tight({
 ensureLLMSystemInitialized().catch(error => {
   console.error('Failed to initialize LLM system:', error);
 });
+
+export const metadata: Metadata = {
+  title: 'Modern 3D Viewer', // You might want to customize this
+  description: 'An LLM-powered 3D model viewer and cameraman.', // Customize this too
+  icons: {
+    icon: '/images/favicon.svg',
+  },
+  openGraph: {
+    title: 'Modern 3D Viewer', // Customize
+    description: 'An LLM-powered 3D model viewer and cameraman.', // Customize
+    images: [
+      {
+        url: '/images/og_image.png',
+        width: 1200, // Assuming a common OG image width, adjust if needed
+        height: 630, // Assuming a common OG image height, adjust if needed
+        alt: 'Modern 3D Viewer Open Graph Image', // Customize
+      },
+    ],
+    type: 'website',
+  },
+};
 
 export default function RootLayout({
   children,
