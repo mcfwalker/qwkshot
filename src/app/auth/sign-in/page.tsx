@@ -20,19 +20,38 @@ function SignInContent() {
 
   // Listen for auth state changes
   useEffect(() => {
+    console.log('Setting up onAuthStateChange listener...');
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('onAuthStateChange event:', event, session);
       if (event === 'SIGNED_IN' && session) {
-        toast.success('Signed in successfully')
-        router.push(redirectTo)
+        toast.success('Signed in successfully');
+        console.log('Redirecting to:', redirectTo);
+        router.push(redirectTo);
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed, session:', session);
+      } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
       }
-    })
+    });
+
+    // Check if the session is already available from the URL hash when the component mounts
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        console.log('Session found on mount (from URL hash processing by Supabase client):', session);
+        // Potentially trigger redirect here if not already handled by onAuthStateChange
+        // This might be redundant if onAuthStateChange fires reliably for SIGNED_IN from magic link
+      } else {
+        console.log('No session found on mount from URL hash.');
+      }
+    });
 
     return () => {
-      subscription.unsubscribe()
-    }
-  }, [redirectTo, router])
+      console.log('Unsubscribing from onAuthStateChange listener.');
+      subscription.unsubscribe();
+    };
+  }, [redirectTo, router]);
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
