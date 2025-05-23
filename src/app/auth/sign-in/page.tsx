@@ -119,7 +119,7 @@ function SignInContent() {
 // Main component with Suspense boundary
 export default function SignInPage() {
   return (
-    // <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
       <div className="flex min-h-screen w-full">
         {/* Column 1: Login Form with Graphic as column background, offset to extend below bottom (30%), sized to 75% height */}
         <div className="relative flex w-full flex-col overflow-hidden bg-black bg-[url('/images/side_bar_graphic.svg')] bg-no-repeat bg-[length:auto_75%] bg-[center_130%] lg:w-1/3">
@@ -144,6 +144,6 @@ export default function SignInPage() {
           </video>
         </div>
       </div>
-    // </Suspense>
+    </Suspense>
   )
 } 
