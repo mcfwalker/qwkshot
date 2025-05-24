@@ -86,22 +86,22 @@ function SignInContent() {
             className=""
             style={{ width: '296px', height: 'auto' }}
           />
-        </div>
+      </div>
 
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleMagicLinkSignIn(); }}>
-          <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="email" className="text-gray-200">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
+          <Input
+            id="email"
+            type="email"
+            placeholder="m@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
               className="h-16 rounded-md border-[#383838] bg-black text-white placeholder-[rgba(254,227,229,0.64)] focus:border-[#FEE3E5] focus:ring-[#FEE3E5]/50"
-            />
-          </div>
+          />
+        </div>
           
           <Button
             onClick={handleMagicLinkSignIn}
@@ -109,8 +109,8 @@ function SignInContent() {
             className="w-full h-14 px-6 flex items-center justify-center gap-[10px] rounded-md border border-[#121212] bg-[#FEE3E5] text-black hover:bg-[#FEE3E5]/90 focus-visible:ring-[#FEE3E5] disabled:opacity-100" 
           >
             {isMagicLinkLoading ? 'Sending link...' : 'Sign in with Magic Link'}
-          </Button>
-        </form>
+        </Button>
+      </form>
       </div>
     </div>
   )
@@ -125,7 +125,7 @@ export default function SignInPage() {
         <div className="relative flex w-full flex-col overflow-hidden bg-black bg-[url('/images/side_bar_graphic.svg')] bg-no-repeat bg-[length:auto_75%] bg-[center_130%] lg:w-1/3">
           {/* Top Container: Form Area - 50% height, padding, aligns SignInContent to the top. */}
           <div className="relative z-10 flex h-1/2 items-start p-6 sm:p-8 lg:p-12">
-            <SignInContent />
+      <SignInContent />
           </div>
           {/* Bottom Container: This area is now part of the column background. */}
         </div>

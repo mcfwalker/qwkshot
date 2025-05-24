@@ -1,19 +1,18 @@
 ### **Content for: `PRD.md` (Leaner Version)**
 
 ```markdown
-# Modern 3D Viewer - Product Requirements Document
+# QWK Shot - Product Requirements Document
 
 ## 1. Product Overview
 
 ### Purpose
-A web-based 3D model viewer with AI-powered camera path generation and model creation capabilities, designed to provide intuitive controls with a modern UI.
+To empower novice users to easily manipulate 3D models and generate captivating still and motion content, bridging the gap between complex professional 3D software and the growing accessibility of AI-generated assets.
 
 ### Core Value Proposition
-Automate and simplify the creation of professional 3D model presentations through:
-- Intelligent camera path generation via LLM
-- AI-powered 3D model generation from images
-- Real-time 3D visualization and interaction
-- Intuitive, accessible UI powered by modern component libraries (e.g., shadcn).
+Provide a focused, low-overhead utility that simplifies the creation of cinematic "hero" content from 3D assets by offering:
+- AI-powered, intuitive camera path generation via natural language.
+- Streamlined real-time 3D visualization and interaction.
+- An accessible, modern UI designed for users without extensive 3D software experience.
 
 ### Target Users
 - 3D artists and designers
@@ -26,8 +25,7 @@ Automate and simplify the creation of professional 3D model presentations throug
 - Average session duration > 5 minutes
 - Camera path generation usage > 20% of sessions
 - User retention (return visits) > 30%
-- Model export rate > 10% of uploads
-- User satisfaction score > 4/5 (via surveys/feedback)
+- Animation/Video export rate > 10% of camera paths generated
 - Error rate < 0.1%
 
 ## 2. User Experience Flow
@@ -46,37 +44,21 @@ graph TD
 #### 2. AI Camera Path Generation
 ```mermaid
 graph TD
-    A[Model Loaded] --> B[Access Camera Path Section]
-    B --> C[Enter Natural Language Description]
-    C --> D[Preview Generated Path]
-    D --> E1[Edit Path]
-    D --> E2[Save Path]
-    E1 --> D
-    E2 --> F[Apply to Model]
-```
-
-#### 3. AI Model Generation
-```mermaid
-graph TD
-    A[Landing Page] --> B[Select Image-to-3D]
-    B --> C[Upload Reference Image(s)]
-    C --> D[Configure Generation Parameters]
-    D --> E[Process with AI]
-    E --> F[Preview Generated Model]
-    F --> G1[Edit/Refine]
-    F --> G2[Save to Library]
-    G1 --> E
+    A[Model Loaded] --> B[Locks Camera Position]
+    B --> C[Enters Natural Language Prompt]
+    C --> D[Animation Generated (Preview, Play, Adjust Speed)]
+    D --> E[Downloads Video (Optional)]
+    D --> C // Re-prompt if not satisfied
 ```
 
 ## 3. Core Features
 
 ### A. 3D Viewer (Base Feature)
-- Real-time 3D model rendering (targeting WebGL 2.0).
+- Real-time rendering of uploaded or library-selected 3D models (targeting WebGL 2.0).
 - Intuitive camera controls (orbit, pan, zoom) and support for smooth camera animations.
-- Support for common 3D model formats (initially focusing on glTF/GLB).
-- Basic PBR texture management.
-- Options for simple environment setup (e.g., floor grids, basic lighting).
-- Display of real-time camera telemetry data.
+- Support for glTF/GLB, common 3D model formats for web-based viewing.
+- Renders models utilizing their embedded PBR materials.
+- Environment customization: configurable canvas color, grid display, and custom texture uploads for the floor plane.
 - Basic export functionality (e.g., screenshots).
 
 ### B. AI Camera Path Generation
@@ -95,18 +77,10 @@ graph TD
 
 *(For detailed technical architecture and current implementation, see the [P2P Pipeline Architecture](../features/camera-animation/ARCHITECTURE.md))*
 
-### C. AI Model Generation
-- Capability to generate 3D models from user-provided images (Image-to-3D).
-- Support for different generation styles or quality levels.
-- Preview generated models before saving.
-- Integration with the user's model library.
-- Model optimization options (e.g., decimation, texture compression).
-
 ## 4. UI Design Concepts
 - **Layout:** A clean, modern layout featuring a primary 3D viewport and accessible control panels. Typically, controls might reside in sidebars or contextual panels.
-- **Component Library:** Utilize a modern component library like shadcn/ui for consistency, accessibility, and themeability (supporting light/dark modes).
 - **Control Panels:** Intuitive panels for model selection/upload, scene setup, camera controls, AI feature interaction, and export options.
-- **Responsiveness:** The UI should adapt gracefully to different screen sizes, including desktop and mobile devices, potentially simplifying controls or layout on smaller screens.
+- **Responsiveness:** The UI is responsive for various desktop screen sizes. Mobile devices are not officially supported.
 
 *(For detailed technical implementation, component code, and specific layout structures, see the [Technical Design Document](./TECHNICAL_DESIGN.md))*
 
@@ -156,4 +130,4 @@ graph TD
 - **Minimum Hardware:** WebGL 1.0 support, 4GB RAM (recommend WebGL 2.0, 8GB+ RAM for optimal experience).
 
 ## 12. Conclusion
-The Modern 3D Viewer aims to provide a powerful yet intuitive platform for visualizing and presenting 3D models, enhanced by AI capabilities. By focusing on a clean user experience, robust technical foundation, and intelligent features, the product seeks to streamline workflows for creative professionals and other target users.
+QWK Shot is dedicated to empowering users, especially those new to 3D, to effortlessly create compelling visual content from their 3D models. By offering an intuitive, focused utility with AI-driven camera automation, it bridges the gap between complex professional software and the increasing availability of 3D assets. QWK Shot aims to streamline the creation of cinematic presentations, making high-quality 3D visualization accessible to a broader audience, including content creators, marketers, and anyone looking to showcase 3D assets without a steep learning curve.

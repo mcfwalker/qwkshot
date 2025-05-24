@@ -182,7 +182,7 @@ export function clampPositionWithRaycast(
         // If intersection is further than dynamicOffset,
         // move to dynamicOffset units *before* the intersection point.
         adjustedPosition = new Vector3()
-            .copy(intersectionPoint)
+          .copy(intersectionPoint)
             .addScaledVector(movementDirection, -dynamicOffset);
         logger.debug(`Intersection at ${distanceToIntersection.toFixed(3)} is > dynamicOffset ${dynamicOffset.toFixed(3)}. Pulling back by offset from boundary.`);
       }

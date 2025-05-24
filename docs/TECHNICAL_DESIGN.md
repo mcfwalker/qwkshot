@@ -1,9 +1,6 @@
-### **Content for: `TECHNICAL_DESIGN.md` (New File)**
+# QWK Shot - Technical Design Document
 
-```markdown
-# Modern 3D Viewer - Technical Design Document
-
-This document details the technical architecture, implementation specifics, and design decisions for the Modern 3D Viewer application. It complements the [Product Requirements Document](./PRD.md).
+This document details the technical architecture, implementation specifics, and design decisions for the QWK Shot application. It complements the [Product Requirements Document](./PRD.md).
 
 ## 1. Frontend Architecture
 
@@ -29,14 +26,13 @@ src/
 │   │   └── callback/
 │   ├── (protected)/        # Protected routes
 │   │   ├── viewer/
-│   │   ├── library/
-│   │   └── generate/
+│   │   └── library/
 │   └── api/                # API routes
 ├── components/
 │   ├── ui/                 # Reusable UI components
 │   └── viewer/             # Viewer-specific components
 │       ├── Viewer.tsx               # Primary R3F viewer component (ACTIVE for main route)
-│       ├── ModelViewerClient.tsx    # Older vanilla Three.js viewer (May be used elsewhere or deprecated)
+│       ├── ModelViewerClient.tsx    # Deprecated vanilla Three.js viewer (kept for reference/archival)
 │       ├── LockButton.tsx             # Added
 │       ├── ShotCallerPanel.tsx        # Added
 │       ├── PlaybackPanel.tsx          # Added
@@ -284,14 +280,13 @@ const ModelControls = () => {
   );
 };
 ```
-*(Similar detailed examples for Camera Path Controls, Terrain Options, AI Path Generation Interface would follow here, extracted from the original PRD)*
+(Similar detailed examples for Environment Setup Controls and Camera Path Controls would follow here, if extracted from relevant component code.)
 
 ### 2.3 UI Component Styling
 - Primarily use Tailwind CSS utility classes.
 - Leverage `shadcn/ui` component primitives and styling conventions.
 - Define custom styles or overrides in `globals.css` or component-specific CSS modules where necessary.
 - Maintain themeability (light/dark modes).
-*(See also: [UI Documentation](./docs/UI/README.md))*
 
 ## 3. Authentication Architecture
 
@@ -331,8 +326,8 @@ export const createServerActionSupabaseClient = () => {
 2. Middleware (`src/middleware.ts`) intercepts the request.
 3. Middleware checks for a valid session using `createMiddlewareClient`.
 4. If no valid session, redirect to the sign-in page (`/auth/sign-in`), potentially passing the intended destination as a query parameter (`redirectTo`).
-5. User authenticates via Email/Password or OAuth provider (e.g., Google).
-6. **Email/Password:** Server Action or API route handles sign-in, sets session cookies.
+5. User authenticates via Magic Link or OAuth provider (e.g., Google).
+6. **Magic Link:** User receives an email with a sign-in link. Clicking this link (or using an OTP if applicable) completes authentication via Supabase, which handles session setup.
 7. **OAuth:** User is redirected to the provider, then back to the defined callback URL (`/auth/callback`).
 8. **Callback Route Handler (`src/app/auth/callback/route.ts`):** Exchanges the OAuth code for a session using `createRouteHandlerClient`, sets session cookies.
 9. User is redirected from sign-in/callback to their original destination (`redirectTo`) or a default page (e.g., `/viewer`).
@@ -354,9 +349,8 @@ export async function middleware(req: NextRequest) {
   // Defined Protected Routes:
   // - /library/*
   // - /viewer/*
-  // - /generate/* 
   // - Any route within (protected) group
-  const isProtectedRoute = pathname.startsWith('/viewer') || pathname.startsWith('/library') || pathname.startsWith('/generate');
+  const isProtectedRoute = pathname.startsWith('/viewer') || pathname.startsWith('/library');
 
   if (!session && isProtectedRoute) {
       const redirectUrl = req.nextUrl.clone()
@@ -392,9 +386,9 @@ export const config = {
 
 ### 3.5. Sign-In Page Implementation
 - Use client components for interactivity.
-- Employ `useState` for form inputs (email, password) and loading/error states.
+- Employ `useState` for form input (email) and loading/error states.
 - Use `useRouter` for navigation.
-- Implement handlers for email/password sign-in and OAuth provider sign-in, calling Supabase client methods.
+- Implement handlers for magic link sign-in (obtaining OTP/link) and OAuth provider sign-in, calling Supabase client methods.
 - Display user-friendly error messages (e.g., using toasts).
 - Optionally use `onAuthStateChange` listener for reactive redirects upon successful sign-in, although redirects from handlers/middleware are often sufficient.
 
@@ -441,8 +435,6 @@ export async function GET(request: NextRequest) {
 - Perform environment variable validation on startup
 - Verify model ownership in database functions
 
-*(See also: [Storage Security Documentation](../features/storage/README.md))*
-
 ## 4. API Structure
 
 - **Primary Mechanism:** Utilize Next.js Server Actions (`src/app/actions/...`) for handling client requests that involve data persistence or complex backend logic.
@@ -453,7 +445,7 @@ export async function GET(request: NextRequest) {
     - **Instantiation:** Server-side components (Actions, API Routes) obtain `MetadataManager` instances via the `MetadataManagerFactory`, typically requesting the **service role client** for necessary permissions.
 
 ### 4.1 Server Actions
-- **Purpose:** Handle client-initiated operations like saving models, updating environmental metadata, generating paths (if moved server-side later).
+- **Purpose:** Handle client-initiated operations like saving models, updating environmental metadata.
 - **Location:** `src/app/actions/`
 - **Implementation:**
     - Marked with `'use server';`.
@@ -528,56 +520,7 @@ export async function GET(request: NextRequest) {
   - Adapter handles interaction, polling, and parsing the structured `MotionPlan` response based on the configured Assistant ID and its associated Motion KB.
   - Manages API errors and rate limits (basic handling).
 
-- **Google Generative AI:** Potentially used for other AI features like scene analysis or initial model generation concepts (Verify specific usage).
-  - Integration via `@google/generative-ai` package.
-  - Handles prompt construction and response parsing for its specific tasks.
-
-### 6.2. Model Generation Service
-- **Purpose:** Convert images to 3D models.
-- **Implementation:**
-    - Use official SDK or standard HTTP requests.
-    - Store API key securely.
-    - Implement service layer abstracting API calls (submit job, check status, download result).
-    - Handle asynchronous nature: submit job -> poll status -> process result.
-    - Implement robust error handling for API failures, processing errors.
-    - Manage temporary storage for source images if needed.
-    - Securely transfer generated models to our Supabase storage.
-
-```typescript
-// Example service structure (Illustrative)
-// src/lib/model-generation-service.ts
-const MODEL_GEN_API_KEY = process.env.MODEL_GEN_API_KEY;
-const MODEL_GEN_API_URL = 'https://api.examplemodelgen.com/v1'; // Hypothetical
-
-interface SubmitJobResponse { jobId: string; estimatedTime?: number; }
-interface JobStatusResponse { status: 'pending' | 'processing' | 'complete' | 'failed'; progress?: number; resultUrl?: string; error?: string; }
-
-export async function submitImageToModelJob(imageFiles: File[], params: GenerationParams): Promise<SubmitJobResponse> {
-  const formData = new FormData();
-  imageFiles.forEach(file => formData.append('images', file));
-  formData.append('params', JSON.stringify(params));
-
-  const response = await fetch(`${MODEL_GEN_API_URL}/generate`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${MODEL_GEN_API_KEY}` },
-    body: formData,
-  });
-  if (!response.ok) throw new Error(`Model generation submission failed: ${response.statusText}`);
-  return await response.json();
-}
-
-export async function checkModelGenerationStatus(jobId: string): Promise<JobStatusResponse> {
-  const response = await fetch(`${MODEL_GEN_API_URL}/status/${jobId}`, {
-    headers: { 'Authorization': `Bearer ${MODEL_GEN_API_KEY}` },
-  });
-  if (!response.ok) throw new Error(`Failed to check job status: ${response.statusText}`);
-  return await response.json();
-}
-
-// Add function to download result and upload to Supabase storage
-```
-
-## 8. Testing Strategy Implementation
+## 7. Testing Strategy Implementation
 - **Framework:** Vitest with React Testing Library
 - **Environment:** JSDOM for browser environment simulation
 - **Coverage:** Using `@vitest/coverage-v8` for code coverage reporting
@@ -641,7 +584,7 @@ describe('P2P Pipeline Integration (Conceptual Example)', () => {
 });
 ```
 
-### 8.1 Test Configuration
+### 7.1 Test Configuration
 ```typescript
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
@@ -664,7 +607,7 @@ export default defineConfig({
 });
 ```
 
-### 8.2 Test Setup
+### 7.2 Test Setup
 ```typescript
 // __tests__/setup.ts
 import { expect, afterEach } from 'vitest';
@@ -679,7 +622,7 @@ afterEach(() => {
 });
 ```
 
-## 9. Deployment & Infrastructure
+## 8. Deployment & Infrastructure
 - **Platform:** Vercel (preferred for Next.js) or other suitable cloud provider (AWS Amplify, Netlify, etc.).
 - **CI/CD:** GitHub Actions (or provider's built-in CI/CD) for automated testing, building, and deployment triggered by pushes/merges to main/stable branches.
 - **Environment Variables:** Manage secrets (API keys, Supabase keys) securely using platform's environment variable system. Differentiate between build-time and runtime variables.
@@ -703,7 +646,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '18' # Or your target version
+          node-version: '20' # Or your target version
           cache: 'npm'
       - name: Install Dependencies
         run: npm ci
@@ -739,7 +682,7 @@ jobs:
   #   ... deploy to production ...
 ```
 
-## 10. Analytics & Monitoring Implementation
+## 9. Analytics & Monitoring Implementation
 - **Analytics:** Integrate a service like Vercel Analytics, Google Analytics, PostHog, or Plausible. Track key user events (model loads, feature usage, errors) and performance metrics (LCP, FID, CLS). Implement custom events for specific feature interactions.
 - **Monitoring:** Use platform's built-in monitoring (e.g., Vercel logs, Supabase metrics). Consider external services like Sentry or LogRocket for more detailed error tracking and session replay, especially in production.
 - **Health Checks:** Implement `/api/health` endpoint checking database connectivity and basic server health.
@@ -769,51 +712,14 @@ export const trackError = (error: Error, context?: Record<string, any>) => {
 };
 ```
 
-## 11. Mobile & Responsive Design Implementation
-- **Approach:** Mobile-first or graceful degradation from desktop.
-- **Layout:** Use Tailwind CSS responsive modifiers (`sm:`, `md:`, `lg:`) extensively. Employ CSS Flexbox and Grid for fluid layouts.
-- **UI Components:** Ensure shadcn/ui components adapt well or provide alternative layouts/components for smaller screens (e.g., drawer navigation instead of sidebar).
-- **Touch Controls:** Implement specific touch event handlers for 3D viewport interaction (pinch-to-zoom, two-finger-rotate, one-finger-pan) using libraries or custom logic. Ensure `touch-action: none;` is applied to the canvas to prevent default browser gestures.
-- **Performance:** Use adaptive quality settings (Section 11.C from original PRD) based on device capabilities or performance monitoring. Load lighter assets or simplified models on mobile if necessary.
+## 10. Responsive Design
+- **Approach:** The UI is designed to be responsive across various desktop screen sizes. Mobile devices are not officially supported.
+- **Layout Techniques:**
+  - Utilize Tailwind CSS responsive modifiers (`sm:`, `md:`, `lg:`, `xl:`) extensively to adapt layouts to different viewport widths common on desktop.
+  - Employ CSS Flexbox and Grid for creating fluid and adaptable layout structures.
+- **Component Adaptability:** Standard `shadcn/ui` components are used, which have some inherent responsiveness. Custom components are built with desktop scalability in mind.
 
-```typescript
-// Example Responsive Component Structure
-// src/components/layout/ResponsiveSidebar.tsx
-import { useMediaQuery } from '@/hooks/useMediaQuery'; // Hypothetical hook
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // Drawer
-import { Button } from "@/components/ui/button";
-import { MenuIcon } from "lucide-react";
-import { ControlPanels } from './ControlPanels'; // Component containing all controls
-
-export const ResponsiveSidebar = () => {
-  const isDesktop = useMediaQuery('(min-width: 768px)'); // Example breakpoint
-
-  if (isDesktop) {
-    return (
-      <aside className="w-80 border-r p-4 overflow-y-auto">
-        <ControlPanels />
-      </aside>
-    );
-  }
-
-  // Mobile: Use a drawer
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="fixed bottom-4 right-4 z-50 md:hidden">
-           <MenuIcon className="h-4 w-4" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-[300px] sm:w-[400px] p-4 overflow-y-auto">
-         <ControlPanels />
-      </SheetContent>
-    </Sheet>
-  );
-};
-```
-*(Include details on Touch Controls and Adaptive Quality Manager as extracted from original PRD Section 14 if needed)*
-
-## 12. Accessibility Implementation
+## 11. Accessibility Implementation
 - **Semantic HTML:** Use appropriate HTML5 tags (`<nav>`, `<main>`, `<aside>`, `<button>`, etc.).
 - **ARIA Attributes:** Use ARIA roles and properties where semantic HTML is insufficient (e.g., `aria-label` for icon buttons, `aria-live` for status updates, roles for custom widgets).
 - **Focus Management:** Ensure logical focus order. Manage focus programmatically in modals and dynamic UI changes. Use visible focus indicators (`focus-visible`).
