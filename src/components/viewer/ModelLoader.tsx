@@ -328,7 +328,7 @@ export const ModelLoader = ({ onModelLoad }: { onModelLoad: (modelId: string) =>
           "flex flex-col items-center justify-center gap-2 h-[128px] p-4 rounded-[6px] border border-dashed border-[#444444] text-center cursor-pointer",
           "transition-colors",
           "hover:border-[#e2e2e2]",
-          isDragActive && 'border-[#C2F751] bg-[#C2F751]/5',
+          isDragActive && 'border-[#e2e2e2] bg-[#e2e2e2]/5',
           error && 'border-destructive',
           isInitializing && 'opacity-60 cursor-not-allowed'
         )}

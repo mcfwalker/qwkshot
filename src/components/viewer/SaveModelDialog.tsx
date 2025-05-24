@@ -138,7 +138,7 @@ export function SaveModelDialog({ isOpen, onClose, onSave, loadingMessage }: Sav
                   "min-w-[120px] flex items-center gap-2",
                   isSaving 
                     ? "bg-[#1D1D1D] border border-[#C2F751] text-[#C2F751]" 
-                    : "bg-[#C2F751] text-[#121212] hover:bg-[#C2F751]/90"
+                    : "bg-[#e2e2e2] text-[#121212] hover:bg-[#e2e2e2]/90"
                 )}
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}

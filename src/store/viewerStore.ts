@@ -229,7 +229,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     set({
       ...defaultSettings,
       modelId: get().modelId,
-      isLocked: get().isLocked,
+      isLocked: false,
     });
     if (get().modelId) {
       set({ activeLeftPanelTab: 'camera' });
