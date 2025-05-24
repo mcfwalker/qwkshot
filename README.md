@@ -6,8 +6,8 @@ A web-based 3D model viewer with AI-powered camera path generation and model cre
 
 This README serves as the central index for key project documentation.
 
-*   **[Product Requirements (PRD)](./PRD.md)**: High-level goals, target users, core features, and requirements.
-*   **[Technical Design Document](./TECHNICAL_DESIGN.md)**: Detailed architecture, state management, API structure, integration specs, and implementation details.
+*   **[Product Requirements (PRD)](./docs/PRD.md)**: High-level goals, target users, core features, and requirements.
+*   **[Technical Design Document](./docs/TECHNICAL_DESIGN.md)**: Detailed architecture, state management, API structure, integration specs, and implementation details.
 *   **[P2P Pipeline Architecture](./docs/features/camera-animation/ARCHITECTURE.md)**: Detailed design and workflow of the AI camera path generation pipeline.
 
 ## Quick Navigation
