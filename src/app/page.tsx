@@ -69,7 +69,7 @@ export default function HomePage() {
               </div>
 
               <h1 className="use-mamoth-font text-xl leading-7 md:text-2xl md:leading-[34px] font-normal text-[#FEE3E5] mb-4">
-                Super-simple LLM-powered cameraman for quick, easy hero shots and animations.
+                Super-simple AI-powered virtual cameraman for fast, cinematic hero shots and motion.
               </h1>
 
               <div className="mt-12"> {/* Overall Waitlist section block */}
