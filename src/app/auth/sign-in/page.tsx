@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 // Separate the main content into its own component
 function SignInContent() {
@@ -79,14 +80,13 @@ function SignInContent() {
   return (
     <div className="flex h-full w-full items-start justify-start">
       <div className="w-full max-w-xs space-y-6 sm:max-w-sm"> 
-        <div className="space-y-4 text-left">
-          <img
-            src="/images/logo_pink.png"
-            alt="Awk Shot Logo"
-            className=""
-            style={{ width: '296px', height: 'auto' }}
-          />
-      </div>
+        <div className="space-y-4 text-left mb-10">
+          <Link href="/" className="block">
+            <div className="use-mamoth-font text-[2rem] leading-[2.5rem] sm:text-[2.5rem] sm:leading-[3rem] md:text-[3rem] md:leading-[3.5rem] text-[#FDE1E4] text-left">
+              QWK SHOT
+            </div>
+          </Link>
+        </div>
 
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleMagicLinkSignIn(); }}>
         <div className="space-y-2">

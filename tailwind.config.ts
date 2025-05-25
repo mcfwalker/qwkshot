@@ -3,6 +3,7 @@ const defaultTheme = require('tailwindcss/defaultTheme')
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
+    './src/app/page.tsx',
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
@@ -20,6 +21,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-inter-tight)", ...defaultTheme.fontFamily.sans],
         mono: ["var(--font-jetbrains)"],
+        // mamoth: ['MamothFont', 'Arial', 'sans-serif'], // Removed as we are using a direct CSS class
       },
       colors: {
         // ... existing colors ...

@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'MamothFont';
+  src: url('/font/Mamoth.otf') format('opentype');
+  font-weight: normal; /* Assuming it's a normal weight, adjust if needed */
+  font-style: normal;
+  font-display: swap;
+}
+
+.use-mamoth-font {
+  font-family: 'MamothFont', Arial, sans-serif; /* Fallbacks are good practice */
+}
+
+/* @custom-variant dark (&:is(.dark *)); */ /* Commenting out the temporary rule is better than deleting if we need it again, but for now, per user, it will be removed */ 
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
